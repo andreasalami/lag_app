@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/layout/Navbar.tsx","./src/components/layout/TabBar.tsx","./src/components/ui/Button.tsx","./src/components/ui/Card.tsx","./src/features/social/InstagramLink.tsx","./src/features/tickets/EventbriteTickets.tsx","./src/pages/Home.tsx"],"version":"5.9.3"}

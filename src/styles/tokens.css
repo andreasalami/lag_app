@@ -1,0 +1,114 @@
+/*
+  DESIGN TOKENS — L'Agro ai Giovani (LAG)
+  ----------------------------------------
+  Direzione: "notte di raccolto" — un festival benefico in una cascina,
+  di giorno campi e terra, di notte DJ set e luci calde.
+  Dark, NON flat. L'effetto vetro (blur/traslucenza) è riservato SOLO
+  agli elementi con z-layer superiore (navbar, tab bar flottante, bottoni
+  primari). Il resto (card di contenuto) resta solido/opaco: --surface-solid.
+
+  Regola pratica per chi tocca questo file:
+  - Se l'elemento galleggia SOPRA il contenuto (nav, tab bar, bottone, modale) -> .glass-elevated
+  - Se l'elemento È il contenuto (card biglietto, card social, sezione) -> .surface-solid
+  Non mischiare le due cose sullo stesso elemento: è la regola che tiene
+  in piedi tutta la gerarchia visiva.
+*/
+
+:root {
+  /* Base — nero caldo "terra di notte", non un neutro grigio-blu da tema dark generico */
+  --bg-base: #12100d;
+  --bg-base-alt: #17140f;
+
+  /* Superfici solide (card di contenuto: biglietti, social, tornei) */
+  --surface-solid: #1c1812;
+  --surface-solid-hover: #241f17;
+  --surface-border: rgba(243, 239, 230, 0.08);
+
+  /* Superfici vetro (SOLO navbar, tab bar flottante, bottoni primari) */
+  --glass-tint: rgba(243, 236, 214, 0.07);
+  --glass-tint-strong: rgba(243, 236, 214, 0.12);
+  --glass-border: rgba(243, 239, 230, 0.14);
+  --glass-blur: 20px;
+
+  /* Accent — oro grano (identità "Agro" + luci del DJ set) */
+  --accent-gold: #d9a441;
+  --accent-gold-strong: #eab659;
+
+  /* Accent secondario — mattone della cascina, usato con parsimonia */
+  --accent-clay: #b5502e;
+
+  /* Stato positivo — verde campo/vigneto (conferme, check-in) */
+  --state-success: #7a8b4f;
+  --state-error: #c1503f;
+
+  /* Testo */
+  --text-primary: #f3efe6;
+  --text-secondary: #a69c8c;
+  --text-on-accent: #12100d;
+
+  /* Raggi e ombre */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-solid: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* ---------- Utility: vetro (solo z-layer superiore) ---------- */
+.glass-elevated {
+  background: var(--glass-tint);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-elevated);
+}
+
+.glass-elevated--strong {
+  background: var(--glass-tint-strong);
+}
+
+/* ---------- Utility: superficie solida (card di contenuto) ---------- */
+.surface-solid {
+  background: var(--surface-solid);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--shadow-solid);
+}
+
+/* ---------- Signature: bordo "harvest glow" per la CTA primaria ---------- */
+.signature-glow {
+  position: relative;
+  isolation: isolate;
+}
+.signature-glow::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    120deg,
+    var(--accent-gold) 0%,
+    rgba(217, 164, 65, 0.15) 35%,
+    var(--accent-gold) 70%
+  );
+  background-size: 200% 200%;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  z-index: -1;
+  animation: glow-shift 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signature-glow::before {
+    animation: none;
+  }
+}
+
+@keyframes glow-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
