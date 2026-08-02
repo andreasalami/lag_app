@@ -1,8 +1,8 @@
 /*
   DESIGN TOKENS — L'Agro ai Giovani (LAG)
   ----------------------------------------
-  Direzione: "notte di raccolto" — un festival benefico in una cascina,
-  di giorno campi e terra, di notte DJ set e luci calde.
+  Brand identity dell'evento: blu come colore dominante, arancione
+  come accent (CTA, dettagli, glow), bianco per testo e highlight.
   Dark, NON flat. L'effetto vetro (blur/traslucenza) è riservato SOLO
   agli elementi con z-layer superiore (navbar, tab bar flottante, bottoni
   primari). Il resto (card di contenuto) resta solido/opaco: --surface-solid.
@@ -15,36 +15,33 @@
 */
 
 :root {
-  /* Base — nero caldo "terra di notte", non un neutro grigio-blu da tema dark generico */
-  --bg-base: #12100d;
-  --bg-base-alt: #17140f;
+  /* Base — blu notte, dominante del brand */
+  --bg-base: #091422;
+  --bg-base-alt: #0d1f38;
 
   /* Superfici solide (card di contenuto: biglietti, social, tornei) */
-  --surface-solid: #1c1812;
-  --surface-solid-hover: #241f17;
-  --surface-border: rgba(243, 239, 230, 0.08);
+  --surface-solid: #11233c;
+  --surface-solid-hover: #152a46;
+  --surface-border: rgba(255, 255, 255, 0.08);
 
   /* Superfici vetro (SOLO navbar, tab bar flottante, bottoni primari) */
-  --glass-tint: rgba(243, 236, 214, 0.07);
-  --glass-tint-strong: rgba(243, 236, 214, 0.12);
-  --glass-border: rgba(243, 239, 230, 0.14);
+  --glass-tint: rgba(255, 255, 255, 0.07);
+  --glass-tint-strong: rgba(255, 255, 255, 0.13);
+  --glass-border: rgba(255, 255, 255, 0.16);
   --glass-blur: 20px;
 
-  /* Accent — oro grano (identità "Agro" + luci del DJ set) */
-  --accent-gold: #d9a441;
-  --accent-gold-strong: #eab659;
+  /* Accent — arancione, usato per CTA, dettagli e signature glow */
+  --accent-primary: #f2802e;
+  --accent-primary-strong: #ff9d52;
 
-  /* Accent secondario — mattone della cascina, usato con parsimonia */
-  --accent-clay: #b5502e;
+  /* Stato positivo / negativo */
+  --state-success: #6fa97a;
+  --state-error: #e5584b;
 
-  /* Stato positivo — verde campo/vigneto (conferme, check-in) */
-  --state-success: #7a8b4f;
-  --state-error: #c1503f;
-
-  /* Testo */
-  --text-primary: #f3efe6;
-  --text-secondary: #a69c8c;
-  --text-on-accent: #12100d;
+  /* Testo — bianco/bianco caldo, terzo colore del brand */
+  --text-primary: #f7f9fc;
+  --text-secondary: #93a4bd;
+  --text-on-accent: #0a1420;
 
   /* Raggi e ombre */
   --radius-sm: 10px;
@@ -75,7 +72,7 @@
   box-shadow: var(--shadow-solid);
 }
 
-/* ---------- Signature: bordo "harvest glow" per la CTA primaria ---------- */
+/* ---------- Signature: bordo "glow" arancione per la CTA primaria ---------- */
 .signature-glow {
   position: relative;
   isolation: isolate;
@@ -88,9 +85,9 @@
   padding: 1px;
   background: linear-gradient(
     120deg,
-    var(--accent-gold) 0%,
-    rgba(217, 164, 65, 0.15) 35%,
-    var(--accent-gold) 70%
+    var(--accent-primary) 0%,
+    rgba(242, 128, 46, 0.15) 35%,
+    var(--accent-primary) 70%
   );
   background-size: 200% 200%;
   -webkit-mask:

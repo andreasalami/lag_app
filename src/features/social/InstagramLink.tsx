@@ -13,7 +13,7 @@ export function InstagramLink() {
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Aggiornamenti su line-up, orari e novità dell'ultimo minuto su Instagram.
           </p>
-          <p className="mt-1 font-mono text-sm text-[var(--accent-gold)]">@{INSTAGRAM_HANDLE}</p>
+          <p className="mt-1 font-mono text-sm text-[var(--accent-primary)]">@{INSTAGRAM_HANDLE}</p>
         </div>
         <Button
           variant="ghost"

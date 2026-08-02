@@ -38,7 +38,7 @@ export function EventbriteTickets() {
           <Card key={t.id} className="flex flex-col justify-between">
             <div>
               <h3 className="font-display text-lg">{t.name}</h3>
-              {t.note && <p className="mt-1 text-xs text-[var(--accent-gold)]">{t.note}</p>}
+              {t.note && <p className="mt-1 text-xs text-[var(--accent-primary)]">{t.note}</p>}
             </div>
             <p className="mt-4 font-mono text-2xl text-[var(--text-primary)]">{t.price}</p>
           </Card>

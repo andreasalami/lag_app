@@ -76,7 +76,7 @@ export function TabBar() {
           <a
             key={tab.label}
             href={tab.href}
-            className="flex flex-col items-center gap-1 rounded-[var(--radius-md)] px-3 py-1.5 text-[10px] text-[var(--text-secondary)] transition-colors hover:text-[var(--accent-gold)]"
+            className="flex flex-col items-center gap-1 rounded-[var(--radius-md)] px-3 py-1.5 text-[10px] text-[var(--text-secondary)] transition-colors hover:text-[var(--accent-primary)]"
           >
             {tab.icon}
             {tab.label}
