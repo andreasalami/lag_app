@@ -1,37 +1,60 @@
-import { InstagramEmbed } from "./InstagramEmbed";
-
 /*
-  Post curati a mano — niente Graph API, niente token, niente backend.
+  Post curati a mano — mostriamo solo la foto, niente iframe di Instagram.
+  Un iframe cross-origin non si può "ritagliare" con CSS: dentro c'è
+  header, didascalia e link di attribuzione di Instagram, e non c'è modo
+  di nasconderli selettivamente (è anche il motivo per cui prima si
+  sovrapponevano — l'iframe cambia altezza in modo asincrono dopo il
+  caricamento). Qui invece è una <img> normale: pieno controllo, zero
+  sorprese.
 
-  Per aggiungere/togliere un post:
-  1. Apri il post su instagram.com
-  2. Copia l'URL del permalink, es. https://www.instagram.com/p/XXXXXXXXXXX/
-  3. Aggiungilo/rimuovilo dall'array qui sotto
+  Per aggiungere un post:
+  1. Salva la foto del post (screenshot o download) in public/instagram/
+  2. Aggiungi una riga qui sotto con permalink (per il link cliccabile),
+     percorso immagine e un alt text breve
 
-  Va aggiornato a mano, quindi tienilo corto (3-6 post) e a rotazione:
-  non è pensato per essere uno storico completo, solo gli ultimi/i
-  migliori momenti da mettere in vetrina.
+  Corto e a rotazione: 3-6 post, non è pensato per essere uno storico
+  completo.
 */
-const CURATED_POSTS: string[] = [
-  // "https://www.instagram.com/p/ESEMPIO_1/",
-  // "https://www.instagram.com/p/ESEMPIO_2/",
-  // "https://www.instagram.com/p/ESEMPIO_3/",
+type CuratedPost = {
+  permalink: string;
+  image: string; // percorso in /public, es. "/instagram/post-1.jpg"
+  alt: string;
+};
+
+const CURATED_POSTS: CuratedPost[] = [
+  // {
+  //   permalink: "https://www.instagram.com/p/ESEMPIO/",
+  //   image: "/instagram/post-1.jpg",
+  //   alt: "Descrizione breve della foto",
+  // },
 ];
 
 export function InstagramPosts() {
   if (CURATED_POSTS.length === 0) {
     return (
       <p className="mt-6 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-center text-sm text-[var(--text-secondary)]">
-        Nessun post selezionato ancora — aggiungi gli URL in{" "}
+        Nessun post selezionato ancora — aggiungi foto + permalink in{" "}
         <code className="font-mono text-[var(--accent-primary)]">src/features/social/InstagramPosts.tsx</code>.
       </p>
     );
   }
 
   return (
-    <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {CURATED_POSTS.map((url) => (
-        <InstagramEmbed key={url} url={url} />
+    <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {CURATED_POSTS.map((post) => (
+        <a
+          key={post.permalink}
+          href={post.permalink}
+          target="_blank"
+          rel="noreferrer"
+          className="group block aspect-square overflow-hidden rounded-[var(--radius-lg)] border border-[var(--surface-border)]"
+        >
+          <img
+            src={post.image}
+            alt={post.alt}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        </a>
       ))}
     </div>
   );
