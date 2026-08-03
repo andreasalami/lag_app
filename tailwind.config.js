@@ -4,7 +4,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ["Fraunces", "serif"],
+        display: ["Fredoka", "sans-serif"],
         body: ["Manrope", "sans-serif"],
         mono: ["'JetBrains Mono'", "monospace"],
       },

@@ -2,7 +2,7 @@ import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 
 // Placeholder: sostituire con l'handle reale della pagina evento.
-const INSTAGRAM_HANDLE = "lagrocaigiovani";
+const INSTAGRAM_HANDLE = "lagroaigiovani";
 
 export function InstagramLink() {
   return (
