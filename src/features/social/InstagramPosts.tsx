@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 /*
   Post curati a mano — mostriamo solo la foto, niente iframe di Instagram.
   Un iframe cross-origin non si può "ritagliare" con CSS: dentro c'è
@@ -29,7 +31,34 @@ const CURATED_POSTS: CuratedPost[] = [
   // },
 ];
 
+const AUTO_SCROLL_INTERVAL_MS = 4000;
+
 export function InstagramPosts() {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const pausedRef = useRef(false);
+
+  // Auto-scroll orizzontale: avanza di uno "schermo" alla volta, torna
+  // all'inizio quando arriva in fondo. In pausa mentre l'utente ci
+  // passa sopra il mouse o lo tocca (altrimenti litighi con lo scroll
+  // manuale, esperienza fastidiosa). Niente auto-scroll se l'utente ha
+  // richiesto animazioni ridotte a livello di sistema.
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || CURATED_POSTS.length < 2) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const id = window.setInterval(() => {
+      if (pausedRef.current) return;
+      const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 8;
+      track.scrollTo({
+        left: atEnd ? 0 : track.scrollLeft + track.clientWidth * 0.8,
+        behavior: "smooth",
+      });
+    }, AUTO_SCROLL_INTERVAL_MS);
+
+    return () => window.clearInterval(id);
+  }, []);
+
   if (CURATED_POSTS.length === 0) {
     return (
       <p className="mt-6 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-center text-sm text-[var(--text-secondary)]">
@@ -40,14 +69,21 @@ export function InstagramPosts() {
   }
 
   return (
-    <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <div
+      ref={trackRef}
+      onPointerEnter={() => (pausedRef.current = true)}
+      onPointerLeave={() => (pausedRef.current = false)}
+      onTouchStart={() => (pausedRef.current = true)}
+      onTouchEnd={() => (pausedRef.current = false)}
+      className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       {CURATED_POSTS.map((post) => (
         <a
           key={post.permalink}
           href={post.permalink}
           target="_blank"
           rel="noreferrer"
-          className="group block aspect-square overflow-hidden rounded-[var(--radius-lg)] border border-[var(--surface-border)]"
+          className="group block aspect-square w-40 flex-shrink-0 snap-start overflow-hidden rounded-[var(--radius-lg)] border border-[var(--surface-border)] sm:w-48"
         >
           <img
             src={post.image}
