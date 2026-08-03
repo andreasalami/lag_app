@@ -4,6 +4,7 @@ import { EventbriteTickets } from "../features/tickets/EventbriteTickets";
 import { EventbriteCheckoutButton } from "../features/tickets/EventbriteCheckoutButton";
 import { InstagramLink } from "../features/social/InstagramLink";
 import { Announcements } from "../features/announcements/Announcements";
+import { TournamentBracket } from "../features/tournament/TournamentBracket";
 import { Button } from "../components/ui/Button";
 
 export function Home() {
@@ -31,11 +32,7 @@ export function Home() {
       <InstagramLink />
       <Announcements />
 
-      <section id="tornei" className="mx-auto max-w-3xl px-4 py-10">
-        <div className="surface-solid rounded-[var(--radius-lg)] border-dashed p-6 text-center text-sm text-[var(--text-secondary)]">
-          Tornei in tempo reale — in arrivo in una prossima iterazione.
-        </div>
-      </section>
+      <TournamentBracket />
 
       <TabBar />
     </div>
