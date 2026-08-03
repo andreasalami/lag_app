@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_EVENTBRITE_EVENT_ID?: string;
   readonly VITE_INSTAGRAM_HANDLE?: string;
+  readonly VITE_SUPABASE_URL?: string;
+  readonly VITE_SUPABASE_ANON_KEY?: string;
 }
 
 interface ImportMeta {
