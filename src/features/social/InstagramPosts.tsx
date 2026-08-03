@@ -24,11 +24,31 @@ type CuratedPost = {
 };
 
 const CURATED_POSTS: CuratedPost[] = [
-  // {
-  //   permalink: "https://www.instagram.com/p/ESEMPIO/",
-  //   image: "/instagram/post-1.jpg",
-  //   alt: "Descrizione breve della foto",
-  // },
+  {
+    permalink: "https://www.instagram.com/p/DZNBnbrjPns/",
+    image: "/instagram/post-1.jpg", // TODO: in attesa della foto
+    alt: "TODO: descrizione post 1",
+  },
+  {
+    permalink: "https://www.instagram.com/p/DZKQ_OgDKUd/",
+    image: "/instagram/post-2.jpg", // TODO: in attesa della foto
+    alt: "TODO: descrizione post 2",
+  },
+  {
+    permalink: "https://www.instagram.com/p/DYuNjU5jDtV/",
+    image: "/instagram/post-3.jpg", // TODO: in attesa della foto
+    alt: "TODO: descrizione post 3",
+  },
+  {
+    permalink: "https://www.instagram.com/p/DWrDeL8DPET/",
+    image: "/instagram/post-4.jpg", // TODO: in attesa della foto
+    alt: "TODO: descrizione post 4",
+  },
+  {
+    permalink: "https://www.instagram.com/p/DWi1z2cjMOa/",
+    image: "/instagram/post-5.jpg", // TODO: in attesa della foto
+    alt: "TODO: descrizione post 5",
+  },
 ];
 
 const AUTO_SCROLL_INTERVAL_MS = 4000;
