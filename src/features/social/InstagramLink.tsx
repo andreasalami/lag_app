@@ -1,5 +1,6 @@
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
+import { InstagramPosts } from "./InstagramPosts";
 
 // Placeholder: sostituire con l'handle reale della pagina evento.
 const INSTAGRAM_HANDLE = "lagroaigiovani";
@@ -22,6 +23,8 @@ export function InstagramLink() {
           Apri Instagram
         </Button>
       </Card>
+
+      <InstagramPosts />
     </section>
   );
 }
