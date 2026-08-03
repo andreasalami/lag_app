@@ -13,7 +13,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  */
 export function Button({ variant = "primary", className = "", children, ...props }: ButtonProps) {
   const base =
-    "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-[var(--radius-pill)] font-semibold text-sm transition-transform active:scale-[0.97]";
+    "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-[var(--radius-pill)] font-semibold text-sm transition-transform active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
 
   if (variant === "ghost") {
     return (

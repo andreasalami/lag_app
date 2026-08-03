@@ -1,54 +1,23 @@
 import { useEffect, useRef } from "react";
+import { InstagramEmbed } from "./InstagramEmbed";
 
 /*
-  Post curati a mano — mostriamo solo la foto, niente iframe di Instagram.
-  Un iframe cross-origin non si può "ritagliare" con CSS: dentro c'è
-  header, didascalia e link di attribuzione di Instagram, e non c'è modo
-  di nasconderli selettivamente (è anche il motivo per cui prima si
-  sovrapponevano — l'iframe cambia altezza in modo asincrono dopo il
-  caricamento). Qui invece è una <img> normale: pieno controllo, zero
-  sorprese.
+  Post Instagram di default (embed ufficiale via embed.js): mostrano
+  la card intera (header, foto, eventuale didascalia, link "Visualizza
+  su Instagram"). Non possiamo ritagliare solo la foto — è dentro un
+  iframe cross-origin, non stilizzabile dal nostro CSS — ma bordo e
+  angoli del CONTENITORE restano coerenti col resto della home, quello
+  lo controlliamo noi.
 
-  Per aggiungere un post:
-  1. Salva la foto del post (screenshot o download) in public/instagram/
-  2. Aggiungi una riga qui sotto con permalink (per il link cliccabile),
-     percorso immagine e un alt text breve
-
-  Corto e a rotazione: 3-6 post, non è pensato per essere uno storico
-  completo.
+  Per aggiungere/togliere un post: aggiungi/rimuovi un permalink qui
+  sotto. Corto e a rotazione: 3-6 post.
 */
-type CuratedPost = {
-  permalink: string;
-  image: string; // percorso in /public, es. "/instagram/post-1.jpg"
-  alt: string;
-};
-
-const CURATED_POSTS: CuratedPost[] = [
-  {
-    permalink: "https://www.instagram.com/p/DZNBnbrjPns/",
-    image: "/instagram/post-1.jpg", // TODO: in attesa della foto
-    alt: "TODO: descrizione post 1",
-  },
-  {
-    permalink: "https://www.instagram.com/p/DZKQ_OgDKUd/",
-    image: "/instagram/post-2.jpg", // TODO: in attesa della foto
-    alt: "TODO: descrizione post 2",
-  },
-  {
-    permalink: "https://www.instagram.com/p/DYuNjU5jDtV/",
-    image: "/instagram/post-3.jpg", // TODO: in attesa della foto
-    alt: "TODO: descrizione post 3",
-  },
-  {
-    permalink: "https://www.instagram.com/p/DWrDeL8DPET/",
-    image: "/instagram/post-4.jpg", // TODO: in attesa della foto
-    alt: "TODO: descrizione post 4",
-  },
-  {
-    permalink: "https://www.instagram.com/p/DWi1z2cjMOa/",
-    image: "/instagram/post-5.jpg", // TODO: in attesa della foto
-    alt: "TODO: descrizione post 5",
-  },
+const CURATED_POSTS: string[] = [
+  "https://www.instagram.com/p/DZNBnbrjPns/",
+  "https://www.instagram.com/p/DZKQ_OgDKUd/",
+  "https://www.instagram.com/p/DYuNjU5jDtV/",
+  "https://www.instagram.com/p/DWrDeL8DPET/",
+  "https://www.instagram.com/p/DWi1z2cjMOa/",
 ];
 
 const AUTO_SCROLL_INTERVAL_MS = 4000;
@@ -59,9 +28,8 @@ export function InstagramPosts() {
 
   // Auto-scroll orizzontale: avanza di uno "schermo" alla volta, torna
   // all'inizio quando arriva in fondo. In pausa mentre l'utente ci
-  // passa sopra il mouse o lo tocca (altrimenti litighi con lo scroll
-  // manuale, esperienza fastidiosa). Niente auto-scroll se l'utente ha
-  // richiesto animazioni ridotte a livello di sistema.
+  // passa sopra il mouse o lo tocca. Niente auto-scroll con animazioni
+  // ridotte a livello di sistema.
   useEffect(() => {
     const track = trackRef.current;
     if (!track || CURATED_POSTS.length < 2) return;
@@ -82,7 +50,7 @@ export function InstagramPosts() {
   if (CURATED_POSTS.length === 0) {
     return (
       <p className="mt-6 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-center text-sm text-[var(--text-secondary)]">
-        Nessun post selezionato ancora — aggiungi foto + permalink in{" "}
+        Nessun post selezionato ancora — aggiungi un permalink in{" "}
         <code className="font-mono text-[var(--accent-primary)]">src/features/social/InstagramPosts.tsx</code>.
       </p>
     );
@@ -97,20 +65,13 @@ export function InstagramPosts() {
       onTouchEnd={() => (pausedRef.current = false)}
       className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      {CURATED_POSTS.map((post) => (
-        <a
-          key={post.permalink}
-          href={post.permalink}
-          target="_blank"
-          rel="noreferrer"
-          className="group block aspect-square w-40 flex-shrink-0 snap-start overflow-hidden rounded-[var(--radius-lg)] border border-[var(--surface-border)] sm:w-48"
+      {CURATED_POSTS.map((permalink) => (
+        <div
+          key={permalink}
+          className="w-80 flex-shrink-0 snap-start overflow-hidden rounded-[var(--radius-lg)] border border-[var(--surface-border)] sm:w-96"
         >
-          <img
-            src={post.image}
-            alt={post.alt}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-        </a>
+          <InstagramEmbed url={permalink} />
+        </div>
       ))}
     </div>
   );

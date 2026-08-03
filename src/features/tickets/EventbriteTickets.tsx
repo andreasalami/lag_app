@@ -1,5 +1,5 @@
 import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
+import { EventbriteCheckoutButton } from "./EventbriteCheckoutButton";
 
 /*
   NOTA ARCHITETTURALE (da tenere a mente, non ancora deciso in via definitiva):
@@ -46,7 +46,7 @@ export function EventbriteTickets() {
       </div>
 
       <div className="mt-6">
-        <Button variant="primary">Acquista su Eventbrite</Button>
+        <EventbriteCheckoutButton />
       </div>
     </section>
   );

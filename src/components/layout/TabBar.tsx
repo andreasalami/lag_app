@@ -48,15 +48,12 @@ const tabs: Tab[] = [
     ),
   },
   {
-    label: "Tornei",
-    href: "#tornei",
+    label: "Annunci",
+    href: "#annunci",
     icon: (
       <svg {...iconProps}>
-        <path d="M8 21h8" />
-        <path d="M12 17v4" />
-        <path d="M7 4h10v4a5 5 0 0 1-10 0Z" />
-        <path d="M7 5H4v2a3 3 0 0 0 3 3" />
-        <path d="M17 5h3v2a3 3 0 0 1-3 3" />
+        <path d="M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z" />
+        <path d="M10 19a2 2 0 0 0 4 0" />
       </svg>
     ),
   },
