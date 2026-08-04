@@ -78,3 +78,69 @@ create policy "Solo lo staff elimina annunci"
 -- aperta, senza refresh. Va abilitato anche dalla dashboard:
 -- Database > Replication > tabella "announcements" > Enable.
 alter publication supabase_realtime add table announcements;
+
+-- ============================================================
+-- PROGRAMMA: scaletta con 2 palchi in contemporanea. Pubblico in
+-- lettura, modificabile solo dallo staff (stessa autenticazione
+-- degli annunci — stesso ruolo 'staff', nessun ruolo a parte).
+-- ============================================================
+create table if not exists program_slots (
+  id uuid primary key default gen_random_uuid(),
+  stage text not null check (stage in ('Stage 1', 'Stage 2')),
+  title text not null,
+  start_time text not null, -- formato "HH:MM", niente data: evento di un giorno solo
+  end_time text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table program_slots enable row level security;
+
+create policy "Chiunque legge il programma"
+  on program_slots for select
+  using (true);
+
+create policy "Solo lo staff scrive il programma"
+  on program_slots for insert
+  with check (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+
+create policy "Solo lo staff modifica il programma"
+  on program_slots for update
+  using (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+
+create policy "Solo lo staff elimina dal programma"
+  on program_slots for delete
+  using (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+
+alter publication supabase_realtime add table program_slots;
+
+-- ============================================================
+-- MENU: cibo e bevande. Stesse regole del programma — pubblico in
+-- lettura, scrittura solo staff.
+-- ============================================================
+create table if not exists menu_items (
+  id uuid primary key default gen_random_uuid(),
+  category text not null check (category in ('cibo', 'bevande')),
+  name text not null,
+  price numeric(6,2) not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table menu_items enable row level security;
+
+create policy "Chiunque legge il menu"
+  on menu_items for select
+  using (true);
+
+create policy "Solo lo staff scrive il menu"
+  on menu_items for insert
+  with check (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+
+create policy "Solo lo staff modifica il menu"
+  on menu_items for update
+  using (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+
+create policy "Solo lo staff elimina dal menu"
+  on menu_items for delete
+  using (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+
+alter publication supabase_realtime add table menu_items;
