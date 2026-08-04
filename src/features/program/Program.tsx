@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { RoleLogin } from "../auth/RoleLogin";
 import { useAuth } from "../auth/AuthContext";
-import { supabase, isSupabaseConfigured } from "../../lib/supabaseClient";
+import { supabase } from "../../lib/supabaseClient";
+import { useSupabaseRows } from "../../lib/useSupabaseRows";
 import { ProgramGrid, type ProgramSlotData } from "./ProgramGrid";
 
 const STAGES = ["Stage 1", "Stage 2"];
@@ -14,50 +14,29 @@ const FALLBACK_SLOTS: ProgramSlotData[] = [
 ];
 
 /*
-  Programma — stessa logica degli annunci: dati reali da Supabase con
-  realtime (fetch completo ad ogni cambiamento, sono poche righe, non
-  serve ottimizzare un merge incrementale), fallback di esempio se
-  Supabase non è ancora configurato. Editing riservato allo STESSO
-  ruolo 'staff' degli annunci — nessuna autenticazione a parte, come
-  richiesto: chi pubblica annunci pubblica anche il programma.
+  Programma — dati reali da Supabase (fetch + realtime via
+  useSupabaseRows), editing riservato allo STESSO ruolo 'staff' degli
+  annunci: nessuna autenticazione a parte.
 
-  "Scaletta modificabile": ogni riga nella lista sotto è editabile
-  direttamente (nome, orario inizio/fine, palco) — cambia un campo,
-  si salva subito. La griglia calendario si ricalcola da sola dai
-  dati, non è un disegno separato da tenere sincronizzato a mano.
+  "Scaletta modificabile": ogni riga nella lista è editabile
+  direttamente — cambia un campo, si salva subito. La griglia
+  calendario sotto si ricalcola da sola da questi dati.
 */
 export function Program() {
   const { role } = useAuth();
   const canEdit = role === "staff";
-  const [slots, setSlots] = useState<ProgramSlotData[]>(FALLBACK_SLOTS);
-  const [loading, setLoading] = useState(isSupabaseConfigured);
-
-  const fetchSlots = async () => {
-    const { data, error } = await supabase
-      .from("program_slots")
-      .select("id, stage, title, start_time, end_time")
-      .order("start_time", { ascending: true });
-    if (!error && data) setSlots(data);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    fetchSlots();
-    const channel = supabase
-      .channel("program-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "program_slots" }, fetchSlots)
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  const { rows: slots, setRows: setSlots, loading, refetch } = useSupabaseRows<ProgramSlotData>({
+    table: "program_slots",
+    select: "id, stage, title, start_time, end_time",
+    orderBy: [{ column: "start_time" }],
+    fallback: FALLBACK_SLOTS,
+  });
 
   async function addSlot() {
     await supabase
       .from("program_slots")
       .insert({ stage: STAGES[0], title: "Nuovo evento", start_time: "20:00", end_time: "21:00" });
-    fetchSlots();
+    refetch();
   }
 
   async function updateSlot(id: string, patch: Partial<ProgramSlotData>) {
@@ -89,7 +68,7 @@ export function Program() {
               <select
                 value={slot.stage}
                 onChange={(e) => updateSlot(slot.id, { stage: e.target.value })}
-                className="rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-xs text-[var(--text-primary)]"
+                className="field text-xs"
               >
                 {STAGES.map((s) => (
                   <option key={s} value={s} className="bg-[var(--surface-solid)]">
@@ -100,20 +79,20 @@ export function Program() {
               <input
                 value={slot.title}
                 onChange={(e) => updateSlot(slot.id, { title: e.target.value })}
-                className="min-w-[140px] flex-1 rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-sm text-[var(--text-primary)]"
+                className="field min-w-[140px] flex-1"
               />
               <input
                 type="time"
                 value={slot.start_time}
                 onChange={(e) => updateSlot(slot.id, { start_time: e.target.value })}
-                className="rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-xs text-[var(--text-primary)]"
+                className="field text-xs"
               />
               <span className="text-xs text-[var(--text-secondary)]">–</span>
               <input
                 type="time"
                 value={slot.end_time}
                 onChange={(e) => updateSlot(slot.id, { end_time: e.target.value })}
-                className="rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-xs text-[var(--text-primary)]"
+                className="field text-xs"
               />
               <button
                 onClick={() => deleteSlot(slot.id)}
@@ -123,10 +102,7 @@ export function Program() {
               </button>
             </div>
           ))}
-          <button
-            onClick={addSlot}
-            className="mt-1 self-start text-xs text-[var(--accent-primary)] hover:underline"
-          >
+          <button onClick={addSlot} className="mt-1 self-start text-xs text-[var(--accent-primary)] hover:underline">
             + Aggiungi evento
           </button>
         </Card>

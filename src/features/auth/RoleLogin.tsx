@@ -86,7 +86,7 @@ export function RoleLogin({ requiredRole, label }: RoleLoginProps) {
         placeholder={`Email ${label.toLowerCase()}`}
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1.5 text-sm text-[var(--text-primary)]"
+        className="field py-1.5"
       />
       <input
         type="password"
@@ -94,7 +94,7 @@ export function RoleLogin({ requiredRole, label }: RoleLoginProps) {
         placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1.5 text-sm text-[var(--text-primary)]"
+        className="field py-1.5"
       />
       <button
         type="submit"

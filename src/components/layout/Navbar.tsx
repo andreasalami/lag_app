@@ -7,11 +7,9 @@ export function Navbar() {
         </a>
         <nav className="hidden gap-6 text-sm text-[var(--text-secondary)] sm:flex">
           <a href="#biglietti" className="hover:text-[var(--text-primary)]">Biglietti</a>
-          <a href="#programma" className="hover:text-[var(--text-primary)]">Programma</a>
           <a href="#menu" className="hover:text-[var(--text-primary)]">Menu</a>
           <a href="#social" className="hover:text-[var(--text-primary)]">Instagram</a>
           <a href="#annunci" className="hover:text-[var(--text-primary)]">Annunci</a>
-          <a href="#tornei" className="hover:text-[var(--text-primary)]">Tornei</a>
         </nav>
       </div>
     </header>

@@ -32,7 +32,7 @@ function SlotRow({ name, isWinner, score, editable, onClick, onScoreChange, onOv
             setEditing(false);
           }
         }}
-        className="w-full rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-sm text-[var(--text-primary)]"
+        className="field w-full"
       />
     );
   }
@@ -59,7 +59,7 @@ function SlotRow({ name, isWinner, score, editable, onClick, onScoreChange, onOv
             type="number"
             value={score ?? ""}
             onChange={(e) => onScoreChange(e.target.value === "" ? null : Number(e.target.value))}
-            className="w-12 rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-1 py-1 text-center font-mono text-xs text-[var(--text-primary)]"
+            className="field w-12 px-1 text-center font-mono text-xs"
             placeholder="-"
           />
           <button
@@ -80,8 +80,6 @@ function SlotRow({ name, isWinner, score, editable, onClick, onScoreChange, onOv
 }
 
 interface MatchCardProps {
-  round: number;
-  index: number;
   nameA: string | null;
   nameB: string | null;
   scoreA: number | null;

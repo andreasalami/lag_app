@@ -35,7 +35,7 @@ export function PublishAnnouncementForm({ onPublished }: PublishAnnouncementForm
         placeholder="Titolo annuncio"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)]"
+        className="field px-3 py-2"
       />
       <textarea
         required
@@ -43,7 +43,7 @@ export function PublishAnnouncementForm({ onPublished }: PublishAnnouncementForm
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         rows={2}
-        className="resize-none rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)]"
+        className="field resize-none px-3 py-2"
       />
       <div className="flex items-center gap-3">
         <button

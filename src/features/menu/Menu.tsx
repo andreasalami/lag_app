@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { RoleLogin } from "../auth/RoleLogin";
 import { useAuth } from "../auth/AuthContext";
-import { supabase, isSupabaseConfigured } from "../../lib/supabaseClient";
+import { supabase } from "../../lib/supabaseClient";
+import { useSupabaseRows } from "../../lib/useSupabaseRows";
 
 type Category = "cibo" | "bevande";
 
@@ -26,41 +26,27 @@ const FALLBACK_ITEMS: MenuItem[] = [
 const priceFormatter = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" });
 
 /*
-  Menu — stesso pattern esatto di Program: dati Supabase con realtime,
-  fallback di esempio, editing riservato al ruolo 'staff' (identico
-  agli annunci, nessuna autenticazione a parte).
+  Menu — stesso pattern esatto di Program (vedi useSupabaseRows):
+  dati Supabase con realtime, fallback di esempio, editing riservato
+  al ruolo 'staff' (identico agli annunci, nessuna autenticazione
+  a parte).
 */
 export function Menu() {
   const { role } = useAuth();
   const canEdit = role === "staff";
-  const [items, setItems] = useState<MenuItem[]>(FALLBACK_ITEMS);
-  const [loading, setLoading] = useState(isSupabaseConfigured);
-
-  const fetchItems = async () => {
-    const { data, error } = await supabase
-      .from("menu_items")
-      .select("id, category, name, price")
-      .order("category", { ascending: true })
-      .order("name", { ascending: true });
-    if (!error && data) setItems(data);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    fetchItems();
-    const channel = supabase
-      .channel("menu-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, fetchItems)
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  const { rows: items, setRows: setItems, loading, refetch } = useSupabaseRows<MenuItem>({
+    table: "menu_items",
+    select: "id, category, name, price",
+    orderBy: [
+      { column: "category" },
+      { column: "name" },
+    ],
+    fallback: FALLBACK_ITEMS,
+  });
 
   async function addItem(category: Category) {
     await supabase.from("menu_items").insert({ category, name: "Nuovo prodotto", price: 0 });
-    fetchItems();
+    refetch();
   }
 
   async function updateItem(id: string, patch: Partial<MenuItem>) {
@@ -101,7 +87,7 @@ export function Menu() {
                       <input
                         value={item.name}
                         onChange={(e) => updateItem(item.id, { name: e.target.value })}
-                        className="flex-1 rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-sm text-[var(--text-primary)]"
+                        className="field flex-1"
                       />
                       <input
                         type="number"
@@ -109,7 +95,7 @@ export function Menu() {
                         min="0"
                         value={item.price}
                         onChange={(e) => updateItem(item.id, { price: Number(e.target.value) })}
-                        className="w-20 rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-right font-mono text-sm text-[var(--text-primary)]"
+                        className="field w-20 text-right font-mono"
                       />
                       <span className="text-xs text-[var(--text-secondary)]">€</span>
                       <button

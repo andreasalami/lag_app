@@ -36,3 +36,12 @@ h1, h2, h3 {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
+
+/* Input/select/textarea: stesso identico stile ovunque nell'app —
+   qui in @layer components così le utility Tailwind aggiunte accanto
+   (es. "field text-xs w-20") vincono comunque sul default. */
+@layer components {
+  .field {
+    @apply rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-sm text-[var(--text-primary)];
+  }
+}

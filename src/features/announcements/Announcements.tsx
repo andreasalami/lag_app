@@ -1,22 +1,15 @@
-import { useEffect, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { NotificationPermission } from "./NotificationPermission";
 import { PublishAnnouncementForm } from "./PublishAnnouncementForm";
 import { RoleLogin } from "../auth/RoleLogin";
 import { useAuth } from "../auth/AuthContext";
-import { supabase, isSupabaseConfigured } from "../../lib/supabaseClient";
+import { useSupabaseRows } from "../../lib/useSupabaseRows";
 
 /*
-  Annunci — dati reali da Supabase quando configurato (fetch iniziale +
-  sottoscrizione realtime: un annuncio pubblicato da un membro dello
-  staff appare a chiunque abbia la pagina aperta, senza refresh).
-
-  Se Supabase non è ancora configurato (.env.local vuoto), mostriamo
-  3 annunci di esempio invece di una sezione vuota — stesso principio
-  onesto già usato per Eventbrite: stato chiaro, non finto.
-
-  Layout: lista verticale semplice, NON un carosello — tutti gli
-  annunci sono visibili scorrendo la pagina normalmente.
+  Annunci — dati reali da Supabase (fetch + realtime via useSupabaseRows),
+  fallback di esempio se non configurato. Layout: lista verticale
+  semplice, NON un carosello — tutti gli annunci sono visibili
+  scorrendo la pagina normalmente.
 */
 type Announcement = {
   id: string;
@@ -25,7 +18,7 @@ type Announcement = {
   published_at: string;
 };
 
-const FALLBACK_ANNOUNCEMENTS: Announcement[] = [
+const FALLBACK: Announcement[] = [
   {
     id: "fallback-1",
     title: "Benvenuti a L'Agro ai Giovani",
@@ -55,41 +48,12 @@ const dateFormatter = new Intl.DateTimeFormat("it-IT", {
 
 export function Announcements() {
   const { role } = useAuth();
-  const [announcements, setAnnouncements] = useState<Announcement[]>(FALLBACK_ANNOUNCEMENTS);
-  const [loading, setLoading] = useState(isSupabaseConfigured);
-
-  const fetchAnnouncements = async () => {
-    const { data, error } = await supabase
-      .from("announcements")
-      .select("id, title, message, published_at")
-      .order("published_at", { ascending: false });
-
-    if (!error && data) setAnnouncements(data);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-
-    fetchAnnouncements();
-
-    // Realtime: chi ha la pagina aperta vede il nuovo annuncio comparire
-    // da solo, senza dover ricaricare.
-    const channel = supabase
-      .channel("announcements-changes")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "announcements" },
-        (payload) => {
-          setAnnouncements((prev) => [payload.new as Announcement, ...prev]);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  const { rows: announcements, loading, refetch } = useSupabaseRows<Announcement>({
+    table: "announcements",
+    select: "id, title, message, published_at",
+    orderBy: [{ column: "published_at", ascending: false }],
+    fallback: FALLBACK,
+  });
 
   return (
     <section id="annunci" className="mx-auto max-w-3xl px-4 py-10">
@@ -100,7 +64,7 @@ export function Announcements() {
 
       <NotificationPermission />
       <RoleLogin requiredRole="staff" label="Staff" />
-      {role === "staff" && <PublishAnnouncementForm onPublished={fetchAnnouncements} />}
+      {role === "staff" && <PublishAnnouncementForm onPublished={refetch} />}
 
       {loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico gli annunci...</p>

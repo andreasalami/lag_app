@@ -145,7 +145,7 @@ export function TournamentBracket() {
                     next[i] = e.target.value;
                     setTeams(next);
                   }}
-                  className="rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-sm text-[var(--text-primary)]"
+                  className="field"
                 />
               ))}
             </Card>
@@ -166,8 +166,6 @@ export function TournamentBracket() {
               return (
                 <MatchCard
                   key={index}
-                  round={round}
-                  index={index}
                   nameA={nameA}
                   nameB={nameB}
                   scoreA={state?.scoreA ?? null}
