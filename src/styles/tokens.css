@@ -59,12 +59,6 @@
   backdrop-filter: blur(var(--glass-blur)) saturate(160%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-elevated);
-  /* Isola il blur nel proprio layer GPU: mitigazione nota per i glitch
-     di repaint che Safari/WebKit può avere quando backdrop-filter vive
-     su elementi sticky/fixed (si vedono come bande chiare durante lo
-     scroll altrove nella pagina). */
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 .glass-elevated--strong {
