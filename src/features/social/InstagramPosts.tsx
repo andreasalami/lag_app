@@ -1,16 +1,25 @@
-import { useEffect, useRef } from "react";
+import { useRef, useState } from "react";
 import { InstagramEmbed } from "./InstagramEmbed";
 
 /*
-  Post Instagram di default (embed ufficiale via embed.js): mostrano
-  la card intera (header, foto, eventuale didascalia, link "Visualizza
-  su Instagram"). Non possiamo ritagliare solo la foto — è dentro un
-  iframe cross-origin, non stilizzabile dal nostro CSS — ma bordo e
-  angoli del CONTENITORE restano coerenti col resto della home, quello
-  lo controlliamo noi.
+  Post curati a mano, stessi permalink di prima — solo la presentazione
+  cambia: da riga scorrevole a mazzo di carte sovrapposte, swipe a
+  sinistra per andare avanti, a destra per tornare indietro.
 
-  Per aggiungere/togliere un post: aggiungi/rimuovi un permalink qui
-  sotto. Corto e a rotazione: 3-6 post.
+  Perché un overlay trasparente sopra ogni carta: l'embed Instagram è
+  un iframe cross-origin, e un iframe NON inoltra gli eventi di
+  puntamento al documento che lo contiene — se attacchi il drag
+  direttamente sul wrapper, appena il dito/mouse è sopra l'iframe lo
+  swipe si blocca. L'overlay cattura sempre lui il gesto, sopra tutto.
+  Come bonus: un tap secco (senza trascinamento) sull'overlay apre il
+  post vero su Instagram, altrimenti l'embed sotto sarebbe irraggiungibile.
+
+  Nota onesta: la card ha un'altezza fissa con overflow nascosto,
+  quindi per i post con didascalia lunga il piè di pagina dell'embed
+  ("Visualizza su Instagram") può risultare tagliato — la foto in alto
+  resta sempre visibile per intero. È il compromesso di forzare
+  qualsiasi imbed (dimensione variabile, fuori dal nostro controllo)
+  dentro una carta di dimensione fissa.
 */
 const CURATED_POSTS: string[] = [
   "https://www.instagram.com/p/DZNBnbrjPns/",
@@ -20,34 +29,19 @@ const CURATED_POSTS: string[] = [
   "https://www.instagram.com/p/DWi1z2cjMOa/",
 ];
 
-const AUTO_SCROLL_INTERVAL_MS = 4000;
+const VISIBLE_DEPTH = 3;
+const SWIPE_THRESHOLD = 80;
+const TAP_THRESHOLD = 6;
 
 export function InstagramPosts() {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const pausedRef = useRef(false);
+  const [current, setCurrent] = useState(0);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const dragStartX = useRef(0);
+  const dragging = useRef(false);
 
-  // Auto-scroll orizzontale: avanza di uno "schermo" alla volta, torna
-  // all'inizio quando arriva in fondo. In pausa mentre l'utente ci
-  // passa sopra il mouse o lo tocca. Niente auto-scroll con animazioni
-  // ridotte a livello di sistema.
-  useEffect(() => {
-    const track = trackRef.current;
-    if (!track || CURATED_POSTS.length < 2) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const total = CURATED_POSTS.length;
 
-    const id = window.setInterval(() => {
-      if (pausedRef.current) return;
-      const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 8;
-      track.scrollTo({
-        left: atEnd ? 0 : track.scrollLeft + track.clientWidth * 0.8,
-        behavior: "smooth",
-      });
-    }, AUTO_SCROLL_INTERVAL_MS);
-
-    return () => window.clearInterval(id);
-  }, []);
-
-  if (CURATED_POSTS.length === 0) {
+  if (total === 0) {
     return (
       <p className="mt-6 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-center text-sm text-[var(--text-secondary)]">
         Nessun post selezionato ancora — aggiungi un permalink in{" "}
@@ -56,23 +50,129 @@ export function InstagramPosts() {
     );
   }
 
+  function goNext() {
+    setCurrent((c) => (c + 1) % total);
+  }
+  function goPrev() {
+    setCurrent((c) => (c - 1 + total) % total);
+  }
+
+  function snapBack() {
+    const el = cardRef.current;
+    if (!el) return;
+    el.style.transition = "transform 0.25s ease";
+    el.style.transform = "translateX(0) rotate(0deg)";
+  }
+
+  function handlePointerDown(e: React.PointerEvent) {
+    dragging.current = true;
+    dragStartX.current = e.clientX;
+    const el = cardRef.current;
+    if (el) el.style.transition = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  function handlePointerMove(e: PointerEvent) {
+    if (!dragging.current) return;
+    const el = cardRef.current;
+    if (!el) return;
+    const deltaX = e.clientX - dragStartX.current;
+    el.style.transform = `translateX(${deltaX}px) rotate(${deltaX / 14}deg)`;
+  }
+
+  function handlePointerUp(e: PointerEvent) {
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+    if (!dragging.current) return;
+    dragging.current = false;
+
+    const deltaX = e.clientX - dragStartX.current;
+    const el = cardRef.current;
+
+    if (Math.abs(deltaX) < TAP_THRESHOLD) {
+      window.open(CURATED_POSTS[current], "_blank", "noreferrer");
+      snapBack();
+      return;
+    }
+
+    if (Math.abs(deltaX) > SWIPE_THRESHOLD) {
+      const goingNext = deltaX < 0; // swipe a sinistra = avanti
+      if (el) {
+        el.style.transition = "transform 0.22s ease";
+        el.style.transform = `translateX(${goingNext ? -600 : 600}px) rotate(${goingNext ? -25 : 25}deg)`;
+      }
+      window.setTimeout(() => {
+        if (goingNext) goNext();
+        else goPrev();
+        if (el) {
+          el.style.transition = "none";
+          el.style.transform = "translateX(0) rotate(0deg)";
+        }
+      }, 200);
+    } else {
+      snapBack();
+    }
+  }
+
+  const depthCount = Math.min(VISIBLE_DEPTH, total);
+
   return (
-    <div
-      ref={trackRef}
-      onPointerEnter={() => (pausedRef.current = true)}
-      onPointerLeave={() => (pausedRef.current = false)}
-      onTouchStart={() => (pausedRef.current = true)}
-      onTouchEnd={() => (pausedRef.current = false)}
-      className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      {CURATED_POSTS.map((permalink) => (
-        <div
-          key={permalink}
-          className="w-80 flex-shrink-0 snap-start overflow-hidden rounded-[var(--radius-lg)] border border-[var(--surface-border)] sm:w-96"
+    <div className="mt-6">
+      <div className="relative mx-auto aspect-[4/5] w-full max-w-[300px]">
+        {Array.from({ length: depthCount }, (_, d) => depthCount - 1 - d).map((depth) => {
+          const idx = (current + depth) % total;
+          const isTop = depth === 0;
+          const rotation = isTop ? 0 : (depth % 2 === 0 ? 1 : -1) * (4 + depth * 2);
+
+          return (
+            <div
+              key={depth === 0 ? "top" : idx}
+              ref={isTop ? cardRef : undefined}
+              className="surface-solid absolute inset-0 overflow-hidden rounded-[var(--radius-lg)]"
+              style={{
+                zIndex: 100 - depth,
+                transform: `translateY(${depth * 10}px) scale(${1 - depth * 0.06}) rotate(${rotation}deg)`,
+                opacity: isTop ? 1 : 0.85 - depth * 0.2,
+              }}
+            >
+              {isTop && <InstagramEmbed url={CURATED_POSTS[idx]} />}
+              {isTop && (
+                <div
+                  className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
+                  onPointerDown={handlePointerDown}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-3 text-center text-xs text-[var(--text-secondary)]">
+        Scorri la carta per esplorare gli altri post
+      </p>
+
+      <div className="mt-2 flex items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={goPrev}
+          aria-label="Post precedente"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--surface-border)] text-[var(--text-secondary)] hover:text-[var(--accent-primary)]"
         >
-          <InstagramEmbed url={permalink} />
-        </div>
-      ))}
+          ‹
+        </button>
+        <span className="font-mono text-xs text-[var(--text-secondary)]">
+          {current + 1} / {total}
+        </span>
+        <button
+          type="button"
+          onClick={goNext}
+          aria-label="Post successivo"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--surface-border)] text-[var(--text-secondary)] hover:text-[var(--accent-primary)]"
+        >
+          ›
+        </button>
+      </div>
     </div>
   );
 }
