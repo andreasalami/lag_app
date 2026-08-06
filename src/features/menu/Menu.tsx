@@ -45,18 +45,27 @@ export function Menu() {
   });
 
   async function addItem(category: Category) {
-    await supabase.from("menu_items").insert({ category, name: "Nuovo prodotto", price: 0 });
+    const { error } = await supabase.from("menu_items").insert({ category, name: "Nuovo prodotto", price: 0 });
+    if (error) console.error("[Menu] Errore inserimento:", error.message);
     refetch();
   }
 
   async function updateItem(id: string, patch: Partial<MenuItem>) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
-    await supabase.from("menu_items").update(patch).eq("id", id);
+    const { error } = await supabase.from("menu_items").update(patch).eq("id", id);
+    if (error) {
+      console.error("[Menu] Errore aggiornamento:", error.message);
+      refetch();
+    }
   }
 
   async function deleteItem(id: string) {
     setItems((prev) => prev.filter((i) => i.id !== id));
-    await supabase.from("menu_items").delete().eq("id", id);
+    const { error } = await supabase.from("menu_items").delete().eq("id", id);
+    if (error) {
+      console.error("[Menu] Errore eliminazione:", error.message);
+      refetch();
+    }
   }
 
   return (

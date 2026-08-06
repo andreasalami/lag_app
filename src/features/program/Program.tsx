@@ -33,20 +33,32 @@ export function Program() {
   });
 
   async function addSlot() {
-    await supabase
+    const { error } = await supabase
       .from("program_slots")
       .insert({ stage: STAGES[0], title: "Nuovo evento", start_time: "20:00", end_time: "21:00" });
+    if (error) console.error("[Program] Errore inserimento:", error.message);
     refetch();
   }
 
   async function updateSlot(id: string, patch: Partial<ProgramSlotData>) {
     setSlots((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-    await supabase.from("program_slots").update(patch).eq("id", id);
+    const { error } = await supabase.from("program_slots").update(patch).eq("id", id);
+    // Se la scrittura vera fallisce (es. sessione scaduta), lo stato
+    // ottimistico sopra resterebbe sbagliato senza che nessuno se ne
+    // accorga: il refetch riallinea alla realtà del DB.
+    if (error) {
+      console.error("[Program] Errore aggiornamento:", error.message);
+      refetch();
+    }
   }
 
   async function deleteSlot(id: string) {
     setSlots((prev) => prev.filter((s) => s.id !== id));
-    await supabase.from("program_slots").delete().eq("id", id);
+    const { error } = await supabase.from("program_slots").delete().eq("id", id);
+    if (error) {
+      console.error("[Program] Errore eliminazione:", error.message);
+      refetch();
+    }
   }
 
   return (
