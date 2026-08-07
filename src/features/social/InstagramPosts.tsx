@@ -13,6 +13,18 @@ import { InstagramEmbed } from "./InstagramEmbed";
   swipe si blocca. L'overlay cattura sempre lui il gesto, sopra tutto.
   Come bonus: un tap secco (senza trascinamento) sull'overlay apre il
   post vero su Instagram, altrimenti l'embed sotto sarebbe irraggiungibile.
+  L'overlay è montato SOLO sulla carta in cima: le carte dietro devono
+  restare visibili ma non devono intercettare gesti.
+
+  Tutte le carte visibili nel mazzo (non solo quella in cima) montano
+  l'embed vero: quando fai swipe la prossima è già pronta, non c'è un
+  buco vuoto sotto. La key di ogni carta è l'indice del post (idx), non
+  la sua posizione nel mazzo: così quando una carta viene promossa da
+  "dietro" a "in cima" resta lo STESSO nodo React/DOM, non viene
+  smontata e rimontata da capo (niente ricaricamento, niente flash).
+  Le carte che escono dalla finestra visibile (VISIBLE_DEPTH) vengono
+  smontate per davvero — l'iframe non resta a consumare risorse quando
+  non è a portata di swipe.
 
   Nota onesta: la card ha un'altezza fissa con overflow nascosto,
   quindi per i post con didascalia lunga il piè di pagina dell'embed
@@ -119,7 +131,7 @@ export function InstagramPosts() {
 
   return (
     <div className="mt-6">
-      <div className="relative mx-auto aspect-[4/5] w-full max-w-[300px]">
+      <div className="relative isolate mx-auto aspect-[4/5] w-full max-w-[300px]">
         {Array.from({ length: depthCount }, (_, d) => depthCount - 1 - d).map((depth) => {
           const idx = (current + depth) % total;
           const isTop = depth === 0;
@@ -127,16 +139,16 @@ export function InstagramPosts() {
 
           return (
             <div
-              key={depth === 0 ? "top" : idx}
+              key={idx}
               ref={isTop ? cardRef : undefined}
               className="surface-solid absolute inset-0 overflow-hidden rounded-[var(--radius-lg)]"
               style={{
-                zIndex: 100 - depth,
+                zIndex: depthCount - depth,
                 transform: `translateY(${depth * 10}px) scale(${1 - depth * 0.06}) rotate(${rotation}deg)`,
                 opacity: isTop ? 1 : 0.85 - depth * 0.2,
               }}
             >
-              {isTop && <InstagramEmbed url={CURATED_POSTS[idx]} />}
+              <InstagramEmbed url={CURATED_POSTS[idx]} />
               {isTop && (
                 <div
                   className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"

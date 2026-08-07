@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Navbar } from "../components/layout/Navbar";
 import { TabBar } from "../components/layout/TabBar";
 import { EventbriteTickets } from "../features/tickets/EventbriteTickets";
@@ -10,6 +11,17 @@ import { TournamentBracket } from "../features/tournament/TournamentBracket";
 import { Button } from "../components/ui/Button";
 
 export function Home() {
+  // Chi arriva da /staff con un link tipo "/#menu" fa una navigazione
+  // vera (pagina diversa), non un salto d'ancora nella stessa pagina:
+  // il browser prova a scrollare PRIMA che React abbia montato le
+  // sezioni, quindi fallisce silenziosamente. Rifacciamo lo scroll
+  // a mano una volta che il DOM è pronto.
+  useEffect(() => {
+    if (window.location.hash) {
+      document.querySelector(window.location.hash)?.scrollIntoView();
+    }
+  }, []);
+
   return (
     <div className="pb-28">
       <Navbar />
