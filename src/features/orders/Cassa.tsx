@@ -74,14 +74,9 @@ export function Cassa() {
     setSubmitting(true);
     setError(null);
 
-    const { data, error: insertError } = await supabase
-      .from("orders")
-      .insert({
-        items: lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price })),
-        total,
-      })
-      .select("queue_number")
-      .single();
+    const { data, error: insertError } = await supabase.rpc("create_order", {
+      p_items: lines.map((l) => ({ id: l.id, qty: l.qty })),
+    });
 
     setSubmitting(false);
 
@@ -90,7 +85,7 @@ export function Cassa() {
       return;
     }
 
-    setLastQueueNumber(data.queue_number);
+    setLastQueueNumber(Number(data));
     setCart({});
   }
 

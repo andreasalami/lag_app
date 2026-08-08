@@ -18,7 +18,7 @@ export function InstagramLink() {
         </div>
         <Button
           variant="ghost"
-          onClick={() => window.open(`https://instagram.com/${INSTAGRAM_HANDLE}`, "_blank")}
+          onClick={() => window.open(`https://instagram.com/${INSTAGRAM_HANDLE}`, "_blank", "noopener,noreferrer")}
         >
           Apri Instagram
         </Button>

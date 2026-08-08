@@ -11,7 +11,7 @@
 -- ============================================================
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  role text not null default 'staff' check (role in ('staff', 'tournament_manager', 'cassa', 'cucina')),
+  role text not null default 'pending' check (role in ('pending', 'staff', 'tournament_manager', 'cassa', 'cucina')),
   created_at timestamptz not null default now()
 );
 
@@ -23,17 +23,17 @@ create policy "Un utente legge solo il proprio profilo"
 
 -- Quando crei un utente in Auth (dashboard > Authentication > Add user),
 -- questo trigger gli crea automaticamente una riga in profiles col ruolo
--- di default 'staff'. Per renderlo tournament_manager, dopo la creazione
+-- 'pending'. Per abilitarlo, dopo la creazione
 -- vai in Table Editor > profiles e cambia manualmente il valore di role
 -- per quella riga.
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
   insert into public.profiles (id, role)
-  values (new.id, 'staff');
+  values (new.id, 'pending');
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
@@ -187,7 +187,65 @@ create policy "Solo la cucina aggiorna gli ordini"
   on orders for update
   using (
     exists (select 1 from profiles where id = auth.uid() and role = 'cucina')
-  );
+  )
+  with check (completed_at is not null);
+
+-- La cucina può aggiornare solo il timestamp di completamento.
+revoke update on orders from authenticated;
+grant update (completed_at) on orders to authenticated;
+
+-- Crea l'ordine usando prezzi e nomi letti dal menu, mai dai valori
+-- forniti dal browser.
+create or replace function public.create_order(p_items jsonb)
+returns bigint
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  normalized_items jsonb;
+  calculated_total numeric(7,2);
+  created_queue_number bigint;
+begin
+  if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
+    raise exception 'items must be a non-empty array';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(p_items) as line
+    where jsonb_typeof(line) <> 'object'
+      or (line->>'id') is null
+      or (line->>'qty') !~ '^[1-9][0-9]*$'
+  ) then
+    raise exception 'invalid order items';
+  end if;
+
+  select
+    jsonb_agg(jsonb_build_object(
+      'name', menu.name,
+      'qty', (line->>'qty')::integer,
+      'price', menu.price
+    )),
+    sum(menu.price * (line->>'qty')::integer)::numeric(7,2)
+  into normalized_items, calculated_total
+  from jsonb_array_elements(p_items) as line
+  join menu_items as menu on menu.id = (line->>'id')::uuid;
+
+  if normalized_items is null or jsonb_array_length(normalized_items) <> jsonb_array_length(p_items) then
+    raise exception 'unknown menu item';
+  end if;
+
+  insert into orders (items, total)
+  values (normalized_items, calculated_total)
+  returning queue_number into created_queue_number;
+
+  return created_queue_number;
+end;
+$$;
+
+revoke execute on function public.create_order(jsonb) from public;
+grant execute on function public.create_order(jsonb) to authenticated;
 
 -- Nessuna policy DELETE: non si cancella mai davvero una riga,
 -- solo soft-delete via completed_at. I dati restano per le stats.

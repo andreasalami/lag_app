@@ -38,6 +38,9 @@ Poi compila `.env.local`:
    Project Settings > API in `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
    Poi crea gli account staff/gestione-tornei da Authentication > Add user,
    e imposta il ruolo giusto sulla riga corrispondente nella tabella `profiles`.
+   Gli account nuovi sono `pending` e non hanno permessi finché non vengono
+   promossi manualmente. Disabilita anche il signup pubblico nelle impostazioni
+   Supabase Auth.
 2. **Eventbrite** — quando l'evento esiste, incolla il suo Event ID in
    `VITE_EVENTBRITE_EVENT_ID`.
 3. **Instagram** — l'handle è in `VITE_INSTAGRAM_HANDLE` (i permalink dei

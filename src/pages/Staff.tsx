@@ -97,7 +97,7 @@ export function Staff() {
   // tournament_manager e il redirect qui sopra sta per scattare:
   // in entrambi i casi meglio uno stato di attesa onesto che un
   // flash dell'hub sbagliato.
-  if (role === null || role === "tournament_manager") {
+  if (role === null || role === "pending" || role === "tournament_manager") {
     return (
       <section className="mx-auto max-w-sm px-4 py-16 text-center">
         <p className="text-sm text-[var(--text-secondary)]">Carico...</p>
