@@ -10,14 +10,16 @@ import { AuthProvider } from "./features/auth/AuthContext";
 function App() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const path = window.location.pathname.replace(basePath, "") || "/";
+  const hashPath = window.location.hash.replace(/^#/, "");
+  const internalPage = hashPath === "staff" || hashPath === "cassa" || hashPath === "cucina" ? hashPath : path.slice(1);
 
   return (
     <AuthProvider>
-      {path === "/staff" ? (
+      {internalPage === "staff" ? (
         <Staff />
-      ) : path === "/cassa" ? (
+      ) : internalPage === "cassa" ? (
         <Cassa />
-      ) : path === "/cucina" ? (
+      ) : internalPage === "cucina" ? (
         <Cucina />
       ) : (
         <Home />

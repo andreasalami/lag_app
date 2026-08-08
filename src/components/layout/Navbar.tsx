@@ -2,13 +2,13 @@ import { useState } from "react";
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const staffPath = `${import.meta.env.BASE_URL}staff`.replace("//", "/");
+  const staffPath = `${import.meta.env.BASE_URL}#staff`;
 
   return (
     <header className="sticky top-0 z-50 px-4 pt-4">
       <div className="glass-elevated mx-auto flex max-w-3xl items-center justify-between rounded-[var(--radius-pill)] px-5 py-3">
         <a href="#home" className="flex items-center gap-2">
-          <img src="/logo-lag.png" alt="L'Agro ai Giovani" className="h-9 w-auto" />
+          <img src={`${import.meta.env.BASE_URL}logo-lag.png`} alt="L'Agro ai Giovani" className="h-9 w-auto" />
         </a>
 
         <nav className="hidden gap-6 text-sm text-[var(--text-secondary)] sm:flex">

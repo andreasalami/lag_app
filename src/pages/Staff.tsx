@@ -18,8 +18,8 @@ const DESTINATIONS = [
   { label: "Programma", path: "/#programma" },
   { label: "Annunci", path: "/#annunci" },
   { label: "Menu", path: "/#menu" },
-  { label: "Cassa", path: "/cassa" },
-  { label: "Cucina", path: "/cucina" },
+  { label: "Cassa", path: "/#cassa" },
+  { label: "Cucina", path: "/#cucina" },
 ];
 
 export function Staff() {
