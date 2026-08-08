@@ -5,11 +5,8 @@ import { isSupabaseConfigured } from "../lib/supabaseClient";
 /*
   Hub staff: un login unico e generico (qualsiasi ruolo: staff,
   cassa, cucina, tournament_manager — non lo distinguiamo qui),
-  poi bottoni verso le destinazioni vere. Ogni destinazione ha
-  già il proprio controllo di ruolo specifico (RoleLogin dentro
-  Program/Menu/Announcements, o direttamente in Cassa/Cucina):
-  se clicchi un bottone per cui non hai il permesso giusto, è
-  quella pagina a dirtelo — qui non serve duplicare la logica.
+  poi bottoni verso le destinazioni vere. I permessi restano verificati
+  dalle singole sezioni, ma il login e il logout vivono soltanto qui.
 
   I link verso le sezioni embeddate in Home usano "/#ancora" (path
   assoluto) perché questa è una pagina diversa: serve una vera
@@ -19,6 +16,10 @@ const DESTINATIONS = [
   { label: "Programma", path: "/#programma" },
   { label: "Annunci", path: "/#annunci" },
   { label: "Menu", path: "/#menu" },
+  { label: "Torneo", path: "/#tornei" },
+];
+
+const OPERATIONS = [
   { label: "Cassa", path: "/#cassa" },
   { label: "Cucina", path: "/#cucina" },
 ];
@@ -31,7 +32,7 @@ export function Staff() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // tournament_manager non deve vedere l'hub con i 5 bottoni: per lui
+  // tournament_manager non deve vedere l'hub con i bottoni operativi: per lui
   // "Staff" è solo la porta d'ingresso al torneo, punto. Redirect vera
   // navigazione (non un salto d'ancora) perché stiamo cambiando pagina.
   useEffect(() => {
@@ -117,12 +118,24 @@ export function Staff() {
       <h1 className="mb-1 text-center font-display text-2xl">Gestione</h1>
       <p className="mb-6 text-center text-xs text-[var(--text-secondary)]">{session.user.email}</p>
 
-      <div className="flex flex-col gap-2">
-        {DESTINATIONS.map((d) => (
-          <a key={d.label} href={`${basePath}${d.path}`} className="field text-center font-semibold">
-            {d.label}
-          </a>
-        ))}
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-2">
+          <h2 className="font-display text-sm text-[var(--text-secondary)]">Sezioni del sito</h2>
+          {DESTINATIONS.map((d) => (
+            <a key={d.label} href={`${basePath}${d.path}`} className="field text-center font-semibold">
+              {d.label}
+            </a>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <h2 className="font-display text-sm text-[var(--text-secondary)]">Operatività</h2>
+          {OPERATIONS.map((d) => (
+            <a key={d.label} href={`${basePath}${d.path}`} className="field text-center font-semibold">
+              {d.label}
+            </a>
+          ))}
+        </div>
       </div>
 
       <button

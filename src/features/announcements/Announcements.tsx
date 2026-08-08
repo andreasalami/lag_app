@@ -1,7 +1,6 @@
 import { Card } from "../../components/ui/Card";
 import { NotificationPermission } from "./NotificationPermission";
 import { PublishAnnouncementForm } from "./PublishAnnouncementForm";
-import { RoleLogin } from "../auth/RoleLogin";
 import { useAuth } from "../auth/AuthContext";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
 
@@ -63,7 +62,6 @@ export function Announcements() {
       </p>
 
       <NotificationPermission />
-      <RoleLogin requiredRole="staff" label="Staff" />
       {(role === "staff" || role === "admin") && <PublishAnnouncementForm onPublished={refetch} />}
 
       {loading ? (

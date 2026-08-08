@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Card } from "../../components/ui/Card";
-import { RoleLogin } from "../auth/RoleLogin";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
@@ -69,8 +68,6 @@ export function Program() {
       <p className="mb-4 text-sm text-[var(--text-secondary)]">
         Due palchi in contemporanea — l’orario può continuare dopo mezzanotte.
       </p>
-
-      <RoleLogin requiredRole="staff" label="Staff" />
 
       {canEdit && (
         <Card className="mb-6 flex flex-col gap-2">

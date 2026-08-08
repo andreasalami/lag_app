@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Card } from "../../components/ui/Card";
-import { RoleLogin } from "../auth/RoleLogin";
 import { useAuth } from "../auth/AuthContext";
 import { MatchCard } from "./MatchCard";
 import {
@@ -105,8 +104,6 @@ export function TournamentBracket() {
       <p className="mb-4 text-sm text-[var(--text-secondary)]">
         Eliminazione diretta — dimensione configurabile, con ripescaggio manuale.
       </p>
-
-      <RoleLogin requiredRole="tournament_manager" label="Gestione tornei" />
 
       {!canEdit && (
         <p className="mb-4 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-3 text-xs text-[var(--text-secondary)]">

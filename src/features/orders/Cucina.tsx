@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
-import { RoleLogin } from "../auth/RoleLogin";
 import { supabase } from "../../lib/supabaseClient";
 import { Card } from "../../components/ui/Card";
 
@@ -68,7 +67,7 @@ export function Cucina() {
     return (
       <section className="mx-auto max-w-3xl px-4 py-10">
         <h2 className="mb-4 text-2xl font-semibold">Cucina</h2>
-        <RoleLogin requiredRole="cucina" label="Cucina" />
+        <p className="text-sm text-[var(--text-secondary)]">Accedi dall'area Staff per entrare in cucina.</p>
       </section>
     );
   }
@@ -77,8 +76,6 @@ export function Cucina() {
     <section className="mx-auto max-w-3xl px-4 py-10">
       <h2 className="mb-1 text-2xl font-semibold">Cucina — coda ordini</h2>
       <p className="mb-4 text-sm text-[var(--text-secondary)]">{orders.length} ordini attivi.</p>
-
-      <RoleLogin requiredRole="cucina" label="Cucina" />
 
       {loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico...</p>

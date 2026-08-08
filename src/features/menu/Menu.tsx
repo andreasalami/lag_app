@@ -1,5 +1,4 @@
 import { Card } from "../../components/ui/Card";
-import { RoleLogin } from "../auth/RoleLogin";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
@@ -73,8 +72,6 @@ export function Menu() {
     <section id="menu" className="mx-auto max-w-3xl px-4 py-10">
       <h2 className="mb-1 text-2xl font-semibold">Menu</h2>
       <p className="mb-4 text-sm text-[var(--text-secondary)]">Cibo e bevande disponibili all'evento.</p>
-
-      <RoleLogin requiredRole="staff" label="Staff" />
 
       {loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico il menu...</p>
