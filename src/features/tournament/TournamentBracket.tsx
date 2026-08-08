@@ -14,6 +14,7 @@ import {
   defaultTeams,
   roundLabel,
   resolveSlot,
+  winnerFromScore,
 } from "./bracketUtils";
 
 /*
@@ -61,28 +62,19 @@ export function TournamentBracket() {
     setOverrides({});
   }
 
-  function setWinner(round: number, index: number, side: Side) {
-    const key = matchKey(round, index);
-    setMatches((prev) => ({
-      ...prev,
-      [key]: {
-        winner: side,
-        scoreA: prev[key]?.scoreA ?? null,
-        scoreB: prev[key]?.scoreB ?? null,
-      },
-    }));
-  }
-
   function setScore(round: number, index: number, side: Side, value: number | null) {
     const key = matchKey(round, index);
     setMatches((prev) => {
       const current = prev[key] ?? { winner: null, scoreA: null, scoreB: null };
+      const scoreA = side === "A" ? value : current.scoreA;
+      const scoreB = side === "B" ? value : current.scoreB;
       return {
         ...prev,
         [key]: {
           ...current,
-          scoreA: side === "A" ? value : current.scoreA,
-          scoreB: side === "B" ? value : current.scoreB,
+          winner: winnerFromScore(scoreA, scoreB),
+          scoreA,
+          scoreB,
         },
       };
     });
@@ -190,7 +182,6 @@ export function TournamentBracket() {
                     scoreB={state?.scoreB ?? null}
                     winner={state?.winner ?? null}
                     editable={canEdit}
-                    onSetWinner={(side) => setWinner(round, index, side)}
                     onSetScore={(side, value) => setScore(round, index, side, value)}
                     onOverride={(side, name) => setOverride(round, index, side, name)}
                   />

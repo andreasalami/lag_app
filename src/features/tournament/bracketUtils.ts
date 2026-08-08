@@ -40,6 +40,11 @@ export function roundLabel(size: BracketSize, round: number): string {
   return `Turno da ${teamsEnteringRound}`;
 }
 
+export function winnerFromScore(scoreA: number | null, scoreB: number | null): Side | null {
+  if (scoreA === null || scoreB === null || scoreA === scoreB) return null;
+  return scoreA > scoreB ? "A" : "B";
+}
+
 /**
  * Nome della squadra in un dato slot, risolto ricorsivamente:
  * 1. Se c'è un override manuale su questo slot (ripescaggio o

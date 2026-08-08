@@ -7,12 +7,11 @@ interface SlotRowProps {
   isWinner: boolean;
   score: number | null;
   editable: boolean;
-  onClick: () => void;
   onScoreChange: (value: number | null) => void;
   onOverride: (name: string) => void;
 }
 
-function SlotRow({ name, isWinner, score, editable, onClick, onScoreChange, onOverride }: SlotRowProps) {
+function SlotRow({ name, isWinner, score, editable, onScoreChange, onOverride }: SlotRowProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name ?? "");
 
@@ -39,10 +38,7 @@ function SlotRow({ name, isWinner, score, editable, onClick, onScoreChange, onOv
 
   return (
     <div className="flex items-center gap-2 py-1">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={!editable || !name}
+      <div
         className={`flex-1 truncate rounded-[var(--radius-sm)] px-2 py-1 text-left text-sm transition-colors ${
           isWinner
             ? "font-semibold text-[var(--accent-primary)]"
@@ -52,7 +48,7 @@ function SlotRow({ name, isWinner, score, editable, onClick, onScoreChange, onOv
         } ${editable && name ? "hover:bg-white/5" : ""}`}
       >
         {name ?? "In attesa"}
-      </button>
+      </div>
       {editable && (
         <>
           <input
@@ -86,7 +82,6 @@ interface MatchCardProps {
   scoreB: number | null;
   winner: Side | null;
   editable: boolean;
-  onSetWinner: (side: Side) => void;
   onSetScore: (side: Side, value: number | null) => void;
   onOverride: (side: Side, name: string) => void;
 }
@@ -98,7 +93,6 @@ export function MatchCard({
   scoreB,
   winner,
   editable,
-  onSetWinner,
   onSetScore,
   onOverride,
 }: MatchCardProps) {
@@ -109,7 +103,6 @@ export function MatchCard({
         isWinner={winner === "A"}
         score={scoreA}
         editable={editable}
-        onClick={() => onSetWinner("A")}
         onScoreChange={(v) => onSetScore("A", v)}
         onOverride={(name) => onOverride("A", name)}
       />
@@ -119,7 +112,6 @@ export function MatchCard({
         isWinner={winner === "B"}
         score={scoreB}
         editable={editable}
-        onClick={() => onSetWinner("B")}
         onScoreChange={(v) => onSetScore("B", v)}
         onOverride={(name) => onOverride("B", name)}
       />

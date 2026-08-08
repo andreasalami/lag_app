@@ -2,6 +2,7 @@ import { Card } from "../../components/ui/Card";
 import { NotificationPermission } from "./NotificationPermission";
 import { PublishAnnouncementForm } from "./PublishAnnouncementForm";
 import { useAuth } from "../auth/AuthContext";
+import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
 
 /*
@@ -47,12 +48,20 @@ const dateFormatter = new Intl.DateTimeFormat("it-IT", {
 
 export function Announcements() {
   const { role } = useAuth();
-  const { rows: announcements, loading, refetch } = useSupabaseRows<Announcement>({
+  const { rows: announcements, setRows, loading, refetch } = useSupabaseRows<Announcement>({
     table: "announcements",
     select: "id, title, message, published_at",
     orderBy: [{ column: "published_at", ascending: false }],
     fallback: FALLBACK,
   });
+
+  async function deleteAnnouncement(id: string) {
+    if (!window.confirm("Eliminare definitivamente questo annuncio?")) return;
+
+    setRows((prev) => prev.filter((announcement) => announcement.id !== id));
+    const { error } = await supabase.from("announcements").delete().eq("id", id);
+    if (error) await refetch();
+  }
 
   return (
     <section id="annunci" className="mx-auto max-w-3xl px-4 py-10">
@@ -71,13 +80,24 @@ export function Announcements() {
           {announcements.map((a) => (
             <Card key={a.id} className="p-5">
               <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                <h3 className="min-w-0 break-words font-display text-base">{a.title}</h3>
-                <time
-                  dateTime={a.published_at}
-                  className="font-mono text-xs text-[var(--text-secondary)] sm:shrink-0 sm:whitespace-nowrap"
-                >
-                  {dateFormatter.format(new Date(a.published_at))}
-                </time>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <h3 className="min-w-0 break-words font-display text-base">{a.title}</h3>
+                  <time
+                    dateTime={a.published_at}
+                    className="font-mono text-xs text-[var(--text-secondary)] sm:shrink-0 sm:whitespace-nowrap"
+                  >
+                    {dateFormatter.format(new Date(a.published_at))}
+                  </time>
+                </div>
+                {(role === "staff" || role === "admin") && (
+                  <button
+                    type="button"
+                    onClick={() => deleteAnnouncement(a.id)}
+                    className="self-start text-xs text-[var(--state-error)] hover:underline"
+                  >
+                    Elimina
+                  </button>
+                )}
               </div>
               <p className="mt-2 text-sm text-[var(--text-secondary)]">{a.message}</p>
             </Card>
