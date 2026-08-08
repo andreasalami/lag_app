@@ -44,5 +44,7 @@ h1, h2, h3 {
 @layer components {
   .field {
     @apply rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-sm text-[var(--text-primary)];
+    max-width: 100%;
+    min-width: 0;
   }
 }

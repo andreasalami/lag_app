@@ -86,7 +86,7 @@ export function RoleLogin({ requiredRole, label }: RoleLoginProps) {
         placeholder={`Email ${label.toLowerCase()}`}
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="field py-1.5"
+        className="field min-w-0 w-full py-1.5 sm:flex-1"
       />
       <input
         type="password"
@@ -94,7 +94,7 @@ export function RoleLogin({ requiredRole, label }: RoleLoginProps) {
         placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="field py-1.5"
+        className="field min-w-0 w-full py-1.5 sm:flex-1"
       />
       <button
         type="submit"

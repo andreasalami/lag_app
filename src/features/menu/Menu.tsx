@@ -92,12 +92,12 @@ export function Menu() {
                   canEdit ? (
                     <div
                       key={item.id}
-                      className="flex items-center gap-2 border-b border-[var(--surface-border)] pb-2 last:border-0 last:pb-0"
+                      className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0 sm:flex sm:items-center sm:pb-2"
                     >
                       <input
                         value={item.name}
                         onChange={(e) => updateItem(item.id, { name: e.target.value })}
-                        className="field flex-1"
+                        className="field min-w-0 w-full sm:flex-1"
                       />
                       <input
                         type="number"
@@ -105,9 +105,9 @@ export function Menu() {
                         min="0"
                         value={item.price}
                         onChange={(e) => updateItem(item.id, { price: Number(e.target.value) })}
-                        className="field w-20 text-right font-mono"
+                        className="field w-full min-w-0 text-right font-mono sm:w-20"
                       />
-                      <span className="text-xs text-[var(--text-secondary)]">€</span>
+                      <span className="hidden text-xs text-[var(--text-secondary)] sm:inline">€</span>
                       <input
                         type="number"
                         min="0"
@@ -118,12 +118,12 @@ export function Menu() {
                         onChange={(e) => updateItem(item.id, {
                           available_portions: e.target.value === "" ? null : Math.max(0, Number(e.target.value)),
                         })}
-                        className="field w-20 text-right font-mono"
+                        className="field w-full min-w-0 text-right font-mono sm:w-20"
                       />
-                      <span className="text-xs text-[var(--text-secondary)]">porz.</span>
+                      <span className="hidden text-xs text-[var(--text-secondary)] sm:inline">porz.</span>
                       <button
                         onClick={() => deleteItem(item.id)}
-                        className="text-xs text-[var(--state-error)] hover:underline"
+                        className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto"
                       >
                         Elimina
                       </button>

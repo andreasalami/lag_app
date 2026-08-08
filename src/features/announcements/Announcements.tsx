@@ -72,11 +72,11 @@ export function Announcements() {
         <div className="flex flex-col gap-3">
           {announcements.map((a) => (
             <Card key={a.id} className="p-5">
-              <div className="flex items-start justify-between gap-4">
-                <h3 className="font-display text-base">{a.title}</h3>
+              <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <h3 className="min-w-0 break-words font-display text-base">{a.title}</h3>
                 <time
                   dateTime={a.published_at}
-                  className="shrink-0 whitespace-nowrap font-mono text-xs text-[var(--text-secondary)]"
+                  className="font-mono text-xs text-[var(--text-secondary)] sm:shrink-0 sm:whitespace-nowrap"
                 >
                   {dateFormatter.format(new Date(a.published_at))}
                 </time>

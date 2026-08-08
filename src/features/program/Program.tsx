@@ -83,12 +83,12 @@ export function Program() {
           {slots.map((slot) => (
             <div
               key={slot.id}
-              className="flex flex-wrap items-center gap-2 border-b border-[var(--surface-border)] pb-2 last:border-0 last:pb-0"
+              className="grid gap-2 border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0 sm:flex sm:flex-wrap sm:items-center sm:pb-2"
             >
               <select
                 value={slot.day}
                 onChange={(e) => updateSlot(slot.id, { day: Number(e.target.value) })}
-                className="field text-xs"
+                className="field min-w-0 text-xs sm:w-auto"
               >
                 {Array.from({ length: days }, (_, index) => index + 1).map((day) => (
                   <option key={day} value={day}>Giorno {day}</option>
@@ -97,7 +97,7 @@ export function Program() {
               <select
                 value={slot.stage}
                 onChange={(e) => updateSlot(slot.id, { stage: e.target.value })}
-                className="field text-xs"
+                className="field min-w-0 text-xs sm:w-auto"
               >
                 {STAGES.map((s) => (
                   <option key={s} value={s} className="bg-[var(--surface-solid)]">
@@ -108,24 +108,26 @@ export function Program() {
               <input
                 value={slot.title}
                 onChange={(e) => updateSlot(slot.id, { title: e.target.value })}
-                className="field min-w-[140px] flex-1"
+                className="field col-span-2 min-w-0 w-full sm:col-span-auto sm:min-w-[140px] sm:flex-1"
               />
-              <input
-                type="time"
-                value={slot.start_time}
-                onChange={(e) => updateSlot(slot.id, { start_time: e.target.value })}
-                className="field text-xs"
-              />
-              <span className="text-xs text-[var(--text-secondary)]">–</span>
-              <input
-                type="time"
-                value={slot.end_time}
-                onChange={(e) => updateSlot(slot.id, { end_time: e.target.value })}
-                className="field text-xs"
-              />
+              <div className="col-span-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:contents">
+                <input
+                  type="time"
+                  value={slot.start_time}
+                  onChange={(e) => updateSlot(slot.id, { start_time: e.target.value })}
+                  className="field min-w-0 w-full text-xs"
+                />
+                <span className="text-center text-xs text-[var(--text-secondary)]">–</span>
+                <input
+                  type="time"
+                  value={slot.end_time}
+                  onChange={(e) => updateSlot(slot.id, { end_time: e.target.value })}
+                  className="field min-w-0 w-full text-xs"
+                />
+              </div>
               <button
                 onClick={() => deleteSlot(slot.id)}
-                className="text-xs text-[var(--state-error)] hover:underline"
+                className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto"
               >
                 Elimina
               </button>
