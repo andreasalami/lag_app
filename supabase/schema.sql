@@ -97,6 +97,7 @@ $$;
 -- ============================================================
 create table if not exists program_slots (
   id uuid primary key default gen_random_uuid(),
+  day integer not null default 1 check (day between 1 and 2),
   stage text not null check (stage in ('Stage 1', 'Stage 2')),
   title text not null,
   start_time text not null, -- formato "HH:MM", niente data: evento di un giorno solo

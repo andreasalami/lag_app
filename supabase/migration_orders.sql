@@ -15,6 +15,19 @@ alter table profiles add constraint profiles_role_check
 -- finché un amministratore non assegna esplicitamente il ruolo.
 alter table profiles alter column role set default 'pending';
 
+alter table program_slots add column if not exists day integer not null default 1;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'program_slots_day_check'
+      and conrelid = 'program_slots'::regclass
+  ) then
+    alter table program_slots add constraint program_slots_day_check check (day between 1 and 2);
+  end if;
+end
+$$;
+
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin

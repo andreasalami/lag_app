@@ -41,8 +41,8 @@ import {
 export function TournamentBracket() {
   const { role } = useAuth();
   const canEdit = role === "tournament_manager" || role === "admin";
-  const matchHeight = 96;
-  const matchGap = 24;
+  const matchHeight = 116;
+  const matchGap = 32;
 
   const [size, setSize] = useState<BracketSize>(8);
   const [teams, setTeams] = useState<string[]>(defaultTeams(8));
@@ -162,7 +162,14 @@ export function TournamentBracket() {
       <div className="max-h-[75vh] overflow-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex min-w-max gap-6 pr-4">
         {Array.from({ length: rounds }, (_, round) => (
-          <div key={round} className="w-56 flex-shrink-0">
+          <div
+            key={round}
+            className={`relative w-56 flex-shrink-0 ${
+              round < rounds - 1
+                ? "after:absolute after:-right-3 after:top-0 after:h-full after:border-r after:border-[var(--surface-border)]"
+                : ""
+            }`}
+          >
             <h3 className="mb-1 text-center font-display text-sm text-[var(--accent-primary)]">
               {roundLabel(size, round)}
             </h3>

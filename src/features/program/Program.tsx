@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { RoleLogin } from "../auth/RoleLogin";
 import { useAuth } from "../auth/AuthContext";
@@ -8,9 +9,9 @@ import { ProgramGrid, type ProgramSlotData } from "./ProgramGrid";
 const STAGES = ["Stage 1", "Stage 2"];
 
 const FALLBACK_SLOTS: ProgramSlotData[] = [
-  { id: "f1", stage: "Stage 1", title: "Apertura porte — esempio", start_time: "18:00", end_time: "19:00" },
-  { id: "f2", stage: "Stage 1", title: "DJ set — esempio", start_time: "19:00", end_time: "21:00" },
-  { id: "f3", stage: "Stage 2", title: "Live band — esempio", start_time: "19:30", end_time: "20:30" },
+  { id: "f1", day: 1, stage: "Stage 1", title: "Apertura porte — esempio", start_time: "18:00", end_time: "19:00" },
+  { id: "f2", day: 1, stage: "Stage 1", title: "DJ set — esempio", start_time: "19:00", end_time: "21:00" },
+  { id: "f3", day: 1, stage: "Stage 2", title: "Live band — esempio", start_time: "19:30", end_time: "20:30" },
 ];
 
 /*
@@ -25,17 +26,18 @@ const FALLBACK_SLOTS: ProgramSlotData[] = [
 export function Program() {
   const { role } = useAuth();
   const canEdit = role === "staff" || role === "admin";
+  const [days, setDays] = useState(1);
   const { rows: slots, setRows: setSlots, loading, refetch } = useSupabaseRows<ProgramSlotData>({
     table: "program_slots",
-    select: "id, stage, title, start_time, end_time",
-    orderBy: [{ column: "start_time" }],
+    select: "id, day, stage, title, start_time, end_time",
+    orderBy: [{ column: "day" }, { column: "start_time" }],
     fallback: FALLBACK_SLOTS,
   });
 
   async function addSlot() {
     const { error } = await supabase
       .from("program_slots")
-      .insert({ stage: STAGES[0], title: "Nuovo evento", start_time: "20:00", end_time: "21:00" });
+      .insert({ day: 1, stage: STAGES[0], title: "Nuovo evento", start_time: "20:00", end_time: "21:00" });
     if (error) console.error("[Program] Errore inserimento:", error.message);
     refetch();
   }
@@ -65,18 +67,33 @@ export function Program() {
     <section id="programma" className="mx-auto max-w-3xl px-4 py-10">
       <h2 className="mb-1 text-2xl font-semibold">Programma</h2>
       <p className="mb-4 text-sm text-[var(--text-secondary)]">
-        Due palchi in contemporanea — orari indicativi, possono aggiornarsi.
+        Due palchi in contemporanea — l’orario può continuare dopo mezzanotte.
       </p>
 
       <RoleLogin requiredRole="staff" label="Staff" />
 
       {canEdit && (
         <Card className="mb-6 flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+            Giorni dell’evento
+            <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="field text-xs">
+              {[1, 2].map((dayCount) => <option key={dayCount} value={dayCount}>{dayCount}</option>)}
+            </select>
+          </label>
           {slots.map((slot) => (
             <div
               key={slot.id}
               className="flex flex-wrap items-center gap-2 border-b border-[var(--surface-border)] pb-2 last:border-0 last:pb-0"
             >
+              <select
+                value={slot.day}
+                onChange={(e) => updateSlot(slot.id, { day: Number(e.target.value) })}
+                className="field text-xs"
+              >
+                {Array.from({ length: days }, (_, index) => index + 1).map((day) => (
+                  <option key={day} value={day}>Giorno {day}</option>
+                ))}
+              </select>
               <select
                 value={slot.stage}
                 onChange={(e) => updateSlot(slot.id, { stage: e.target.value })}
@@ -123,7 +140,7 @@ export function Program() {
       {loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico il programma...</p>
       ) : (
-        <ProgramGrid slots={slots} stages={STAGES} />
+        <ProgramGrid slots={slots} stages={STAGES} days={days} />
       )}
     </section>
   );

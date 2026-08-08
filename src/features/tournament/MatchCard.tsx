@@ -103,7 +103,7 @@ export function MatchCard({
   onOverride,
 }: MatchCardProps) {
   return (
-    <Card className="p-3">
+    <Card className="h-full !p-3">
       <SlotRow
         name={nameA}
         isWinner={winner === "A"}
