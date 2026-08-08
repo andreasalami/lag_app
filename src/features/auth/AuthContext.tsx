@@ -62,8 +62,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    if (!isSupabaseConfigured) {
+      return { error: "Supabase non è configurato nella build pubblicata." };
+    }
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      return { error: error?.message ?? null };
+    } catch {
+      return { error: "Impossibile raggiungere Supabase. Controlla la configurazione di produzione." };
+    }
   }
 
   async function signOut() {

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../features/auth/AuthContext";
+import { isSupabaseConfigured } from "../lib/supabaseClient";
 
 /*
   Hub staff: un login unico e generico (qualsiasi ruolo: staff,
@@ -60,6 +61,11 @@ export function Staff() {
     return (
       <section className="mx-auto max-w-sm px-4 py-16">
         <h1 className="mb-6 text-center font-display text-2xl">Accesso staff</h1>
+        {!isSupabaseConfigured && (
+          <p className="mb-4 text-center text-xs text-[var(--state-error)]">
+            Accesso non disponibile: Supabase non è configurato nella build pubblicata.
+          </p>
+        )}
         <form onSubmit={handleSubmit} className="surface-solid flex flex-col gap-3 rounded-[var(--radius-md)] p-4">
           <input
             type="email"
@@ -80,7 +86,7 @@ export function Staff() {
           />
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !isSupabaseConfigured}
             className="signature-glow glass-elevated glass-elevated--strong rounded-[var(--radius-pill)] px-4 py-2 text-sm font-semibold disabled:opacity-50"
           >
             {submitting ? "..." : "Accedi"}

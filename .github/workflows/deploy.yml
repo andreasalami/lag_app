@@ -25,7 +25,15 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_EVENTBRITE_EVENT_ID: ${{ vars.VITE_EVENTBRITE_EVENT_ID }}
+          VITE_INSTAGRAM_HANDLE: ${{ vars.VITE_INSTAGRAM_HANDLE }}
+        run: |
+          test -n "$VITE_SUPABASE_URL" || (echo "Missing VITE_SUPABASE_URL secret" && exit 1)
+          test -n "$VITE_SUPABASE_ANON_KEY" || (echo "Missing VITE_SUPABASE_ANON_KEY secret" && exit 1)
+          npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
