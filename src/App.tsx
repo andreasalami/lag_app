@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Home } from "./pages/Home";
 import { Staff } from "./pages/Staff";
 import { Cassa } from "./features/orders/Cassa";
@@ -10,7 +11,14 @@ import { AuthProvider } from "./features/auth/AuthContext";
 function App() {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const path = window.location.pathname.replace(basePath, "") || "/";
-  const hashPath = window.location.hash.replace(/^#/, "");
+  const [hashPath, setHashPath] = useState(() => window.location.hash.replace(/^#/, ""));
+
+  useEffect(() => {
+    const handleHashChange = () => setHashPath(window.location.hash.replace(/^#/, ""));
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
   const internalPage = hashPath === "staff" || hashPath === "cassa" || hashPath === "cucina" ? hashPath : path.slice(1);
 
   return (
