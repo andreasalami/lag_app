@@ -11,16 +11,17 @@ type MenuItem = {
   category: Category;
   name: string;
   price: number;
+  available_portions: number | null;
 };
 
 const CATEGORIES: Category[] = ["cibo", "bevande"];
 const CATEGORY_LABEL: Record<Category, string> = { cibo: "Cibo", bevande: "Bevande" };
 
 const FALLBACK_ITEMS: MenuItem[] = [
-  { id: "f1", category: "cibo", name: "Panino salamella — esempio", price: 5 },
-  { id: "f2", category: "cibo", name: "Patatine fritte — esempio", price: 3 },
-  { id: "f3", category: "bevande", name: "Birra media — esempio", price: 4 },
-  { id: "f4", category: "bevande", name: "Acqua — esempio", price: 1.5 },
+  { id: "f1", category: "cibo", name: "Panino salamella — esempio", price: 5, available_portions: null },
+  { id: "f2", category: "cibo", name: "Patatine fritte — esempio", price: 3, available_portions: null },
+  { id: "f3", category: "bevande", name: "Birra media — esempio", price: 4, available_portions: null },
+  { id: "f4", category: "bevande", name: "Acqua — esempio", price: 1.5, available_portions: null },
 ];
 
 const priceFormatter = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" });
@@ -36,7 +37,7 @@ export function Menu() {
   const canEdit = role === "staff" || role === "admin";
   const { rows: items, setRows: setItems, loading, refetch } = useSupabaseRows<MenuItem>({
     table: "menu_items",
-    select: "id, category, name, price",
+    select: "id, category, name, price, available_portions",
     orderBy: [
       { column: "category" },
       { column: "name" },
@@ -45,7 +46,7 @@ export function Menu() {
   });
 
   async function addItem(category: Category) {
-    const { error } = await supabase.from("menu_items").insert({ category, name: "Nuovo prodotto", price: 0 });
+    const { error } = await supabase.from("menu_items").insert({ category, name: "Nuovo prodotto", price: 0, available_portions: null });
     if (error) console.error("[Menu] Errore inserimento:", error.message);
     refetch();
   }
@@ -107,6 +108,19 @@ export function Menu() {
                         className="field w-20 text-right font-mono"
                       />
                       <span className="text-xs text-[var(--text-secondary)]">€</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="∞"
+                        aria-label={`Porzioni disponibili per ${item.name}`}
+                        value={item.available_portions ?? ""}
+                        onChange={(e) => updateItem(item.id, {
+                          available_portions: e.target.value === "" ? null : Math.max(0, Number(e.target.value)),
+                        })}
+                        className="field w-20 text-right font-mono"
+                      />
+                      <span className="text-xs text-[var(--text-secondary)]">porz.</span>
                       <button
                         onClick={() => deleteItem(item.id)}
                         className="text-xs text-[var(--state-error)] hover:underline"

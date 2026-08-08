@@ -15,6 +15,8 @@ alter table profiles add constraint profiles_role_check
 -- finché un amministratore non assegna esplicitamente il ruolo.
 alter table profiles alter column role set default 'pending';
 
+alter table menu_items add column if not exists available_portions integer check (available_portions is null or available_portions >= 0);
+
 alter table program_slots add column if not exists day integer not null default 1;
 do $$
 begin
@@ -138,8 +140,9 @@ grant update on orders to authenticated;
 
 -- Crea l'ordine usando prezzi e nomi letti dal menu, mai dai valori
 -- forniti dal browser.
-create or replace function public.create_order(p_items jsonb)
-returns bigint
+drop function if exists public.create_order(jsonb);
+create function public.create_order(p_items jsonb)
+returns jsonb
 language plpgsql
 security invoker
 set search_path = public
@@ -148,6 +151,7 @@ declare
   normalized_items jsonb;
   calculated_total numeric(7,2);
   created_queue_number bigint;
+  warning_messages jsonb := '[]'::jsonb;
 begin
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
     raise exception 'items must be a non-empty array';
@@ -163,8 +167,27 @@ begin
     raise exception 'invalid order items';
   end if;
 
+  perform 1
+  from menu_items
+  where id in (select (line->>'id')::uuid from jsonb_array_elements(p_items) as line)
+  for update;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(p_items) as line
+    join menu_items as menu on menu.id = (line->>'id')::uuid
+    where menu.available_portions is not null
+      and (select coalesce(sum((ordered_line->>'qty')::integer), 0)
+           from orders as order_row, jsonb_array_elements(order_row.items) as ordered_line
+           where ordered_line->>'id' = menu.id::text)
+          + (line->>'qty')::integer > menu.available_portions
+  ) then
+    raise exception 'porzioni insufficienti';
+  end if;
+
   select
     jsonb_agg(jsonb_build_object(
+      'id', menu.id,
       'name', menu.name,
       'qty', (line->>'qty')::integer,
       'price', menu.price
@@ -182,12 +205,47 @@ begin
   values (normalized_items, calculated_total)
   returning queue_number into created_queue_number;
 
-  return created_queue_number;
+  select coalesce(jsonb_agg(format('%s: rimangono %s porzioni', item.name, item.remaining)), '[]'::jsonb)
+  into warning_messages
+  from (
+    select menu.name,
+      menu.available_portions - coalesce((select sum((ordered_line->>'qty')::integer)
+        from orders as order_row, jsonb_array_elements(order_row.items) as ordered_line
+        where ordered_line->>'id' = menu.id::text), 0)::integer as remaining
+    from menu_items as menu
+    join jsonb_array_elements(p_items) as line on (line->>'id')::uuid = menu.id
+    where menu.available_portions is not null
+      and menu.available_portions - coalesce((select sum((ordered_line->>'qty')::integer)
+        from orders as order_row, jsonb_array_elements(order_row.items) as ordered_line
+        where ordered_line->>'id' = menu.id::text), 0) <= ceil(menu.available_portions * 0.2)
+  ) as item;
+
+  return jsonb_build_object('queue_number', created_queue_number, 'warnings', warning_messages);
 end;
 $$;
 
 revoke execute on function public.create_order(jsonb) from public;
 grant execute on function public.create_order(jsonb) to authenticated;
+
+create or replace function public.get_low_stock_items()
+returns table (id uuid, name text, remaining integer, available integer)
+language sql
+security invoker
+set search_path = public
+as $$
+  select menu.id, menu.name,
+    (menu.available_portions - coalesce(sum((line->>'qty')::integer), 0))::integer,
+    menu.available_portions
+  from menu_items as menu
+  left join orders as order_row on true
+  left join lateral jsonb_array_elements(order_row.items) as line on line->>'id' = menu.id::text
+  where menu.available_portions is not null
+  group by menu.id, menu.name, menu.available_portions
+  having menu.available_portions - coalesce(sum((line->>'qty')::integer), 0) <= ceil(menu.available_portions * 0.2);
+$$;
+
+revoke execute on function public.get_low_stock_items() from public;
+grant execute on function public.get_low_stock_items() to authenticated;
 
 -- Nessuna policy DELETE: non si cancella mai davvero una riga,
 -- solo soft-delete via completed_at. I dati restano per le stats.

@@ -5,8 +5,9 @@ import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
 import { Card } from "../../components/ui/Card";
 
-type MenuItem = { id: string; category: "cibo" | "bevande"; name: string; price: number };
+type MenuItem = { id: string; category: "cibo" | "bevande"; name: string; price: number; available_portions: number | null };
 type CartLine = { id: string; name: string; price: number; qty: number };
+type OrderResult = { queue_number: number; warnings: string[] };
 
 const priceFormatter = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" });
 
@@ -25,7 +26,7 @@ export function Cassa() {
   const { role } = useAuth();
   const { rows: menuItems, loading } = useSupabaseRows<MenuItem>({
     table: "menu_items",
-    select: "id, category, name, price",
+    select: "id, category, name, price, available_portions",
     orderBy: [{ column: "category" }, { column: "name" }],
     fallback: [],
   });
@@ -34,6 +35,7 @@ export function Cassa() {
   const [submitting, setSubmitting] = useState(false);
   const [lastQueueNumber, setLastQueueNumber] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   if (role !== "cassa" && role !== "admin") {
     return (
@@ -73,6 +75,7 @@ export function Cassa() {
     if (lines.length === 0) return;
     setSubmitting(true);
     setError(null);
+    setWarnings([]);
 
     const { data, error: insertError } = await supabase.rpc("create_order", {
       p_items: lines.map((l) => ({ id: l.id, qty: l.qty })),
@@ -85,7 +88,9 @@ export function Cassa() {
       return;
     }
 
-    setLastQueueNumber(Number(data));
+    const result = data as OrderResult;
+    setLastQueueNumber(Number(result.queue_number));
+    setWarnings(result.warnings ?? []);
     setCart({});
   }
 
@@ -101,6 +106,11 @@ export function Cassa() {
       {lastQueueNumber !== null && (
         <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--accent-primary)] px-3 py-2 text-sm">
           Ordine #{lastQueueNumber} inviato in cucina.
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--state-warning)] px-3 py-2 text-sm text-[var(--state-warning)]">
+          {warnings.map((warning) => <p key={warning}>{warning}</p>)}
         </div>
       )}
 

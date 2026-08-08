@@ -11,6 +11,7 @@ type Order = {
   total: number;
   created_at: string;
 };
+type LowStockItem = { id: string; name: string; remaining: number; available: number };
 
 /*
   Cucina: solo 1-2 dispositivi collegati, quindi il realtime "broadcast
@@ -24,6 +25,7 @@ export function Cucina() {
   const { role } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
 
   async function refetch() {
     const { data, error } = await supabase
@@ -32,6 +34,8 @@ export function Cucina() {
       .is("completed_at", null)
       .order("queue_number", { ascending: true });
     if (!error && data) setOrders(data as Order[]);
+    const { data: stockData } = await supabase.rpc("get_low_stock_items");
+    if (stockData) setLowStock(stockData as LowStockItem[]);
     setLoading(false);
   }
 
@@ -104,6 +108,16 @@ export function Cucina() {
             </Card>
           ))}
         </div>
+      )}
+      {lowStock.length > 0 && (
+        <Card className="mt-6 border border-[var(--state-warning)]">
+          <h3 className="font-display text-lg text-[var(--state-warning)]">Scorte in esaurimento</h3>
+          {lowStock.map((item) => (
+            <p key={item.id} className="text-sm text-[var(--state-warning)]">
+              {item.name}: rimangono {item.remaining} porzioni su {item.available}.
+            </p>
+          ))}
+        </Card>
       )}
     </section>
   );
