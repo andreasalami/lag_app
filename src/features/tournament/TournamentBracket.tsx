@@ -41,14 +41,19 @@ import {
 export function TournamentBracket() {
   const { role } = useAuth();
   const canEdit = role === "tournament_manager" || role === "admin";
+  const matchHeight = 96;
+  const matchGap = 24;
 
   const [size, setSize] = useState<BracketSize>(8);
   const [teams, setTeams] = useState<string[]>(defaultTeams(8));
   const [matches, setMatches] = useState<MatchesMap>({});
   const [overrides, setOverrides] = useState<OverridesMap>({});
-  const [editingTeams, setEditingTeams] = useState(false);
+  const [editingTeams, setEditingTeams] = useState(true);
 
   const rounds = totalRounds(size);
+  const firstRoundMatches = matchesInRound(size, 0);
+  const matchStep = matchHeight + matchGap;
+  const bracketHeight = firstRoundMatches * matchHeight + (firstRoundMatches - 1) * matchGap;
 
   function changeSize(newSize: BracketSize) {
     setSize(newSize);
@@ -139,6 +144,7 @@ export function TournamentBracket() {
               {teams.map((t, i) => (
                 <input
                   key={i}
+                  aria-label={`Nome squadra ${i + 1}`}
                   value={t}
                   onChange={(e) => {
                     const next = [...teams];
@@ -153,33 +159,44 @@ export function TournamentBracket() {
         </>
       )}
 
-      <div className="flex gap-6 overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="max-h-[75vh] overflow-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-max gap-6 pr-4">
         {Array.from({ length: rounds }, (_, round) => (
-          <div key={round} className="flex w-56 flex-shrink-0 flex-col justify-around gap-4">
+          <div key={round} className="w-56 flex-shrink-0">
             <h3 className="mb-1 text-center font-display text-sm text-[var(--accent-primary)]">
               {roundLabel(size, round)}
             </h3>
+            <div className="relative" style={{ height: bracketHeight }}>
             {Array.from({ length: matchesInRound(size, round) }, (_, index) => {
               const nameA = resolveSlot(round, index, "A", teams, matches, overrides);
               const nameB = resolveSlot(round, index, "B", teams, matches, overrides);
               const state = matches[matchKey(round, index)];
+              const groupSize = 2 ** round;
+              const top = (index * groupSize + (groupSize - 1) / 2) * matchStep;
               return (
-                <MatchCard
+                <div
                   key={index}
-                  nameA={nameA}
-                  nameB={nameB}
-                  scoreA={state?.scoreA ?? null}
-                  scoreB={state?.scoreB ?? null}
-                  winner={state?.winner ?? null}
-                  editable={canEdit}
-                  onSetWinner={(side) => setWinner(round, index, side)}
-                  onSetScore={(side, value) => setScore(round, index, side, value)}
-                  onOverride={(side, name) => setOverride(round, index, side, name)}
-                />
+                  className="absolute inset-x-0"
+                  style={{ top, height: matchHeight }}
+                >
+                  <MatchCard
+                    nameA={nameA}
+                    nameB={nameB}
+                    scoreA={state?.scoreA ?? null}
+                    scoreB={state?.scoreB ?? null}
+                    winner={state?.winner ?? null}
+                    editable={canEdit}
+                    onSetWinner={(side) => setWinner(round, index, side)}
+                    onSetScore={(side, value) => setScore(round, index, side, value)}
+                    onOverride={(side, name) => setOverride(round, index, side, name)}
+                  />
+                </div>
               );
             })}
+            </div>
           </div>
         ))}
+        </div>
       </div>
     </section>
   );

@@ -179,4 +179,16 @@ grant execute on function public.create_order(jsonb) to authenticated;
 -- Nessuna policy DELETE: non si cancella mai davvero una riga,
 -- solo soft-delete via completed_at. I dati restano per le stats.
 
-alter publication supabase_realtime add table orders;
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'orders'
+  ) then
+    alter publication supabase_realtime add table orders;
+  end if;
+end
+$$;

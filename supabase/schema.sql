@@ -79,7 +79,16 @@ create policy "Solo lo staff elimina annunci"
 -- Realtime: serve per far comparire i nuovi annunci a chi ha la pagina
 -- aperta, senza refresh. Va abilitato anche dalla dashboard:
 -- Database > Replication > tabella "announcements" > Enable.
-alter publication supabase_realtime add table announcements;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'announcements'
+  ) then
+    alter publication supabase_realtime add table announcements;
+  end if;
+end
+$$;
 
 -- ============================================================
 -- PROGRAMMA: scaletta con 2 palchi in contemporanea. Pubblico in
@@ -113,7 +122,16 @@ create policy "Solo lo staff elimina dal programma"
   on program_slots for delete
   using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
 
-alter publication supabase_realtime add table program_slots;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'program_slots'
+  ) then
+    alter publication supabase_realtime add table program_slots;
+  end if;
+end
+$$;
 
 -- ============================================================
 -- MENU: cibo e bevande. Stesse regole del programma — pubblico in
@@ -145,7 +163,16 @@ create policy "Solo lo staff elimina dal menu"
   on menu_items for delete
   using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
 
-alter publication supabase_realtime add table menu_items;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'menu_items'
+  ) then
+    alter publication supabase_realtime add table menu_items;
+  end if;
+end
+$$;
 
 -- ============================================================
 -- ORDINI
@@ -278,4 +305,16 @@ grant execute on function public.create_order(jsonb) to authenticated;
 -- Nessuna policy DELETE: non si cancella mai davvero una riga,
 -- solo soft-delete via completed_at. I dati restano per le stats.
 
-alter publication supabase_realtime add table orders;
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'orders'
+  ) then
+    alter publication supabase_realtime add table orders;
+  end if;
+end
+$$;
