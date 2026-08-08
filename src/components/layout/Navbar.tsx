@@ -2,6 +2,7 @@ import { useState } from "react";
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const staffPath = `${import.meta.env.BASE_URL}staff`.replace("//", "/");
 
   return (
     <header className="sticky top-0 z-50 px-4 pt-4">
@@ -15,7 +16,7 @@ export function Navbar() {
           <a href="#menu" className="hover:text-[var(--text-primary)]">Menu</a>
           <a href="#annunci" className="hover:text-[var(--text-primary)]">Annunci</a>
           <a href="#tornei" className="hover:text-[var(--text-primary)]">Torneo</a>
-          <a href="/staff" className="hover:text-[var(--text-primary)]">Staff</a>
+          <a href={staffPath} className="hover:text-[var(--text-primary)]">Staff</a>
         </nav>
 
         {/* Mobile: non è un dropdown separato sotto l'hamburger — è una
@@ -54,7 +55,7 @@ export function Navbar() {
             className="glass-elevated glass-elevated--strong absolute right-0 top-0 z-50 flex h-10 items-center justify-center overflow-hidden rounded-full transition-[width] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
           >
             <a
-              href="/staff"
+              href={staffPath}
               style={{
                 opacity: menuOpen ? 1 : 0,
                 transitionDuration: menuOpen ? "150ms" : "0ms",

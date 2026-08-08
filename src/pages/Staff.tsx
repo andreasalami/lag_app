@@ -15,15 +15,16 @@ import { useAuth } from "../features/auth/AuthContext";
   navigazione, non un semplice salto d'ancora nella stessa pagina.
 */
 const DESTINATIONS = [
-  { label: "Programma", href: "/#programma" },
-  { label: "Annunci", href: "/#annunci" },
-  { label: "Menu", href: "/#menu" },
-  { label: "Cassa", href: "/cassa" },
-  { label: "Cucina", href: "/cucina" },
+  { label: "Programma", path: "/#programma" },
+  { label: "Annunci", path: "/#annunci" },
+  { label: "Menu", path: "/#menu" },
+  { label: "Cassa", path: "/cassa" },
+  { label: "Cucina", path: "/cucina" },
 ];
 
 export function Staff() {
   const { session, role, loading, signIn, signOut } = useAuth();
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +35,7 @@ export function Staff() {
   // navigazione (non un salto d'ancora) perché stiamo cambiando pagina.
   useEffect(() => {
     if (session && role === "tournament_manager") {
-      window.location.href = "/#tornei";
+      window.location.href = `${import.meta.env.BASE_URL}#tornei`;
     }
   }, [session, role]);
 
@@ -86,7 +87,7 @@ export function Staff() {
           </button>
           {error && <p className="text-xs text-[var(--state-error)]">{error}</p>}
         </form>
-        <a href="/" className="mt-4 block text-center text-xs text-[var(--text-secondary)] hover:underline">
+        <a href={`${basePath}/`} className="mt-4 block text-center text-xs text-[var(--text-secondary)] hover:underline">
           ← Torna al sito
         </a>
       </section>
@@ -112,7 +113,7 @@ export function Staff() {
 
       <div className="flex flex-col gap-2">
         {DESTINATIONS.map((d) => (
-          <a key={d.label} href={d.href} className="field text-center font-semibold">
+          <a key={d.label} href={`${basePath}${d.path}`} className="field text-center font-semibold">
             {d.label}
           </a>
         ))}
@@ -125,7 +126,7 @@ export function Staff() {
       >
         Esci
       </button>
-      <a href="/" className="mt-2 block text-center text-xs text-[var(--text-secondary)] hover:underline">
+      <a href={`${basePath}/`} className="mt-2 block text-center text-xs text-[var(--text-secondary)] hover:underline">
         ← Torna al sito
       </a>
     </section>

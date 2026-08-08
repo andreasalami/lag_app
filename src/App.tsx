@@ -8,7 +8,8 @@ import { AuthProvider } from "./features/auth/AuthContext";
 // non vale la pena aggiungere react-router per questo. Se in
 // futuro servono più pagine pubbliche, si passa alla libreria.
 function App() {
-  const path = window.location.pathname;
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const path = window.location.pathname.replace(basePath, "") || "/";
 
   return (
     <AuthProvider>
