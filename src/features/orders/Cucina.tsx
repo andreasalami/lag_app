@@ -111,7 +111,7 @@ export function Cucina() {
           <h3 className="font-display text-lg text-[var(--state-warning)]">Scorte in esaurimento</h3>
           {lowStock.map((item) => (
             <p key={item.id} className="text-sm text-[var(--state-warning)]">
-              {item.name}: rimangono {item.remaining} porzioni su {item.available}.
+              {item.name}: rimangono {item.remaining} porzioni.
             </p>
           ))}
         </Card>
