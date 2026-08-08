@@ -51,7 +51,6 @@ export function Menu() {
   }
 
   async function updateItem(id: string, patch: Partial<MenuItem>) {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
     const { error } = await supabase.from("menu_items").update(patch).eq("id", id);
     if (error) {
       console.error("[Menu] Errore aggiornamento:", error.message);
@@ -93,7 +92,8 @@ export function Menu() {
                     >
                       <input
                         value={item.name}
-                        onChange={(e) => updateItem(item.id, { name: e.target.value })}
+                        onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, name: e.target.value } : i)))}
+                        onBlur={(e) => updateItem(item.id, { name: e.target.value })}
                         className="field min-w-0 w-full sm:flex-1"
                       />
                       <input
@@ -101,7 +101,8 @@ export function Menu() {
                         step="0.5"
                         min="0"
                         value={item.price}
-                        onChange={(e) => updateItem(item.id, { price: Number(e.target.value) })}
+                        onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, price: Number(e.target.value) } : i)))}
+                        onBlur={(e) => updateItem(item.id, { price: Number(e.target.value) })}
                         className="field w-full min-w-0 text-right font-mono sm:w-20"
                       />
                       <span className="hidden text-xs text-[var(--text-secondary)] sm:inline">€</span>
@@ -112,7 +113,11 @@ export function Menu() {
                         placeholder="∞"
                         aria-label={`Porzioni disponibili per ${item.name}`}
                         value={item.available_portions ?? ""}
-                        onChange={(e) => updateItem(item.id, {
+                        onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? {
+                          ...i,
+                          available_portions: e.target.value === "" ? null : Math.max(0, Number(e.target.value)),
+                        } : i)))}
+                        onBlur={(e) => updateItem(item.id, {
                           available_portions: e.target.value === "" ? null : Math.max(0, Number(e.target.value)),
                         })}
                         className="field w-full min-w-0 text-right font-mono sm:w-20"

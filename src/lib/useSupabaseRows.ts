@@ -11,18 +11,18 @@ interface UseSupabaseRowsOptions<T> {
   select: string;
   orderBy?: OrderClause[];
   fallback: T[];
+  realtime?: boolean;
 }
 
 /**
- * Pattern ripetuto identico in Annunci, Programma e Menu: fetch iniziale
- * da una tabella pubblica, sottoscrizione realtime che rifà il fetch ad
- * ogni cambiamento (insert/update/delete — sono poche righe, un fetch
- * completo è più semplice e robusto di un merge incrementale a mano),
- * fallback di esempio se Supabase non è ancora configurato.
+ * Fetch iniziale da una tabella pubblica, con fallback di esempio se
+ * Supabase non è ancora configurato. Il realtime è opt-in: va usato solo
+ * sulle tabelle che devono aggiornarsi live per il pubblico, come Annunci.
+ * Le sezioni di editing fanno refetch esplicito dopo le proprie scritture.
  *
  * Un solo posto dove questa logica può avere un bug, invece di tre.
  */
-export function useSupabaseRows<T>({ table, select, orderBy = [], fallback }: UseSupabaseRowsOptions<T>) {
+export function useSupabaseRows<T>({ table, select, orderBy = [], fallback, realtime = false }: UseSupabaseRowsOptions<T>) {
   const [rows, setRows] = useState<T[]>(fallback);
   const [loading, setLoading] = useState(isSupabaseConfigured);
 
@@ -41,6 +41,8 @@ export function useSupabaseRows<T>({ table, select, orderBy = [], fallback }: Us
 
     refetch();
 
+    if (!realtime) return;
+
     const channel = supabase
       .channel(`${table}-changes`)
       .on("postgres_changes", { event: "*", schema: "public", table }, () => refetch())
@@ -50,7 +52,7 @@ export function useSupabaseRows<T>({ table, select, orderBy = [], fallback }: Us
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table]);
+  }, [table, realtime]);
 
   return { rows, setRows, loading, refetch };
 }

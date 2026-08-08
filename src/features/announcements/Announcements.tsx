@@ -53,6 +53,7 @@ export function Announcements() {
     select: "id, title, message, published_at",
     orderBy: [{ column: "published_at", ascending: false }],
     fallback: FALLBACK,
+    realtime: true,
   });
 
   async function deleteAnnouncement(id: string) {

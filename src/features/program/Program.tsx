@@ -42,7 +42,6 @@ export function Program() {
   }
 
   async function updateSlot(id: string, patch: Partial<ProgramSlotData>) {
-    setSlots((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
     const { error } = await supabase.from("program_slots").update(patch).eq("id", id);
     // Se la scrittura vera fallisce (es. sessione scaduta), lo stato
     // ottimistico sopra resterebbe sbagliato senza che nessuno se ne
@@ -104,21 +103,24 @@ export function Program() {
               </select>
               <input
                 value={slot.title}
-                onChange={(e) => updateSlot(slot.id, { title: e.target.value })}
+                onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, title: e.target.value } : s)))}
+                onBlur={(e) => updateSlot(slot.id, { title: e.target.value })}
                 className="field col-span-2 min-w-0 w-full sm:col-span-auto sm:min-w-[140px] sm:flex-1"
               />
               <div className="col-span-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:contents">
                 <input
                   type="time"
                   value={slot.start_time}
-                  onChange={(e) => updateSlot(slot.id, { start_time: e.target.value })}
+                  onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, start_time: e.target.value } : s)))}
+                  onBlur={(e) => updateSlot(slot.id, { start_time: e.target.value })}
                   className="field min-w-0 w-full text-xs"
                 />
                 <span className="text-center text-xs text-[var(--text-secondary)]">–</span>
                 <input
                   type="time"
                   value={slot.end_time}
-                  onChange={(e) => updateSlot(slot.id, { end_time: e.target.value })}
+                  onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, end_time: e.target.value } : s)))}
+                  onBlur={(e) => updateSlot(slot.id, { end_time: e.target.value })}
                   className="field min-w-0 w-full text-xs"
                 />
               </div>
