@@ -64,7 +64,7 @@ export function Announcements() {
 
       <NotificationPermission />
       <RoleLogin requiredRole="staff" label="Staff" />
-      {role === "staff" && <PublishAnnouncementForm onPublished={refetch} />}
+      {(role === "staff" || role === "admin") && <PublishAnnouncementForm onPublished={refetch} />}
 
       {loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico gli annunci...</p>

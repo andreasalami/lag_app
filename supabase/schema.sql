@@ -11,7 +11,7 @@
 -- ============================================================
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  role text not null default 'pending' check (role in ('pending', 'staff', 'tournament_manager', 'cassa', 'cucina')),
+  role text not null default 'pending' check (role in ('pending', 'admin', 'staff', 'tournament_manager', 'cassa', 'cucina')),
   created_at timestamptz not null default now()
 );
 
@@ -61,19 +61,19 @@ create policy "Chiunque legge gli annunci"
 create policy "Solo lo staff pubblica annunci"
   on announcements for insert
   with check (
-    exists (select 1 from profiles where id = auth.uid() and role = 'staff')
+    exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin'))
   );
 
 create policy "Solo lo staff modifica annunci"
   on announcements for update
   using (
-    exists (select 1 from profiles where id = auth.uid() and role = 'staff')
+    exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin'))
   );
 
 create policy "Solo lo staff elimina annunci"
   on announcements for delete
   using (
-    exists (select 1 from profiles where id = auth.uid() and role = 'staff')
+    exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin'))
   );
 
 -- Realtime: serve per far comparire i nuovi annunci a chi ha la pagina
@@ -103,15 +103,15 @@ create policy "Chiunque legge il programma"
 
 create policy "Solo lo staff scrive il programma"
   on program_slots for insert
-  with check (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+  with check (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
 
 create policy "Solo lo staff modifica il programma"
   on program_slots for update
-  using (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
 
 create policy "Solo lo staff elimina dal programma"
   on program_slots for delete
-  using (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
 
 alter publication supabase_realtime add table program_slots;
 
@@ -135,15 +135,15 @@ create policy "Chiunque legge il menu"
 
 create policy "Solo lo staff scrive il menu"
   on menu_items for insert
-  with check (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+  with check (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
 
 create policy "Solo lo staff modifica il menu"
   on menu_items for update
-  using (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
 
 create policy "Solo lo staff elimina dal menu"
   on menu_items for delete
-  using (exists (select 1 from profiles where id = auth.uid() and role = 'staff'));
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
 
 alter publication supabase_realtime add table menu_items;
 
@@ -172,13 +172,13 @@ alter table orders enable row level security;
 create policy "Cassa e cucina leggono gli ordini"
   on orders for select
   using (
-    exists (select 1 from profiles where id = auth.uid() and role in ('cassa', 'cucina'))
+    exists (select 1 from profiles where id = auth.uid() and role in ('cassa', 'cucina', 'admin'))
   );
 
 create policy "Solo la cassa crea ordini"
   on orders for insert
   with check (
-    exists (select 1 from profiles where id = auth.uid() and role = 'cassa')
+    exists (select 1 from profiles where id = auth.uid() and role in ('cassa', 'admin'))
   );
 
 -- Update copre sia l'eventuale "pronto" sia il completed_at:
@@ -186,13 +186,41 @@ create policy "Solo la cassa crea ordini"
 create policy "Solo la cucina aggiorna gli ordini"
   on orders for update
   using (
-    exists (select 1 from profiles where id = auth.uid() and role = 'cucina')
+    exists (select 1 from profiles where id = auth.uid() and role in ('cucina', 'admin'))
   )
-  with check (completed_at is not null);
+  with check (
+    completed_at is not null
+    or exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  );
 
--- La cucina può aggiornare solo il timestamp di completamento.
-revoke update on orders from authenticated;
-grant update (completed_at) on orders to authenticated;
+-- La cucina può aggiornare solo il timestamp; admin può aggiornare tutto.
+create or replace function public.protect_order_updates()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (select 1 from profiles where id = auth.uid() and role = 'admin') then
+    return new;
+  end if;
+  if new.id is distinct from old.id
+    or new.queue_number is distinct from old.queue_number
+    or new.items is distinct from old.items
+    or new.total is distinct from old.total
+    or new.created_at is distinct from old.created_at then
+    raise exception 'only admin can modify order data';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_order_updates on orders;
+create trigger protect_order_updates
+  before update on orders
+  for each row execute function public.protect_order_updates();
+
+grant update on orders to authenticated;
 
 -- Crea l'ordine usando prezzi e nomi letti dal menu, mai dai valori
 -- forniti dal browser.

@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "../../lib/supabaseClient";
 
-export type Role = "pending" | "staff" | "tournament_manager" | "cassa" | "cucina" | null;
+export type Role = "pending" | "admin" | "staff" | "tournament_manager" | "cassa" | "cucina" | null;
 
 interface AuthState {
   session: Session | null;

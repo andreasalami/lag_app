@@ -24,7 +24,7 @@ const FALLBACK_SLOTS: ProgramSlotData[] = [
 */
 export function Program() {
   const { role } = useAuth();
-  const canEdit = role === "staff";
+  const canEdit = role === "staff" || role === "admin";
   const { rows: slots, setRows: setSlots, loading, refetch } = useSupabaseRows<ProgramSlotData>({
     table: "program_slots",
     select: "id, stage, title, start_time, end_time",

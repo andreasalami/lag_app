@@ -31,7 +31,7 @@ export function RoleLogin({ requiredRole, label }: RoleLoginProps) {
     );
   }
 
-  if (session && role === requiredRole) {
+  if (session && (role === requiredRole || role === "admin")) {
     return (
       <div className="mb-4 flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--surface-border)] px-3 py-2 text-xs text-[var(--text-secondary)]">
         <span>{label}: {session.user.email}</span>
@@ -42,7 +42,7 @@ export function RoleLogin({ requiredRole, label }: RoleLoginProps) {
     );
   }
 
-  if (session && role !== requiredRole) {
+  if (session && role !== requiredRole && role !== "admin") {
     return (
       <p className="mb-4 text-xs text-[var(--text-secondary)]">
         Account senza permessi "{label.toLowerCase()}".{" "}

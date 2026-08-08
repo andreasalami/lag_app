@@ -40,7 +40,7 @@ import {
 */
 export function TournamentBracket() {
   const { role } = useAuth();
-  const canEdit = role === "tournament_manager";
+  const canEdit = role === "tournament_manager" || role === "admin";
 
   const [size, setSize] = useState<BracketSize>(8);
   const [teams, setTeams] = useState<string[]>(defaultTeams(8));

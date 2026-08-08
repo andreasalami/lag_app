@@ -33,7 +33,7 @@ const priceFormatter = new Intl.NumberFormat("it-IT", { style: "currency", curre
 */
 export function Menu() {
   const { role } = useAuth();
-  const canEdit = role === "staff";
+  const canEdit = role === "staff" || role === "admin";
   const { rows: items, setRows: setItems, loading, refetch } = useSupabaseRows<MenuItem>({
     table: "menu_items",
     select: "id, category, name, price",

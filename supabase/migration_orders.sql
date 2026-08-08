@@ -3,13 +3,13 @@
 -- volta sola nel SQL Editor di Supabase).
 -- ============================================================
 
--- Aggiungiamo i ruoli 'cassa' e 'cucina' a quelli già esistenti
+-- Aggiungiamo i ruoli 'admin', 'cassa' e 'cucina' a quelli già esistenti
 -- (staff, tournament_manager). Stesso meccanismo, stessa tabella
 -- profiles: si crea l'account in Auth, poi si cambia manualmente
 -- il campo role su quella riga.
 alter table profiles drop constraint if exists profiles_role_check;
 alter table profiles add constraint profiles_role_check
-  check (role in ('pending', 'staff', 'tournament_manager', 'cassa', 'cucina'));
+  check (role in ('pending', 'admin', 'staff', 'tournament_manager', 'cassa', 'cucina'));
 
 -- Gli utenti creati tramite Auth non ricevono permessi operativi
 -- finché un amministratore non assegna esplicitamente il ruolo.
@@ -23,6 +23,27 @@ begin
   return new;
 end;
 $$ language plpgsql security definer set search_path = public;
+
+alter policy "Solo lo staff pubblica annunci" on announcements
+  with check (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
+alter policy "Solo lo staff modifica annunci" on announcements
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
+alter policy "Solo lo staff elimina annunci" on announcements
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
+
+alter policy "Solo lo staff scrive il programma" on program_slots
+  with check (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
+alter policy "Solo lo staff modifica il programma" on program_slots
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
+alter policy "Solo lo staff elimina dal programma" on program_slots
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
+
+alter policy "Solo lo staff scrive il menu" on menu_items
+  with check (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
+alter policy "Solo lo staff modifica il menu" on menu_items
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
+alter policy "Solo lo staff elimina dal menu" on menu_items
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
 
 -- ============================================================
 -- ORDINI
@@ -46,16 +67,18 @@ alter table orders enable row level security;
 
 -- Cassa e cucina leggono entrambe (la cassa per conferma, la
 -- cucina per la coda). Nessun accesso pubblico: niente RLS "true".
+drop policy if exists "Cassa e cucina leggono gli ordini" on orders;
 create policy "Cassa e cucina leggono gli ordini"
   on orders for select
   using (
-    exists (select 1 from profiles where id = auth.uid() and role in ('cassa', 'cucina'))
+    exists (select 1 from profiles where id = auth.uid() and role in ('cassa', 'cucina', 'admin'))
   );
 
+drop policy if exists "Solo la cassa crea ordini" on orders;
 create policy "Solo la cassa crea ordini"
   on orders for insert
   with check (
-    exists (select 1 from profiles where id = auth.uid() and role = 'cassa')
+    exists (select 1 from profiles where id = auth.uid() and role in ('cassa', 'admin'))
   );
 
 -- Update copre sia l'eventuale "pronto" sia il completed_at:
@@ -64,13 +87,41 @@ drop policy if exists "Solo la cucina aggiorna gli ordini" on orders;
 create policy "Solo la cucina aggiorna gli ordini"
   on orders for update
   using (
-    exists (select 1 from profiles where id = auth.uid() and role = 'cucina')
+    exists (select 1 from profiles where id = auth.uid() and role in ('cucina', 'admin'))
   )
-  with check (completed_at is not null);
+  with check (
+    completed_at is not null
+    or exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  );
 
--- La cucina può aggiornare solo il timestamp di completamento.
-revoke update on orders from authenticated;
-grant update (completed_at) on orders to authenticated;
+-- La cucina può aggiornare solo il timestamp; admin può aggiornare tutto.
+create or replace function public.protect_order_updates()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (select 1 from profiles where id = auth.uid() and role = 'admin') then
+    return new;
+  end if;
+  if new.id is distinct from old.id
+    or new.queue_number is distinct from old.queue_number
+    or new.items is distinct from old.items
+    or new.total is distinct from old.total
+    or new.created_at is distinct from old.created_at then
+    raise exception 'only admin can modify order data';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_order_updates on orders;
+create trigger protect_order_updates
+  before update on orders
+  for each row execute function public.protect_order_updates();
+
+grant update on orders to authenticated;
 
 -- Crea l'ordine usando prezzi e nomi letti dal menu, mai dai valori
 -- forniti dal browser.

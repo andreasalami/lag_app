@@ -41,6 +41,8 @@ Poi compila `.env.local`:
    Gli account nuovi sono `pending` e non hanno permessi finché non vengono
    promossi manualmente. Disabilita anche il signup pubblico nelle impostazioni
    Supabase Auth.
+   Per i test puoi assegnare `admin`: abilita tutte le sezioni dell’app. Non
+   usare questo ruolo per account reali.
 2. **Eventbrite** — quando l'evento esiste, incolla il suo Event ID in
    `VITE_EVENTBRITE_EVENT_ID`.
 3. **Instagram** — l'handle è in `VITE_INSTAGRAM_HANDLE` (i permalink dei
