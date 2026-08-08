@@ -101,14 +101,32 @@ export function Staff() {
     );
   }
 
-  // Ruolo non ancora arrivato (query async dopo il login) o sei
-  // tournament_manager e il redirect qui sopra sta per scattare:
-  // in entrambi i casi meglio uno stato di attesa onesto che un
-  // flash dell'hub sbagliato.
-  if (role === null || role === "pending" || role === "tournament_manager") {
+  // Dopo il login role resta null solo mentre la query del profilo è in corso.
+  if (role === null || role === "tournament_manager") {
     return (
       <section className="mx-auto max-w-sm px-4 py-16 text-center">
         <p className="text-sm text-[var(--text-secondary)]">Carico...</p>
+      </section>
+    );
+  }
+
+  if (role === "pending") {
+    return (
+      <section className="mx-auto max-w-sm px-4 py-16 text-center">
+        <h1 className="mb-3 font-display text-2xl">Account in attesa</h1>
+        <p className="text-sm text-[var(--text-secondary)]">
+          Il tuo account non ha ancora un ruolo assegnato. Contatta l'amministratore per abilitare l'accesso.
+        </p>
+        <button
+          type="button"
+          onClick={signOut}
+          className="mt-6 text-xs text-[var(--text-secondary)] hover:underline"
+        >
+          Esci
+        </button>
+        <a href={`${basePath}/`} className="mt-3 block text-xs text-[var(--text-secondary)] hover:underline">
+          ← Torna al sito
+        </a>
       </section>
     );
   }
