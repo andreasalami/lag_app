@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
@@ -25,11 +26,27 @@ const FALLBACK_ITEMS: MenuItem[] = [
 
 const priceFormatter = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" });
 
+// I prodotti aggiunti in locale (non ancora salvati) hanno un id
+// temporaneo con questo prefisso, mai una vera uuid — così al salvataggio
+// sappiamo distinguere "va inserito" da "va aggiornato" senza dover
+// confrontare con l'ultimo stato noto del DB riga per riga.
+const NEW_ID_PREFIX = "new:";
+const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
+
 /*
-  Menu — stesso pattern esatto di Program (vedi useSupabaseRows):
-  dati Supabase con realtime, fallback di esempio, editing riservato
-  al ruolo 'staff' (identico agli annunci, nessuna autenticazione
-  a parte).
+  Menu — dati Supabase, editing riservato al ruolo 'staff'/'admin'.
+
+  Tutto quello che digiti resta SOLO in locale (in `items`) finché non
+  premi "Salva": un'unica chiamata RPC (bulk_upsert_menu_items) applica
+  creazioni, modifiche ed eliminazioni in un colpo solo, in una
+  transazione atomica — o va tutto a buon fine, o niente cambia.
+
+  `savedItems` è l'ultimo stato noto per certo dal DB (sincronizzato al
+  primo caricamento e di nuovo subito dopo un salvataggio riuscito).
+  isDirty confronta `items` con `savedItems`: è la versione "semplice"
+  (un confronto diretto, non un diff campo per campo) — sufficiente per
+  sapere SE mostrare il tasto Salva, non ci serve sapere esattamente
+  cosa è cambiato per farlo.
 */
 export function Menu() {
   const { role } = useAuth();
@@ -44,27 +61,68 @@ export function Menu() {
     fallback: FALLBACK_ITEMS,
   });
 
-  async function addItem(category: Category) {
-    const { error } = await supabase.from("menu_items").insert({ category, name: "Nuovo prodotto", price: 0, available_portions: null });
-    if (error) console.error("[Menu] Errore inserimento:", error.message);
-    refetch();
-  }
+  const [savedItems, setSavedItems] = useState<MenuItem[]>([]);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const savedOnceRef = useRef(false);
 
-  async function updateItem(id: string, patch: Partial<MenuItem>) {
-    const { error } = await supabase.from("menu_items").update(patch).eq("id", id);
-    if (error) {
-      console.error("[Menu] Errore aggiornamento:", error.message);
-      refetch();
+  // Sincronizza lo snapshot "salvato" al primo caricamento vero (non ad
+  // ogni render: solo quando la fetch iniziale finisce).
+  useEffect(() => {
+    if (!loading && !savedOnceRef.current) {
+      setSavedItems(items);
+      savedOnceRef.current = true;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  const isDirty = deletedIds.length > 0 || JSON.stringify(items) !== JSON.stringify(savedItems);
+
+  function addItem(category: Category) {
+    setItems((prev) => [
+      ...prev,
+      { id: `${NEW_ID_PREFIX}${crypto.randomUUID()}`, category, name: "Nuovo prodotto", price: 0, available_portions: null },
+    ]);
   }
 
-  async function deleteItem(id: string) {
+  function deleteItem(id: string) {
     setItems((prev) => prev.filter((i) => i.id !== id));
-    const { error } = await supabase.from("menu_items").delete().eq("id", id);
+    // Un prodotto mai salvato non esiste nel DB: niente da eliminare lì.
+    if (!isNewId(id)) setDeletedIds((prev) => [...prev, id]);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+
+    const created = items
+      .filter((i) => isNewId(i.id))
+      .map(({ category, name, price, available_portions }) => ({ category, name, price, available_portions }));
+
+    const updated = items.filter((i) => {
+      if (isNewId(i.id)) return false;
+      const original = savedItems.find((s) => s.id === i.id);
+      return original && JSON.stringify(original) !== JSON.stringify(i);
+    });
+
+    const { error } = await supabase.rpc("bulk_upsert_menu_items", {
+      p_created: created,
+      p_updated: updated,
+      p_deleted: deletedIds,
+    });
+
     if (error) {
-      console.error("[Menu] Errore eliminazione:", error.message);
-      refetch();
+      console.error("[Menu] Errore salvataggio:", error.message);
+      setSaveError("Salvataggio non riuscito. Riprova.");
+      setSaving(false);
+      return;
     }
+
+    const fresh = await refetch();
+    if (fresh) setSavedItems(fresh);
+    setDeletedIds([]);
+    setSaving(false);
   }
 
   return (
@@ -93,7 +151,6 @@ export function Menu() {
                       <input
                         value={item.name}
                         onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, name: e.target.value } : i)))}
-                        onBlur={(e) => updateItem(item.id, { name: e.target.value })}
                         className="field min-w-0 w-full sm:flex-1"
                       />
                       <input
@@ -102,7 +159,6 @@ export function Menu() {
                         min="0"
                         value={item.price}
                         onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, price: Number(e.target.value) } : i)))}
-                        onBlur={(e) => updateItem(item.id, { price: Number(e.target.value) })}
                         className="field w-full min-w-0 text-right font-mono sm:w-20"
                       />
                       <span className="hidden text-xs text-[var(--text-secondary)] sm:inline">€</span>
@@ -117,9 +173,6 @@ export function Menu() {
                           ...i,
                           available_portions: e.target.value === "" ? null : Math.max(0, Number(e.target.value)),
                         } : i)))}
-                        onBlur={(e) => updateItem(item.id, {
-                          available_portions: e.target.value === "" ? null : Math.max(0, Number(e.target.value)),
-                        })}
                         className="field w-full min-w-0 text-right font-mono sm:w-20"
                       />
                       <span className="hidden text-xs text-[var(--text-secondary)] sm:inline">porz.</span>
@@ -150,6 +203,25 @@ export function Menu() {
             </Card>
           </div>
         ))
+      )}
+
+      {/* Barra di salvataggio: appare solo con modifiche in sospeso, fissa
+          in basso così resta visibile mentre scorri una lista lunga. Non
+          è un bottone "in più" da cercare — sei sempre a un tap da salvare
+          o sai sempre che hai roba non ancora scritta sul DB. */}
+      {canEdit && isDirty && (
+        <div className="glass-elevated glass-elevated--strong fixed inset-x-4 bottom-24 z-40 mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-[var(--radius-md)] px-4 py-3">
+          <span className="text-xs text-[var(--text-secondary)]">
+            {saveError ?? "Ci sono modifiche non ancora salvate."}
+          </span>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
+          >
+            {saving ? "Salvo..." : "Salva"}
+          </button>
+        </div>
       )}
     </section>
   );

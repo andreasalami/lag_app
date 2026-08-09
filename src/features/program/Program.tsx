@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
@@ -6,6 +6,7 @@ import { useSupabaseRows } from "../../lib/useSupabaseRows";
 import { ProgramGrid, type ProgramSlotData } from "./ProgramGrid";
 
 const STAGES = ["Stage 1", "Stage 2"];
+const MAX_DAYS = 3;
 
 const FALLBACK_SLOTS: ProgramSlotData[] = [
   { id: "f1", day: 1, stage: "Stage 1", title: "Apertura porte — esempio", start_time: "18:00", end_time: "19:00" },
@@ -13,14 +14,24 @@ const FALLBACK_SLOTS: ProgramSlotData[] = [
   { id: "f3", day: 1, stage: "Stage 2", title: "Live band — esempio", start_time: "19:30", end_time: "20:30" },
 ];
 
-/*
-  Programma — dati reali da Supabase (fetch + realtime via
-  useSupabaseRows), editing riservato allo STESSO ruolo 'staff' degli
-  annunci: nessuna autenticazione a parte.
+const NEW_ID_PREFIX = "new:";
+const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
 
-  "Scaletta modificabile": ogni riga nella lista è editabile
-  direttamente — cambia un campo, si salva subito. La griglia
-  calendario sotto si ricalcola da sola da questi dati.
+/*
+  Programma — dati Supabase, editing riservato al ruolo 'staff'/'admin'.
+
+  Stesso pattern di Menu.tsx: tutto locale finché non premi "Salva",
+  poi un'unica RPC (bulk_upsert_program_slots) applica tutto in una
+  transazione atomica.
+
+  Bug risolto qui: Giorno e Stage scrivevano DIRETTAMENTE sul DB
+  all'onChange, ma senza aggiornare `slots` in locale — la select
+  restava agganciata al vecchio valore e "tornava indietro" a schermo
+  anche se il salvataggio sul DB era andato a buon fine. Sembrava che
+  la modifica non avesse effetto (da qui l'istinto di cancellare e
+  ricreare la riga). Ora ogni campo, Giorno e Stage compresi, aggiorna
+  solo lo stato locale: la scrittura vera è deferita al tasto Salva,
+  come tutto il resto.
 */
 export function Program() {
   const { role } = useAuth();
@@ -33,32 +44,65 @@ export function Program() {
     fallback: FALLBACK_SLOTS,
   });
 
-  async function addSlot() {
-    const { error } = await supabase
-      .from("program_slots")
-      .insert({ day: 1, stage: STAGES[0], title: "Nuovo evento", start_time: "20:00", end_time: "21:00" });
-    if (error) console.error("[Program] Errore inserimento:", error.message);
-    refetch();
-  }
+  const [savedSlots, setSavedSlots] = useState<ProgramSlotData[]>([]);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const savedOnceRef = useRef(false);
 
-  async function updateSlot(id: string, patch: Partial<ProgramSlotData>) {
-    const { error } = await supabase.from("program_slots").update(patch).eq("id", id);
-    // Se la scrittura vera fallisce (es. sessione scaduta), lo stato
-    // ottimistico sopra resterebbe sbagliato senza che nessuno se ne
-    // accorga: il refetch riallinea alla realtà del DB.
-    if (error) {
-      console.error("[Program] Errore aggiornamento:", error.message);
-      refetch();
+  useEffect(() => {
+    if (!loading && !savedOnceRef.current) {
+      setSavedSlots(slots);
+      savedOnceRef.current = true;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  const isDirty = deletedIds.length > 0 || JSON.stringify(slots) !== JSON.stringify(savedSlots);
+
+  function addSlot() {
+    setSlots((prev) => [
+      ...prev,
+      { id: `${NEW_ID_PREFIX}${crypto.randomUUID()}`, day: 1, stage: STAGES[0], title: "Nuovo evento", start_time: "20:00", end_time: "21:00" },
+    ]);
   }
 
-  async function deleteSlot(id: string) {
+  function deleteSlot(id: string) {
     setSlots((prev) => prev.filter((s) => s.id !== id));
-    const { error } = await supabase.from("program_slots").delete().eq("id", id);
+    if (!isNewId(id)) setDeletedIds((prev) => [...prev, id]);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+
+    const created = slots
+      .filter((s) => isNewId(s.id))
+      .map(({ day, stage, title, start_time, end_time }) => ({ day, stage, title, start_time, end_time }));
+
+    const updated = slots.filter((s) => {
+      if (isNewId(s.id)) return false;
+      const original = savedSlots.find((o) => o.id === s.id);
+      return original && JSON.stringify(original) !== JSON.stringify(s);
+    });
+
+    const { error } = await supabase.rpc("bulk_upsert_program_slots", {
+      p_created: created,
+      p_updated: updated,
+      p_deleted: deletedIds,
+    });
+
     if (error) {
-      console.error("[Program] Errore eliminazione:", error.message);
-      refetch();
+      console.error("[Program] Errore salvataggio:", error.message);
+      setSaveError("Salvataggio non riuscito. Riprova.");
+      setSaving(false);
+      return;
     }
+
+    const fresh = await refetch();
+    if (fresh) setSavedSlots(fresh);
+    setDeletedIds([]);
+    setSaving(false);
   }
 
   return (
@@ -73,7 +117,9 @@ export function Program() {
           <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
             Giorni dell’evento
             <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="field text-xs">
-              {[1, 2].map((dayCount) => <option key={dayCount} value={dayCount}>{dayCount}</option>)}
+              {Array.from({ length: MAX_DAYS }, (_, index) => index + 1).map((dayCount) => (
+                <option key={dayCount} value={dayCount}>{dayCount}</option>
+              ))}
             </select>
           </label>
           {slots.map((slot) => (
@@ -83,7 +129,7 @@ export function Program() {
             >
               <select
                 value={slot.day}
-                onChange={(e) => updateSlot(slot.id, { day: Number(e.target.value) })}
+                onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, day: Number(e.target.value) } : s)))}
                 className="field min-w-0 text-xs sm:w-auto"
               >
                 {Array.from({ length: days }, (_, index) => index + 1).map((day) => (
@@ -92,7 +138,7 @@ export function Program() {
               </select>
               <select
                 value={slot.stage}
-                onChange={(e) => updateSlot(slot.id, { stage: e.target.value })}
+                onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, stage: e.target.value } : s)))}
                 className="field min-w-0 text-xs sm:w-auto"
               >
                 {STAGES.map((s) => (
@@ -104,7 +150,6 @@ export function Program() {
               <input
                 value={slot.title}
                 onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, title: e.target.value } : s)))}
-                onBlur={(e) => updateSlot(slot.id, { title: e.target.value })}
                 className="field col-span-2 min-w-0 w-full sm:col-span-auto sm:min-w-[140px] sm:flex-1"
               />
               <div className="col-span-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:contents">
@@ -112,7 +157,6 @@ export function Program() {
                   type="time"
                   value={slot.start_time}
                   onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, start_time: e.target.value } : s)))}
-                  onBlur={(e) => updateSlot(slot.id, { start_time: e.target.value })}
                   className="field min-w-0 w-full text-xs"
                 />
                 <span className="text-center text-xs text-[var(--text-secondary)]">–</span>
@@ -120,7 +164,6 @@ export function Program() {
                   type="time"
                   value={slot.end_time}
                   onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, end_time: e.target.value } : s)))}
-                  onBlur={(e) => updateSlot(slot.id, { end_time: e.target.value })}
                   className="field min-w-0 w-full text-xs"
                 />
               </div>
@@ -142,6 +185,21 @@ export function Program() {
         <p className="text-sm text-[var(--text-secondary)]">Carico il programma...</p>
       ) : (
         <ProgramGrid slots={slots} stages={STAGES} days={days} />
+      )}
+
+      {canEdit && isDirty && (
+        <div className="glass-elevated glass-elevated--strong fixed inset-x-4 bottom-24 z-40 mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-[var(--radius-md)] px-4 py-3">
+          <span className="text-xs text-[var(--text-secondary)]">
+            {saveError ?? "Ci sono modifiche non ancora salvate."}
+          </span>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
+          >
+            {saving ? "Salvo..." : "Salva"}
+          </button>
+        </div>
       )}
     </section>
   );

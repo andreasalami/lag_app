@@ -34,6 +34,7 @@ export function useSupabaseRows<T>({ table, select, orderBy = [], fallback, real
     const { data, error } = await query;
     if (!error && data) setRows(data as T[]);
     setLoading(false);
+    return !error && data ? (data as T[]) : null;
   }
 
   useEffect(() => {

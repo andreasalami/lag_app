@@ -97,7 +97,7 @@ $$;
 -- ============================================================
 create table if not exists program_slots (
   id uuid primary key default gen_random_uuid(),
-  day integer not null default 1 check (day between 1 and 2),
+  day integer not null default 1 check (day between 1 and 3),
   stage text not null check (stage in ('Stage 1', 'Stage 2')),
   title text not null,
   start_time text not null, -- formato "HH:MM", niente data: evento di un giorno solo
@@ -133,6 +133,58 @@ begin
   end if;
 end
 $$;
+
+-- Salvataggio batch: crea, modifica ed elimina slot in un'unica
+-- transazione (o va tutto a buon fine, o non cambia niente). Serve al
+-- tasto "Salva" del Programma — chi edita lavora tutto in locale nel
+-- browser, questa RPC applica tutto in un colpo solo invece di una
+-- chiamata di rete per ogni singola modifica.
+-- security invoker: gira con i permessi di chi chiama, quindi le RLS
+-- policy già definite sopra (solo staff/admin) si applicano da sole,
+-- riga per riga, dentro insert/update/delete — non serve duplicare
+-- il controllo qui dentro.
+create or replace function public.bulk_upsert_program_slots(
+  p_created jsonb default '[]'::jsonb,
+  p_updated jsonb default '[]'::jsonb,
+  p_deleted uuid[] default '{}'::uuid[]
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if p_created is not null and jsonb_array_length(p_created) > 0 then
+    insert into program_slots (day, stage, title, start_time, end_time)
+    select
+      (elem->>'day')::integer,
+      (elem->>'stage')::text,
+      (elem->>'title')::text,
+      (elem->>'start_time')::text,
+      (elem->>'end_time')::text
+    from jsonb_array_elements(p_created) as elem;
+  end if;
+
+  if p_updated is not null and jsonb_array_length(p_updated) > 0 then
+    update program_slots as p
+    set
+      day = (elem->>'day')::integer,
+      stage = (elem->>'stage')::text,
+      title = (elem->>'title')::text,
+      start_time = (elem->>'start_time')::text,
+      end_time = (elem->>'end_time')::text
+    from jsonb_array_elements(p_updated) as elem
+    where p.id = (elem->>'id')::uuid;
+  end if;
+
+  if p_deleted is not null and array_length(p_deleted, 1) > 0 then
+    delete from program_slots where id = any(p_deleted);
+  end if;
+end;
+$$;
+
+revoke execute on function public.bulk_upsert_program_slots(jsonb, jsonb, uuid[]) from public;
+grant execute on function public.bulk_upsert_program_slots(jsonb, jsonb, uuid[]) to authenticated;
 
 -- ============================================================
 -- MENU: cibo e bevande. Stesse regole del programma — pubblico in
@@ -175,6 +227,51 @@ begin
   end if;
 end
 $$;
+
+-- Stesso identico pattern di bulk_upsert_program_slots qui sopra: il
+-- tasto "Salva" del Menu manda tutte le modifiche in sospeso in un'unica
+-- chiamata, atomica, invece di una scrittura di rete per ogni carattere
+-- digitato o campo modificato.
+create or replace function public.bulk_upsert_menu_items(
+  p_created jsonb default '[]'::jsonb,
+  p_updated jsonb default '[]'::jsonb,
+  p_deleted uuid[] default '{}'::uuid[]
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if p_created is not null and jsonb_array_length(p_created) > 0 then
+    insert into menu_items (category, name, price, available_portions)
+    select
+      (elem->>'category')::text,
+      (elem->>'name')::text,
+      (elem->>'price')::numeric,
+      (elem->>'available_portions')::integer
+    from jsonb_array_elements(p_created) as elem;
+  end if;
+
+  if p_updated is not null and jsonb_array_length(p_updated) > 0 then
+    update menu_items as m
+    set
+      category = (elem->>'category')::text,
+      name = (elem->>'name')::text,
+      price = (elem->>'price')::numeric,
+      available_portions = (elem->>'available_portions')::integer
+    from jsonb_array_elements(p_updated) as elem
+    where m.id = (elem->>'id')::uuid;
+  end if;
+
+  if p_deleted is not null and array_length(p_deleted, 1) > 0 then
+    delete from menu_items where id = any(p_deleted);
+  end if;
+end;
+$$;
+
+revoke execute on function public.bulk_upsert_menu_items(jsonb, jsonb, uuid[]) from public;
+grant execute on function public.bulk_upsert_menu_items(jsonb, jsonb, uuid[]) to authenticated;
 
 -- ============================================================
 -- ORDINI
