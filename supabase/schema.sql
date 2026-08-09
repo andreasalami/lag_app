@@ -470,3 +470,44 @@ begin
   end if;
 end
 $$;
+
+-- ============================================================
+-- TORNEO: una riga sola (id fisso 'main'), tutto il tabellone dentro.
+-- Niente tabella-per-match: a questa scala (max 64 squadre = 63
+-- match) il documento intero pesa pochi KB, normalizzare non
+-- aggiunge niente e complica solo il codice.
+--
+-- NIENTE REALTIME QUI DI PROPOSITO: Supabase Realtime ha un tetto di
+-- connessioni concorrenti (200 sul piano Free, 500 su Pro) — con
+-- centinaia/migliaia di persone che potrebbero avere il tabellone
+-- aperto sul telefono, quel tetto si supera facile. Chi guarda fa
+-- polling lato client (una select ogni 10-15s, vedi
+-- TournamentBracket.tsx) invece di tenere una connessione aperta:
+-- una query su una riga sola non pesa, a qualunque numero di persone.
+--
+-- Chi gestisce il torneo lavora tutto in locale (localStorage, sempre
+-- sullo stesso browser finché non cambia device) e pubblica solo
+-- quando vuole con un salvataggio esplicito — non ad ogni punteggio
+-- segnato, così il DB non viene scritto ad ogni singolo click.
+-- ============================================================
+create table if not exists tournament_state (
+  id text primary key default 'main',
+  size integer not null default 8,
+  teams jsonb not null default '[]'::jsonb,
+  matches jsonb not null default '{}'::jsonb,
+  overrides jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+insert into tournament_state (id) values ('main') on conflict (id) do nothing;
+
+alter table tournament_state enable row level security;
+
+create policy "Chiunque legge il torneo"
+  on tournament_state for select
+  using (true);
+
+create policy "Solo tournament_manager pubblica il torneo"
+  on tournament_state for all
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('tournament_manager', 'admin')))
+  with check (exists (select 1 from profiles where id = auth.uid() and role in ('tournament_manager', 'admin')));
