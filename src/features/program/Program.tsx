@@ -37,6 +37,7 @@ export function Program() {
   const { role } = useAuth();
   const canEdit = role === "staff" || role === "admin";
   const [days, setDays] = useState(1);
+  const [savedDays, setSavedDays] = useState(1);
   const { rows: slots, setRows: setSlots, loading, refetch } = useSupabaseRows<ProgramSlotData>({
     table: "program_slots",
     select: "id, day, stage, title, start_time, end_time",
@@ -53,27 +54,41 @@ export function Program() {
   useEffect(() => {
     if (!loading && !savedOnceRef.current) {
       setSavedSlots(slots);
-      // "days" è solo lo state del selettore di modifica, non viene
-      // persistito da nessuna parte: al primo caricamento lo si
-      // allinea al giorno più alto già presente tra gli eventi, così
-      // chi entra a modificare non si ritrova il selettore tornato a
-      // "1 giorno" con dentro eventi fino al giorno 3.
-      const maxExistingDay = slots.reduce((max, slot) => Math.max(max, slot.day), 1);
-      setDays(maxExistingDay);
       savedOnceRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
-  const isDirty = deletedIds.length > 0 || JSON.stringify(slots) !== JSON.stringify(savedSlots);
+  // Il numero di giorni è condiviso (riga singola su Supabase,
+  // program_settings) — non più uno state locale al browser di chi
+  // edita, che prima resettava a 1 ad ogni reload/dispositivo diverso
+  // nascondendo i giorni successivi al primo anche con eventi già
+  // salvati lì sopra. Il programma si compila giorni prima
+  // dell'evento: niente realtime, basta leggerlo una volta al
+  // caricamento, come tournament_state.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSettings() {
+      const { data, error } = await supabase.from("program_settings").select("days").eq("id", "main").maybeSingle();
+      if (cancelled) return;
+      if (error) console.error("[Program] Errore caricamento giorni:", error.message);
+      const persistedDays = data?.days ?? 1;
+      setDays(persistedDays);
+      setSavedDays(persistedDays);
+    }
+    loadSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  // Quanti giorni MOSTRARE non deve mai dipendere solo dal selettore
-  // locale (che riparte da 1 ad ogni reload): se ci sono eventi salvati
-  // sul giorno 2 o 3, quei giorni vanno disegnati comunque, anche se
-  // "days" non è stato ancora toccato in questa sessione. Il selettore
-  // resta il modo per AGGIUNGERE giorni oltre a quelli già occupati.
+  const isDirty = days !== savedDays || deletedIds.length > 0 || JSON.stringify(slots) !== JSON.stringify(savedSlots);
+
+  // Rete di sicurezza: se per qualsiasi motivo il valore salvato non
+  // è ancora arrivato (o è rimasto indietro) ma esistono comunque
+  // eventi su un giorno più alto, quel giorno va mostrato comunque —
+  // non deve mai sparire un evento già salvato.
   const displayDays = slots.reduce((max, slot) => Math.max(max, slot.day), days);
-
 
   function addSlot() {
     setSlots((prev) => [
@@ -112,6 +127,20 @@ export function Program() {
       setSaveError("Salvataggio non riuscito. Riprova.");
       setSaving(false);
       return;
+    }
+
+    if (days !== savedDays) {
+      const { error: settingsError } = await supabase
+        .from("program_settings")
+        .upsert({ id: "main", days, updated_at: new Date().toISOString() }, { onConflict: "id" });
+
+      if (settingsError) {
+        console.error("[Program] Errore salvataggio giorni:", settingsError.message);
+        setSaveError("Eventi salvati, ma il numero di giorni non è stato aggiornato. Riprova.");
+        setSaving(false);
+        return;
+      }
+      setSavedDays(days);
     }
 
     const fresh = await refetch();

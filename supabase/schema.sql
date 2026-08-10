@@ -511,3 +511,31 @@ create policy "Solo tournament_manager pubblica il torneo"
   on tournament_state for all
   using (exists (select 1 from profiles where id = auth.uid() and role in ('tournament_manager', 'admin')))
   with check (exists (select 1 from profiles where id = auth.uid() and role in ('tournament_manager', 'admin')));
+
+-- ============================================================
+-- PROGRAM_SETTINGS: quanti giorni dura l'evento. Riga singola come
+-- tournament_state — il programma si compila giorni prima
+-- dell'evento, non serve realtime, serve solo che chi lo modifica da
+-- dispositivi/sessioni diverse veda lo stesso numero di giorni invece
+-- che un contatore locale al browser (che prima resettava a 1 ad ogni
+-- reload, nascondendo i giorni successivi al primo anche se gli slot
+-- erano regolarmente salvati).
+-- ============================================================
+create table if not exists program_settings (
+  id text primary key default 'main',
+  days integer not null default 1 check (days between 1 and 3),
+  updated_at timestamptz not null default now()
+);
+
+insert into program_settings (id) values ('main') on conflict (id) do nothing;
+
+alter table program_settings enable row level security;
+
+create policy "Chiunque legge le impostazioni del programma"
+  on program_settings for select
+  using (true);
+
+create policy "Solo lo staff modifica le impostazioni del programma"
+  on program_settings for all
+  using (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')))
+  with check (exists (select 1 from profiles where id = auth.uid() and role in ('staff', 'admin')));
