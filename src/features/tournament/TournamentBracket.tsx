@@ -86,6 +86,7 @@ export function TournamentBracket() {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [showCloseWarning, setShowCloseWarning] = useState(false);
 
   // Caricamento iniziale: per l'editor, la bozza locale (se esiste)
   // vince sull'ultimo pubblicato, perché rappresenta lavoro più
@@ -192,6 +193,29 @@ export function TournamentBracket() {
     setPublishing(false);
   }
 
+  // Chiudere il pannello nomi squadre con modifiche in sospeso è
+  // esattamente il momento in cui si rischia di cambiare dispositivo
+  // (o aspettarsi che il tabellone sia aggiornato per il pubblico)
+  // senza aver pubblicato: da qui l'avviso invece del toggle diretto.
+  function handleCloseClick() {
+    if (editingTeams && isDirty) {
+      setShowCloseWarning(true);
+      return;
+    }
+    setEditingTeams((v) => !v);
+  }
+
+  async function handlePublishAndClose() {
+    await handlePublish();
+    setShowCloseWarning(false);
+    setEditingTeams(false);
+  }
+
+  function handleCloseWithoutSaving() {
+    setShowCloseWarning(false);
+    setEditingTeams(false);
+  }
+
   const rounds = totalRounds(size);
   const firstRoundMatches = matchesInRound(size, 0);
   const matchStep = matchHeight + matchGap;
@@ -263,13 +287,25 @@ export function TournamentBracket() {
                 {s}
               </button>
             ))}
-            <button
-              onClick={() => setEditingTeams((v) => !v)}
-              className="ml-auto text-xs text-[var(--text-secondary)] underline-offset-2 hover:text-[var(--accent-primary)] hover:underline"
-            >
-              {editingTeams ? "Chiudi" : "Nomi squadre"}
-            </button>
+            <div className="ml-auto flex items-center gap-3">
+              {isDirty && (
+                <button
+                  onClick={handlePublish}
+                  disabled={publishing}
+                  className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-3 py-1.5 text-xs font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
+                >
+                  {publishing ? "Pubblico..." : "Pubblica"}
+                </button>
+              )}
+              <button
+                onClick={handleCloseClick}
+                className="text-xs text-[var(--text-secondary)] underline-offset-2 hover:text-[var(--accent-primary)] hover:underline"
+              >
+                {editingTeams ? "Chiudi" : "Nomi squadre"}
+              </button>
+            </div>
           </div>
+          {publishError && <p className="mb-4 -mt-2 text-right text-xs text-[var(--state-error)]">{publishError}</p>}
 
           {editingTeams && (
             <Card className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -337,18 +373,30 @@ export function TournamentBracket() {
         </div>
       </div>
 
-      {canEdit && isDirty && (
-        <div className="glass-elevated glass-elevated--strong fixed inset-x-4 bottom-24 z-40 mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-[var(--radius-md)] px-4 py-3">
-          <span className="text-xs text-[var(--text-secondary)]">
-            {publishError ?? "Ci sono modifiche non ancora pubblicate — chi guarda vede ancora l'ultimo turno pubblicato."}
-          </span>
-          <button
-            onClick={handlePublish}
-            disabled={publishing}
-            className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
-          >
-            {publishing ? "Pubblico..." : "Pubblica"}
-          </button>
+      {showCloseWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="glass-elevated glass-elevated--strong w-full max-w-sm rounded-[var(--radius-md)] border border-[var(--state-error)] p-5">
+            <p className="mb-1 text-sm font-semibold text-[var(--state-error)]">⚠ Modifiche non pubblicate</p>
+            <p className="mb-4 text-sm text-[var(--text-secondary)]">
+              Hai punteggi o nomi non ancora pubblicati. Se cambi dispositivo o serve che il pubblico veda il
+              tabellone aggiornato, devi pubblicare ora — altrimenti restano solo su questo browser.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={handleCloseWithoutSaving}
+                className="rounded-[var(--radius-pill)] border border-[var(--surface-border)] px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
+                Chiudi senza pubblicare
+              </button>
+              <button
+                onClick={handlePublishAndClose}
+                disabled={publishing}
+                className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-1.5 text-xs font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
+              >
+                {publishing ? "Pubblico..." : "Pubblica ora"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

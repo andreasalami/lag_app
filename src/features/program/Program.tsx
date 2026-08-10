@@ -53,12 +53,27 @@ export function Program() {
   useEffect(() => {
     if (!loading && !savedOnceRef.current) {
       setSavedSlots(slots);
+      // "days" è solo lo state del selettore di modifica, non viene
+      // persistito da nessuna parte: al primo caricamento lo si
+      // allinea al giorno più alto già presente tra gli eventi, così
+      // chi entra a modificare non si ritrova il selettore tornato a
+      // "1 giorno" con dentro eventi fino al giorno 3.
+      const maxExistingDay = slots.reduce((max, slot) => Math.max(max, slot.day), 1);
+      setDays(maxExistingDay);
       savedOnceRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
   const isDirty = deletedIds.length > 0 || JSON.stringify(slots) !== JSON.stringify(savedSlots);
+
+  // Quanti giorni MOSTRARE non deve mai dipendere solo dal selettore
+  // locale (che riparte da 1 ad ogni reload): se ci sono eventi salvati
+  // sul giorno 2 o 3, quei giorni vanno disegnati comunque, anche se
+  // "days" non è stato ancora toccato in questa sessione. Il selettore
+  // resta il modo per AGGIUNGERE giorni oltre a quelli già occupati.
+  const displayDays = slots.reduce((max, slot) => Math.max(max, slot.day), days);
+
 
   function addSlot() {
     setSlots((prev) => [
@@ -132,7 +147,7 @@ export function Program() {
                 onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, day: Number(e.target.value) } : s)))}
                 className="field min-w-0 text-xs sm:w-auto"
               >
-                {Array.from({ length: days }, (_, index) => index + 1).map((day) => (
+                {Array.from({ length: displayDays }, (_, index) => index + 1).map((day) => (
                   <option key={day} value={day}>Giorno {day}</option>
                 ))}
               </select>
@@ -178,28 +193,26 @@ export function Program() {
           <button onClick={addSlot} className="mt-1 self-start text-xs text-[var(--accent-primary)] hover:underline">
             + Aggiungi evento
           </button>
+
+          {isDirty && (
+            <div className="mt-2 flex items-center justify-end gap-3 border-t border-[var(--surface-border)] pt-3">
+              {saveError && <span className="text-xs text-[var(--state-error)]">{saveError}</span>}
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
+              >
+                {saving ? "Salvo..." : "Salva"}
+              </button>
+            </div>
+          )}
         </Card>
       )}
 
       {loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico il programma...</p>
       ) : (
-        <ProgramGrid slots={slots} stages={STAGES} days={days} />
-      )}
-
-      {canEdit && isDirty && (
-        <div className="glass-elevated glass-elevated--strong fixed inset-x-4 bottom-24 z-40 mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-[var(--radius-md)] px-4 py-3">
-          <span className="text-xs text-[var(--text-secondary)]">
-            {saveError ?? "Ci sono modifiche non ancora salvate."}
-          </span>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
-          >
-            {saving ? "Salvo..." : "Salva"}
-          </button>
-        </div>
+        <ProgramGrid slots={slots} stages={STAGES} days={displayDays} />
       )}
     </section>
   );
