@@ -1,0 +1,190 @@
+import { useRef, useState } from "react";
+import { InstagramEmbed } from "./InstagramEmbed";
+
+/*
+  Post curati a mano, stessi permalink di prima — solo la presentazione
+  cambia: da riga scorrevole a mazzo di carte sovrapposte, swipe a
+  sinistra per andare avanti, a destra per tornare indietro.
+
+  Perché un overlay trasparente sopra ogni carta: l'embed Instagram è
+  un iframe cross-origin, e un iframe NON inoltra gli eventi di
+  puntamento al documento che lo contiene — se attacchi il drag
+  direttamente sul wrapper, appena il dito/mouse è sopra l'iframe lo
+  swipe si blocca. L'overlay cattura sempre lui il gesto, sopra tutto.
+  Come bonus: un tap secco (senza trascinamento) sull'overlay apre il
+  post vero su Instagram, altrimenti l'embed sotto sarebbe irraggiungibile.
+  L'overlay è montato SOLO sulla carta in cima: le carte dietro devono
+  restare visibili ma non devono intercettare gesti.
+
+  Tutte le carte visibili nel mazzo (non solo quella in cima) montano
+  l'embed vero: quando fai swipe la prossima è già pronta, non c'è un
+  buco vuoto sotto. La key di ogni carta è l'indice del post (idx), non
+  la sua posizione nel mazzo: così quando una carta viene promossa da
+  "dietro" a "in cima" resta lo STESSO nodo React/DOM, non viene
+  smontata e rimontata da capo (niente ricaricamento, niente flash).
+  Le carte che escono dalla finestra visibile (VISIBLE_DEPTH) vengono
+  smontate per davvero — l'iframe non resta a consumare risorse quando
+  non è a portata di swipe.
+
+  Nota onesta: la card ha un'altezza fissa con overflow nascosto,
+  quindi per i post con didascalia lunga il piè di pagina dell'embed
+  ("Visualizza su Instagram") può risultare tagliato — la foto in alto
+  resta sempre visibile per intero. È il compromesso di forzare
+  qualsiasi imbed (dimensione variabile, fuori dal nostro controllo)
+  dentro una carta di dimensione fissa.
+*/
+const CURATED_POSTS: string[] = [
+  "https://www.instagram.com/p/DZNBnbrjPns/",
+  "https://www.instagram.com/p/DZKQ_OgDKUd/",
+  "https://www.instagram.com/p/DYuNjU5jDtV/",
+  "https://www.instagram.com/p/DWrDeL8DPET/",
+  "https://www.instagram.com/p/DWi1z2cjMOa/",
+];
+
+const VISIBLE_DEPTH = 3;
+const SWIPE_THRESHOLD = 80;
+const TAP_THRESHOLD = 6;
+
+export function InstagramPosts() {
+  const [current, setCurrent] = useState(0);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const dragStartX = useRef(0);
+  const dragging = useRef(false);
+
+  const total = CURATED_POSTS.length;
+
+  if (total === 0) {
+    return (
+      <p className="mt-6 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-center text-sm text-[var(--text-secondary)]">
+        Nessun post selezionato ancora — aggiungi un permalink in{" "}
+        <code className="font-mono text-[var(--accent-primary)]">src/features/social/InstagramPosts.tsx</code>.
+      </p>
+    );
+  }
+
+  function goNext() {
+    setCurrent((c) => (c + 1) % total);
+  }
+  function goPrev() {
+    setCurrent((c) => (c - 1 + total) % total);
+  }
+
+  function snapBack() {
+    const el = cardRef.current;
+    if (!el) return;
+    el.style.transition = "transform 0.25s ease";
+    el.style.transform = "translateX(0) rotate(0deg)";
+  }
+
+  function handlePointerDown(e: React.PointerEvent) {
+    dragging.current = true;
+    dragStartX.current = e.clientX;
+    const el = cardRef.current;
+    if (el) el.style.transition = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  function handlePointerMove(e: PointerEvent) {
+    if (!dragging.current) return;
+    const el = cardRef.current;
+    if (!el) return;
+    const deltaX = e.clientX - dragStartX.current;
+    el.style.transform = `translateX(${deltaX}px) rotate(${deltaX / 14}deg)`;
+  }
+
+  function handlePointerUp(e: PointerEvent) {
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+    if (!dragging.current) return;
+    dragging.current = false;
+
+    const deltaX = e.clientX - dragStartX.current;
+    const el = cardRef.current;
+
+    if (Math.abs(deltaX) < TAP_THRESHOLD) {
+      window.open(CURATED_POSTS[current], "_blank", "noreferrer");
+      snapBack();
+      return;
+    }
+
+    if (Math.abs(deltaX) > SWIPE_THRESHOLD) {
+      const goingNext = deltaX < 0; // swipe a sinistra = avanti
+      if (el) {
+        el.style.transition = "transform 0.22s ease";
+        el.style.transform = `translateX(${goingNext ? -600 : 600}px) rotate(${goingNext ? -25 : 25}deg)`;
+      }
+      window.setTimeout(() => {
+        if (goingNext) goNext();
+        else goPrev();
+        if (el) {
+          el.style.transition = "none";
+          el.style.transform = "translateX(0) rotate(0deg)";
+        }
+      }, 200);
+    } else {
+      snapBack();
+    }
+  }
+
+  const depthCount = Math.min(VISIBLE_DEPTH, total);
+
+  return (
+    <div className="mt-6">
+      <div className="relative isolate mx-auto aspect-[4/5] w-full max-w-[300px]">
+        {Array.from({ length: depthCount }, (_, d) => depthCount - 1 - d).map((depth) => {
+          const idx = (current + depth) % total;
+          const isTop = depth === 0;
+          const rotation = isTop ? 0 : (depth % 2 === 0 ? 1 : -1) * (4 + depth * 2);
+
+          return (
+            <div
+              key={idx}
+              ref={isTop ? cardRef : undefined}
+              className="surface-solid absolute inset-0 overflow-hidden rounded-[var(--radius-lg)]"
+              style={{
+                zIndex: depthCount - depth,
+                transform: `translateY(${depth * 10}px) scale(${1 - depth * 0.06}) rotate(${rotation}deg)`,
+                opacity: isTop ? 1 : 0.85 - depth * 0.2,
+              }}
+            >
+              <InstagramEmbed url={CURATED_POSTS[idx]} />
+              {isTop && (
+                <div
+                  className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
+                  onPointerDown={handlePointerDown}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-3 text-center text-xs text-[var(--text-secondary)]">
+        Scorri la carta per esplorare gli altri post
+      </p>
+
+      <div className="mt-2 flex items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={goPrev}
+          aria-label="Post precedente"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--surface-border)] text-[var(--text-secondary)] hover:text-[var(--accent-primary)]"
+        >
+          ‹
+        </button>
+        <span className="font-mono text-xs text-[var(--text-secondary)]">
+          {current + 1} / {total}
+        </span>
+        <button
+          type="button"
+          onClick={goNext}
+          aria-label="Post successivo"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--surface-border)] text-[var(--text-secondary)] hover:text-[var(--accent-primary)]"
+        >
+          ›
+        </button>
+      </div>
+    </div>
+  );
+}
