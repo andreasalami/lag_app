@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "../../components/ui/Card";
+import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
@@ -222,19 +223,6 @@ export function Program() {
           <button onClick={addSlot} className="mt-1 self-start text-xs text-[var(--accent-primary)] hover:underline">
             + Aggiungi evento
           </button>
-
-          {isDirty && (
-            <div className="mt-2 flex items-center justify-end gap-3 border-t border-[var(--surface-border)] pt-3">
-              {saveError && <span className="text-xs text-[var(--state-error)]">{saveError}</span>}
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
-              >
-                {saving ? "Salvo..." : "Salva"}
-              </button>
-            </div>
-          )}
         </Card>
       )}
 
@@ -242,6 +230,18 @@ export function Program() {
         <p className="text-sm text-[var(--text-secondary)]">Carico il programma...</p>
       ) : (
         <ProgramGrid slots={slots} stages={STAGES} days={displayDays} />
+      )}
+
+      {/* Stesso banner condiviso di Menu e Torneo (vedi SaveBanner.tsx):
+          niente più tasto incollato dentro la Card, un solo posto dove
+          cercare "Salva" in tutta l'interfaccia. */}
+      {canEdit && isDirty && (
+        <SaveBanner
+          message="Ci sono modifiche al Programma non ancora salvate."
+          saving={saving}
+          error={saveError}
+          onSave={handleSave}
+        />
       )}
     </section>
   );

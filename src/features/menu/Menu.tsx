@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "../../components/ui/Card";
+import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
@@ -205,23 +206,19 @@ export function Menu() {
         ))
       )}
 
-      {/* Barra di salvataggio: appare solo con modifiche in sospeso, fissa
-          in basso così resta visibile mentre scorri una lista lunga. Non
-          è un bottone "in più" da cercare — sei sempre a un tap da salvare
-          o sai sempre che hai roba non ancora scritta sul DB. */}
+      {/* Banner di salvataggio condiviso (vedi SaveBanner.tsx): appare solo
+          con modifiche in sospeso, fisso in basso così resta visibile
+          mentre scorri una lista lunga. Non è un bottone "in più" da
+          cercare — sei sempre a un tap da salvare o sai sempre che hai
+          roba non ancora scritta sul DB. Stesso identico banner in
+          Programma e Torneo, così il gesto è sempre lo stesso. */}
       {canEdit && isDirty && (
-        <div className="glass-elevated glass-elevated--strong fixed inset-x-4 bottom-24 z-40 mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-[var(--radius-md)] px-4 py-3">
-          <span className="text-xs text-[var(--text-secondary)]">
-            {saveError ?? "Ci sono modifiche non ancora salvate."}
-          </span>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
-          >
-            {saving ? "Salvo..." : "Salva"}
-          </button>
-        </div>
+        <SaveBanner
+          message="Ci sono modifiche al Menu non ancora salvate."
+          saving={saving}
+          error={saveError}
+          onSave={handleSave}
+        />
       )}
     </section>
   );

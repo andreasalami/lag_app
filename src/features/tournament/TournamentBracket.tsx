@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card } from "../../components/ui/Card";
+import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { MatchCard } from "./MatchCard";
@@ -287,25 +288,13 @@ export function TournamentBracket() {
                 {s}
               </button>
             ))}
-            <div className="ml-auto flex items-center gap-3">
-              {isDirty && (
-                <button
-                  onClick={handlePublish}
-                  disabled={publishing}
-                  className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-3 py-1.5 text-xs font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
-                >
-                  {publishing ? "Pubblico..." : "Pubblica"}
-                </button>
-              )}
-              <button
-                onClick={handleCloseClick}
-                className="text-xs text-[var(--text-secondary)] underline-offset-2 hover:text-[var(--accent-primary)] hover:underline"
-              >
-                {editingTeams ? "Chiudi" : "Nomi squadre"}
-              </button>
-            </div>
+            <button
+              onClick={handleCloseClick}
+              className="ml-auto text-xs text-[var(--text-secondary)] underline-offset-2 hover:text-[var(--accent-primary)] hover:underline"
+            >
+              {editingTeams ? "Chiudi" : "Nomi squadre"}
+            </button>
           </div>
-          {publishError && <p className="mb-4 -mt-2 text-right text-xs text-[var(--state-error)]">{publishError}</p>}
 
           {editingTeams && (
             <Card className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -373,6 +362,19 @@ export function TournamentBracket() {
         </div>
       </div>
 
+      {/* Stesso banner condiviso di Programma e Menu (vedi SaveBanner.tsx):
+          l'etichetta del bottone è "Salva" ovunque nell'app per coerenza,
+          il messaggio resta specifico del Torneo perché qui "salvare"
+          vuol dire pubblicare — chi guarda vede il tabellone solo dopo. */}
+      {canEdit && isDirty && (
+        <SaveBanner
+          message="Ci sono modifiche al Torneo non ancora salvate — chi guarda vede ancora l'ultimo turno pubblicato."
+          saving={publishing}
+          error={publishError}
+          onSave={handlePublish}
+        />
+      )}
+
       {showCloseWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="glass-elevated glass-elevated--strong w-full max-w-sm rounded-[var(--radius-md)] border border-[var(--state-error)] p-5">
@@ -393,7 +395,7 @@ export function TournamentBracket() {
                 disabled={publishing}
                 className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-1.5 text-xs font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
               >
-                {publishing ? "Pubblico..." : "Pubblica ora"}
+                {publishing ? "Salvo..." : "Salva ora"}
               </button>
             </div>
           </div>
