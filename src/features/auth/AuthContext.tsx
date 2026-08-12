@@ -8,6 +8,7 @@ interface AuthState {
   session: Session | null;
   role: Role;
   loading: boolean;
+  profileError: string | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
@@ -29,37 +30,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<Role>(null);
   const [loading, setLoading] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
+      setAuthReady(true);
       setLoading(false);
       return;
     }
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+    void supabase.auth.getSession()
+      .then(({ data }) => {
+        setSession(data.session);
+        setAuthReady(true);
+      })
+      .catch(() => {
+        setProfileError("Impossibile inizializzare la sessione. Ricarica la pagina.");
+        setLoading(false);
+      });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
+      setAuthReady(true);
     });
 
     return () => listener.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
+    if (!authReady) return;
+
     if (!session) {
       setRole(null);
+      setProfileError(null);
+      setLoading(false);
       return;
     }
-    supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", session.user.id)
-      .single()
-      .then(({ data }) => setRole((data?.role as Role) ?? null));
-  }, [session]);
+
+    let cancelled = false;
+    setRole(null);
+    setProfileError(null);
+    setLoading(true);
+
+    void supabase.from("profiles").select("role").eq("id", session.user.id).single().then(({ data, error }) => {
+      if (cancelled) return;
+      if (error || !data) {
+        setProfileError("Impossibile leggere il profilo autorizzativo. Riprova o contatta l'amministratore.");
+      } else {
+        setRole(data.role as Role);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, session]);
 
   async function signIn(email: string, password: string) {
     if (!isSupabaseConfigured) {
@@ -79,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, role, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, role, loading, profileError, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

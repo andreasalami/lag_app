@@ -13,10 +13,10 @@ import { isSupabaseConfigured } from "../lib/supabaseClient";
   navigazione, non un semplice salto d'ancora nella stessa pagina.
 */
 const DESTINATIONS = [
-  { label: "Programma", path: "/#programma" },
-  { label: "Annunci", path: "/#annunci" },
-  { label: "Menu", path: "/#menu" },
-  { label: "Torneo", path: "/#tornei" },
+  { label: "Programma", path: "/#programma", roles: ["staff", "admin"] },
+  { label: "Annunci", path: "/#annunci", roles: ["staff", "admin"] },
+  { label: "Menu", path: "/#menu", roles: ["staff", "admin"] },
+  { label: "Torneo", path: "/#tornei", roles: ["admin"] },
 ];
 
 const OPERATIONS = [
@@ -25,7 +25,7 @@ const OPERATIONS = [
 ];
 
 export function Staff() {
-  const { session, role, loading, signIn, signOut } = useAuth();
+  const { session, role, loading, profileError, signIn, signOut } = useAuth();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -101,7 +101,18 @@ export function Staff() {
     );
   }
 
-  // Dopo il login role resta null solo mentre la query del profilo è in corso.
+  if (profileError) {
+    return (
+      <section className="mx-auto max-w-sm px-4 py-16 text-center">
+        <h1 className="mb-3 font-display text-2xl">Profilo non disponibile</h1>
+        <p className="text-sm text-[var(--state-error)]">{profileError}</p>
+        <button type="button" onClick={signOut} className="mt-6 text-xs text-[var(--text-secondary)] hover:underline">
+          Esci
+        </button>
+      </section>
+    );
+  }
+
   if (role === null || role === "tournament_manager") {
     return (
       <section className="mx-auto max-w-sm px-4 py-16 text-center">
@@ -137,23 +148,23 @@ export function Staff() {
       <p className="mb-6 text-center text-xs text-[var(--text-secondary)]">{session.user.email}</p>
 
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-2">
+        {(role === "staff" || role === "admin") && <div className="flex flex-col gap-2">
           <h2 className="font-display text-sm text-[var(--text-secondary)]">Sezioni del sito</h2>
-          {DESTINATIONS.map((d) => (
+          {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
             <a key={d.label} href={`${basePath}${d.path}`} className="field text-center font-semibold">
               {d.label}
             </a>
           ))}
-        </div>
+        </div>}
 
-        <div className="flex flex-col gap-2">
+        {(role === "cassa" || role === "cucina" || role === "admin") && <div className="flex flex-col gap-2">
           <h2 className="font-display text-sm text-[var(--text-secondary)]">Operatività</h2>
-          {OPERATIONS.map((d) => (
+          {OPERATIONS.filter((d) => role === "admin" || d.label.toLowerCase() === role).map((d) => (
             <a key={d.label} href={`${basePath}${d.path}`} className="field text-center font-semibold">
               {d.label}
             </a>
           ))}
-        </div>
+        </div>}
       </div>
 
       <button

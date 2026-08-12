@@ -53,8 +53,18 @@ function SlotRow({ name, isWinner, score, editable, onScoreChange, onOverride }:
         <>
           <input
             type="number"
+            min="0"
+            max="999"
+            step="1"
             value={score ?? ""}
-            onChange={(e) => onScoreChange(e.target.value === "" ? null : Number(e.target.value))}
+            onChange={(e) => {
+              if (e.target.value === "") {
+                onScoreChange(null);
+                return;
+              }
+              const value = Number(e.target.value);
+              if (Number.isInteger(value) && value >= 0 && value <= 999) onScoreChange(value);
+            }}
             className="field w-12 px-1 text-center font-mono text-xs"
             placeholder="-"
           />

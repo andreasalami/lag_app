@@ -48,7 +48,7 @@ const dateFormatter = new Intl.DateTimeFormat("it-IT", {
 
 export function Announcements() {
   const { role } = useAuth();
-  const { rows: announcements, setRows, loading, refetch } = useSupabaseRows<Announcement>({
+  const { rows: announcements, setRows, loading, error: loadError, refetch } = useSupabaseRows<Announcement>({
     table: "announcements",
     select: "id, title, message, published_at",
     orderBy: [{ column: "published_at", ascending: false }],
@@ -74,7 +74,9 @@ export function Announcements() {
       <NotificationPermission />
       {(role === "staff" || role === "admin") && <PublishAnnouncementForm onPublished={refetch} />}
 
-      {loading ? (
+      {loadError ? (
+        <p className="text-sm text-[var(--state-error)]">Annunci non disponibili. Ricarica la pagina.</p>
+      ) : loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico gli annunci...</p>
       ) : (
         <div className="flex flex-col gap-3">

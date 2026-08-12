@@ -41,6 +41,8 @@ export function roundLabel(size: BracketSize, round: number): string {
 }
 
 export function winnerFromScore(scoreA: number | null, scoreB: number | null): Side | null {
+  if (scoreA !== null && (!Number.isInteger(scoreA) || scoreA < 0)) return null;
+  if (scoreB !== null && (!Number.isInteger(scoreB) || scoreB < 0)) return null;
   if (scoreA === null || scoreB === null || scoreA === scoreB) return null;
   return scoreA > scoreB ? "A" : "B";
 }

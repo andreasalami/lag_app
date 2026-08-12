@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
-import { supabase } from "../../lib/supabaseClient";
+import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
 import { MatchCard } from "./MatchCard";
 import {
   BRACKET_SIZES,
@@ -36,11 +36,22 @@ const EMPTY_SNAPSHOT: TournamentSnapshot = { size: 8, teams: defaultTeams(8), ma
 const DRAFT_KEY = "lag-tournament-draft";
 // Ogni quanto chi guarda (non gestisce) ricontrolla se c'è un turno
 // nuovo pubblicato. Un tabellone eliminazione diretta non ha bisogno
-// del millisecondo — 12s è invisibile all'occhio, e a differenza di
+// del millisecondo — 30s è un compromesso leggero, e a differenza di
 // una connessione realtime non ha nessun tetto di concorrenza: che
 // siano 10 o 3000 persone a guardare, è comunque solo una select su
-// una riga sola ogni 12s a testa.
-const POLL_INTERVAL_MS = 12_000;
+// una riga sola ogni 30s a testa, sospesa quando il tab non è visibile.
+const POLL_INTERVAL_MS = 30_000;
+
+function parseSnapshot(value: unknown): TournamentSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<TournamentSnapshot>;
+  if (!BRACKET_SIZES.includes(candidate.size as BracketSize)) return null;
+  if (!Array.isArray(candidate.teams) || candidate.teams.length !== candidate.size
+    || candidate.teams.some((team) => typeof team !== "string" || team.length > 100)) return null;
+  if (!candidate.matches || typeof candidate.matches !== "object" || Array.isArray(candidate.matches)) return null;
+  if (!candidate.overrides || typeof candidate.overrides !== "object" || Array.isArray(candidate.overrides)) return null;
+  return candidate as TournamentSnapshot;
+}
 
 /*
   Torneo a tabellone — a eliminazione diretta, dimensione scelta tra
@@ -83,11 +94,12 @@ export function TournamentBracket() {
   const [editingTeams, setEditingTeams] = useState(true);
 
   const [savedSnapshot, setSavedSnapshot] = useState<TournamentSnapshot | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const [hydratedMode, setHydratedMode] = useState<boolean | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [showCloseWarning, setShowCloseWarning] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Caricamento iniziale: per l'editor, la bozza locale (se esiste)
   // vince sull'ultimo pubblicato, perché rappresenta lavoro più
@@ -97,31 +109,40 @@ export function TournamentBracket() {
     let cancelled = false;
 
     async function load() {
-      const { data } = await supabase.from("tournament_state").select("size, teams, matches, overrides").eq("id", "main").maybeSingle();
+      if (!isSupabaseConfigured) {
+        setSavedSnapshot(EMPTY_SNAPSHOT);
+        setSize(EMPTY_SNAPSHOT.size);
+        setTeams(EMPTY_SNAPSHOT.teams);
+        setMatches(EMPTY_SNAPSHOT.matches);
+        setOverrides(EMPTY_SNAPSHOT.overrides);
+        setHydratedMode(canEdit);
+        return;
+      }
+
+      const { data, error } = await supabase.from("tournament_state").select("size, teams, matches, overrides").eq("id", "main").maybeSingle();
       if (cancelled) return;
 
-      const published: TournamentSnapshot = data
-        ? { size: data.size as BracketSize, teams: data.teams, matches: data.matches, overrides: data.overrides }
-        : EMPTY_SNAPSHOT;
+      const published = parseSnapshot(data) ?? EMPTY_SNAPSHOT;
+      setLoadError(error ? "Tabellone non disponibile. Riprova più tardi." : null);
       setSavedSnapshot(published);
-      setLastSyncedAt(new Date());
+      if (!error) setLastSyncedAt(new Date());
 
       let starting = published;
       if (canEdit) {
-        const draftRaw = localStorage.getItem(DRAFT_KEY);
-        if (draftRaw) {
-          try {
-            starting = JSON.parse(draftRaw) as TournamentSnapshot;
-          } catch {
-            // bozza corrotta: ignorala, riparti dal pubblicato
+        try {
+          const draftRaw = localStorage.getItem(DRAFT_KEY);
+          if (draftRaw) {
+            starting = parseSnapshot(JSON.parse(draftRaw)) ?? published;
           }
+        } catch {
+          // Storage disabilitato o bozza corrotta: riparti dal pubblicato.
         }
       }
       setSize(starting.size);
       setTeams(starting.teams);
       setMatches(starting.matches);
       setOverrides(starting.overrides);
-      setHydrated(true);
+      setHydratedMode(canEdit);
     }
 
     load();
@@ -136,17 +157,27 @@ export function TournamentBracket() {
   // proprio lavoro in corso con l'ultimo dato pubblicato, cancellando
   // di fatto le modifiche non ancora inviate.
   useEffect(() => {
-    if (canEdit) return;
-    const interval = setInterval(async () => {
-      const { data } = await supabase.from("tournament_state").select("size, teams, matches, overrides").eq("id", "main").maybeSingle();
-      if (!data) return;
-      setSize(data.size as BracketSize);
-      setTeams(data.teams);
-      setMatches(data.matches);
-      setOverrides(data.overrides);
+    if (canEdit || !isSupabaseConfigured) return;
+
+    async function refreshPublished() {
+      if (document.visibilityState !== "visible") return;
+      const { data, error } = await supabase.from("tournament_state").select("size, teams, matches, overrides").eq("id", "main").maybeSingle();
+      const snapshot = parseSnapshot(data);
+      if (error || !snapshot) return;
+      setSize(snapshot.size);
+      setTeams(snapshot.teams);
+      setMatches(snapshot.matches);
+      setOverrides(snapshot.overrides);
       setLastSyncedAt(new Date());
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    }
+
+    const interval = window.setInterval(() => void refreshPublished(), POLL_INTERVAL_MS);
+    const handleVisibility = () => void refreshPublished();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [canEdit]);
 
   // Auto-salvataggio della bozza locale ad ogni modifica — solo
@@ -154,9 +185,13 @@ export function TournamentBracket() {
   // buona con lo stato-zero di partenza del render prima ancora di
   // averla letta.
   useEffect(() => {
-    if (!canEdit || !hydrated) return;
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ size, teams, matches, overrides }));
-  }, [canEdit, hydrated, size, teams, matches, overrides]);
+    if (!canEdit || hydratedMode !== canEdit) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ size, teams, matches, overrides }));
+    } catch {
+      setPublishError("Bozza locale non disponibile: salva prima di chiudere la pagina.");
+    }
+  }, [canEdit, hydratedMode, size, teams, matches, overrides]);
 
   const isDirty =
     canEdit &&
@@ -176,7 +211,7 @@ export function TournamentBracket() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
 
-  async function handlePublish() {
+  async function handlePublish(): Promise<boolean> {
     setPublishing(true);
     setPublishError(null);
     const { error } = await supabase
@@ -187,11 +222,12 @@ export function TournamentBracket() {
       console.error("[Torneo] Errore pubblicazione:", error.message);
       setPublishError("Pubblicazione non riuscita. Riprova.");
       setPublishing(false);
-      return;
+      return false;
     }
     setSavedSnapshot({ size, teams, matches, overrides });
     setLastSyncedAt(new Date());
     setPublishing(false);
+    return true;
   }
 
   // Chiudere il pannello nomi squadre con modifiche in sospeso è
@@ -207,7 +243,8 @@ export function TournamentBracket() {
   }
 
   async function handlePublishAndClose() {
-    await handlePublish();
+    const published = await handlePublish();
+    if (!published) return;
     setShowCloseWarning(false);
     setEditingTeams(false);
   }
@@ -263,6 +300,8 @@ export function TournamentBracket() {
       <p className="mb-4 text-sm text-[var(--text-secondary)]">
         Eliminazione diretta — dimensione configurabile, con ripescaggio manuale.
       </p>
+
+      {loadError && <p className="mb-4 text-sm text-[var(--state-error)]">{loadError}</p>}
 
       {!canEdit && (
         <p className="mb-4 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-3 text-xs text-[var(--text-secondary)]">

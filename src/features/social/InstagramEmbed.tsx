@@ -11,9 +11,13 @@ declare global {
 }
 
 const EMBED_SCRIPT_SRC = "https://www.instagram.com/embed.js";
+let instagramScriptPromise: Promise<void> | null = null;
 
 function loadInstagramScript(): Promise<void> {
-  return new Promise((resolve) => {
+  if (window.instgrm) return Promise.resolve();
+  if (instagramScriptPromise) return instagramScriptPromise;
+
+  instagramScriptPromise = new Promise((resolve, reject) => {
     if (window.instgrm) {
       resolve();
       return;
@@ -21,14 +25,17 @@ function loadInstagramScript(): Promise<void> {
     const existing = document.querySelector<HTMLScriptElement>(`script[src="${EMBED_SCRIPT_SRC}"]`);
     if (existing) {
       existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error("Instagram embed non disponibile")));
       return;
     }
     const script = document.createElement("script");
     script.src = EMBED_SCRIPT_SRC;
     script.async = true;
     script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Instagram embed non disponibile"));
     document.body.appendChild(script);
   });
+  return instagramScriptPromise;
 }
 
 interface InstagramEmbedProps {
@@ -53,6 +60,8 @@ export function InstagramEmbed({ url }: InstagramEmbedProps) {
       if (!cancelled) {
         window.instgrm?.Embeds.process();
       }
+    }).catch(() => {
+      // Il link nel blockquote resta un fallback pienamente utilizzabile.
     });
     return () => {
       cancelled = true;

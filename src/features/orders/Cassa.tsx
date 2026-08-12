@@ -22,12 +22,13 @@ const priceFormatter = new Intl.NumberFormat("it-IT", { style: "currency", curre
   3000 utenti) non è un problema di scala, è comodo e basta.
 */
 export function Cassa() {
-  const { role } = useAuth();
-  const { rows: menuItems, loading } = useSupabaseRows<MenuItem>({
+  const { role, loading: authLoading } = useAuth();
+  const { rows: menuItems, loading, error: menuError, refetch } = useSupabaseRows<MenuItem>({
     table: "menu_items",
     select: "id, category, name, price, available_portions",
     orderBy: [{ column: "category" }, { column: "name" }],
     fallback: [],
+    realtime: true,
   });
 
   const [cart, setCart] = useState<Record<string, CartLine>>({});
@@ -35,6 +36,10 @@ export function Cassa() {
   const [lastQueueNumber, setLastQueueNumber] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+
+  if (authLoading) {
+    return <section className="mx-auto max-w-3xl px-4 py-10 text-sm text-[var(--text-secondary)]">Carico...</section>;
+  }
 
   if (role !== "cassa" && role !== "admin") {
     return (
@@ -48,6 +53,7 @@ export function Cassa() {
   function addToCart(item: MenuItem) {
     setCart((prev) => {
       const existing = prev[item.id];
+      if (item.available_portions !== null && (existing?.qty ?? 0) >= item.available_portions) return prev;
       return {
         ...prev,
         [item.id]: { id: item.id, name: item.name, price: item.price, qty: (existing?.qty ?? 0) + 1 },
@@ -83,7 +89,9 @@ export function Cassa() {
     setSubmitting(false);
 
     if (insertError) {
-      setError(insertError.message);
+      setError(insertError.message.includes("porzioni insufficienti")
+        ? "Porzioni insufficienti: aggiorna il carrello e riprova."
+        : "Ordine non inviato. Riprova.");
       return;
     }
 
@@ -91,6 +99,7 @@ export function Cassa() {
     setLastQueueNumber(Number(result.queue_number));
     setWarnings(result.warnings ?? []);
     setCart({});
+    void refetch();
   }
 
   return (
@@ -111,7 +120,9 @@ export function Cassa() {
         </div>
       )}
 
-      {loading ? (
+      {menuError ? (
+        <p className="text-sm text-[var(--state-error)]">Menu non disponibile. Ricarica la pagina.</p>
+      ) : loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico il menu...</p>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2">
@@ -120,9 +131,10 @@ export function Cassa() {
               key={item.id}
               type="button"
               onClick={() => addToCart(item)}
-              className="field flex items-center justify-between text-left"
+              disabled={item.available_portions === 0}
+              className="field flex items-center justify-between text-left disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span>{item.name}</span>
+              <span>{item.name}{item.available_portions === 0 ? " — esaurito" : ""}</span>
               <span className="font-mono text-[var(--accent-primary)]">{priceFormatter.format(item.price)}</span>
             </button>
           ))}
