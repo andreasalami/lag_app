@@ -4,6 +4,8 @@ import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
+import { ALLERGENS, priceFormatter } from "../orders/orderUtils";
+import { OrderEntryButton } from "../orders/OrderEntryButton";
 
 type Category = "cibo" | "bevande";
 
@@ -13,19 +15,19 @@ type MenuItem = {
   name: string;
   price: number;
   available_portions: number | null;
+  stock_capacity: number | null;
+  allergens: number[];
 };
 
 const CATEGORIES: Category[] = ["cibo", "bevande"];
 const CATEGORY_LABEL: Record<Category, string> = { cibo: "Cibo", bevande: "Bevande" };
 
 const FALLBACK_ITEMS: MenuItem[] = [
-  { id: "f1", category: "cibo", name: "Panino salamella — esempio", price: 5, available_portions: null },
-  { id: "f2", category: "cibo", name: "Patatine fritte — esempio", price: 3, available_portions: null },
-  { id: "f3", category: "bevande", name: "Birra media — esempio", price: 4, available_portions: null },
-  { id: "f4", category: "bevande", name: "Acqua — esempio", price: 1.5, available_portions: null },
+  { id: "f1", category: "cibo", name: "Panino salamella — esempio", price: 5, available_portions: null, stock_capacity: null, allergens: [1] },
+  { id: "f2", category: "cibo", name: "Patatine fritte — esempio", price: 3, available_portions: null, stock_capacity: null, allergens: [] },
+  { id: "f3", category: "bevande", name: "Birra media — esempio", price: 4, available_portions: null, stock_capacity: null, allergens: [1] },
+  { id: "f4", category: "bevande", name: "Acqua — esempio", price: 1.5, available_portions: null, stock_capacity: null, allergens: [] },
 ];
-
-const priceFormatter = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" });
 
 // I prodotti aggiunti in locale (non ancora salvati) hanno un id
 // temporaneo con questo prefisso, mai una vera uuid — così al salvataggio
@@ -51,10 +53,10 @@ const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
 */
 export function Menu() {
   const { role } = useAuth();
-  const canEdit = role === "staff" || role === "admin";
+  const canEdit = role === "staff" || role === "cucina" || role === "admin";
   const { rows: items, setRows: setItems, loading, error: loadError, refetch } = useSupabaseRows<MenuItem>({
     table: "menu_items",
-    select: "id, category, name, price, available_portions",
+    select: "id, category, name, price, available_portions, stock_capacity, allergens",
     orderBy: [
       { column: "category" },
       { column: "name" },
@@ -83,7 +85,15 @@ export function Menu() {
   function addItem(category: Category) {
     setItems((prev) => [
       ...prev,
-      { id: `${NEW_ID_PREFIX}${crypto.randomUUID()}`, category, name: "Nuovo prodotto", price: 0, available_portions: null },
+      {
+        id: `${NEW_ID_PREFIX}${crypto.randomUUID()}`,
+        category,
+        name: "Nuovo prodotto",
+        price: 0,
+        available_portions: null,
+        stock_capacity: null,
+        allergens: [],
+      },
     ]);
   }
 
@@ -103,6 +113,8 @@ export function Menu() {
       || !Number.isFinite(item.price)
       || item.price < 0
       || item.price > 9999.99
+      || item.allergens.some((allergen) => !Number.isInteger(allergen) || allergen < 1 || allergen > 14)
+      || new Set(item.allergens).size !== item.allergens.length
       || (item.available_portions !== null
         && (!Number.isInteger(item.available_portions) || item.available_portions < 0))
     );
@@ -114,12 +126,19 @@ export function Menu() {
 
     const created = items
       .filter((i) => isNewId(i.id))
-      .map(({ category, name, price, available_portions }) => ({ category, name, price, available_portions }));
+      .map(({ category, name, price, available_portions, allergens }) => ({
+        category,
+        name,
+        price,
+        available_portions,
+        allergens,
+      }));
 
-    const updated = items.filter((i) => {
-      if (isNewId(i.id)) return false;
-      const original = savedItems.find((s) => s.id === i.id);
-      return original && JSON.stringify(original) !== JSON.stringify(i);
+    const updated = items.flatMap((item) => {
+      if (isNewId(item.id)) return [];
+      const original = savedItems.find((saved) => saved.id === item.id);
+      if (!original || JSON.stringify(original) === JSON.stringify(item)) return [];
+      return [{ ...item, original_available_portions: original.available_portions }];
     });
 
     const { error } = await supabase.rpc("bulk_upsert_menu_items", {
@@ -130,7 +149,9 @@ export function Menu() {
 
     if (error) {
       console.error("[Menu] Errore salvataggio:", error.message);
-      setSaveError("Salvataggio non riuscito. Riprova.");
+      setSaveError(error.message.includes("stock_changed_retry")
+        ? "Le scorte sono cambiate per un nuovo ordine. Ricarica la pagina e ripeti la modifica."
+        : "Salvataggio non riuscito. Riprova.");
       setSaving(false);
       return;
     }
@@ -164,50 +185,84 @@ export function Menu() {
                   canEdit ? (
                     <div
                       key={item.id}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0 sm:flex sm:items-center sm:pb-2"
+                      className="border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0"
                     >
-                      <input
-                        required
-                        maxLength={200}
-                        value={item.name}
-                        onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, name: e.target.value } : i)))}
-                        className="field min-w-0 w-full sm:flex-1"
-                      />
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="9999.99"
-                        value={item.price}
-                        onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, price: Number(e.target.value) } : i)))}
-                        className="field w-full min-w-0 text-right font-mono sm:w-20"
-                      />
-                      <span className="hidden text-xs text-[var(--text-secondary)] sm:inline">€</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="∞"
-                        aria-label={`Porzioni disponibili per ${item.name}`}
-                        value={item.available_portions ?? ""}
-                        onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? {
-                          ...i,
-                          available_portions: e.target.value === "" ? null : Number(e.target.value),
-                        } : i)))}
-                        className="field w-full min-w-0 text-right font-mono sm:w-20"
-                      />
-                      <span className="hidden text-xs text-[var(--text-secondary)] sm:inline">porz.</span>
-                      <button
-                        onClick={() => deleteItem(item.id)}
-                        className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto"
-                      >
-                        Elimina
-                      </button>
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center">
+                        <input
+                          required
+                          maxLength={200}
+                          value={item.name}
+                          onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, name: e.target.value } : i)))}
+                          className="field min-w-0 w-full sm:flex-1"
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="9999.99"
+                          aria-label={`Prezzo di ${item.name}`}
+                          value={item.price}
+                          onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, price: Number(e.target.value) } : i)))}
+                          className="field w-full min-w-0 text-right font-mono sm:w-20"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="∞"
+                          aria-label={`Porzioni disponibili per ${item.name}`}
+                          value={item.available_portions ?? ""}
+                          onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? {
+                            ...i,
+                            available_portions: e.target.value === "" ? null : Number(e.target.value),
+                          } : i)))}
+                          className="field w-full min-w-0 text-right font-mono sm:w-24"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => deleteItem(item.id)}
+                          className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto"
+                        >
+                          Elimina
+                        </button>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5" aria-label={`Allergeni di ${item.name}`}>
+                        {ALLERGENS.map((allergen, index) => {
+                          const number = index + 1;
+                          const selected = item.allergens.includes(number);
+                          return (
+                            <button
+                              key={allergen}
+                              type="button"
+                              title={`${number}. ${allergen}`}
+                              aria-pressed={selected}
+                              onClick={() => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? {
+                                ...candidate,
+                                allergens: selected
+                                  ? candidate.allergens.filter((value) => value !== number)
+                                  : [...candidate.allergens, number].sort((a, b) => a - b),
+                              } : candidate))}
+                              className={`h-7 w-7 rounded-full border text-xs ${selected
+                                ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                                : "border-[var(--surface-border)] text-[var(--text-secondary)]"}`}
+                            >
+                              {number}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : (
-                    <div key={item.id} className="flex items-center justify-between">
-                      <span className="text-sm text-[var(--text-primary)]">{item.name}</span>
-                      <span className="font-mono text-sm text-[var(--accent-primary)]">
+                    <div key={item.id} className="flex items-start justify-between gap-3">
+                      <span className="text-sm text-[var(--text-primary)]">
+                        {item.name}
+                        {item.allergens.length > 0 && (
+                          <span className="ml-2 text-xs text-[var(--text-secondary)]">
+                            Allergeni: {item.allergens.join(", ")}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">
                         {priceFormatter.format(item.price)}
                       </span>
                     </div>
@@ -225,6 +280,8 @@ export function Menu() {
           </div>
         ))
       )}
+
+      {!canEdit && <OrderEntryButton />}
 
       {/* Banner di salvataggio condiviso (vedi SaveBanner.tsx): appare solo
           con modifiche in sospeso, fisso in basso così resta visibile

@@ -21,11 +21,11 @@ Produzione:
 |---|---|---|
 | Biglietti | Checkout Eventbrite (widget ufficiale) | — |
 | Programma | Griglia calendario, 2 palchi in contemporanea | staff |
-| Menu | Prodotti cibo/bevande con prezzo | staff |
+| Menu | Prodotti, prezzi, scorte e allergeni 1–14 | staff / cucina |
 | Instagram | Embed ufficiali dei post dell'evento | — |
 | Annunci | Lista con notifiche browser (solo permesso, non push vere) | staff |
 | Torneo | Tabellone a eliminazione diretta (8/16/32/64 squadre), ripescaggio | tournament_manager |
-| Ordini | Cassa, coda cucina, disponibilità porzioni e statistiche di base | cassa / cucina |
+| Ordini | Preordine pubblico, QR, cassa, coda cucina e report anonimo | cassa / cucina |
 
 ## Ruoli e accesso
 
@@ -48,13 +48,47 @@ Cassa e Cucina sono raccolte in fondo come strumenti operativi.
 | `admin` | Accesso a tutte le sezioni e a tutte le operazioni |
 | `staff` | Modifica programma, menu e annunci |
 | `tournament_manager` | Modifica esclusivamente il torneo |
-| `cassa` | Crea ordini dalla cassa |
-| `cucina` | Visualizza e completa gli ordini |
+| `cassa` | Gestisce preordini, ordini eccezionali, apertura evento e report |
+| `cucina` | Gestisce menu/scorte e consegna gli ordini alimentari |
 | `pending` | Nessun permesso operativo |
 
 I permessi sono verificati da Supabase tramite Row Level Security. Il ruolo
 non viene scelto dal browser: viene letto dalla tabella `profiles` dopo il
-login.
+login. Le pagine Cassa e Cucina sono caricate dinamicamente soltanto dopo la
+verifica del ruolo: un visitatore anonimo o un ruolo diverso riceve la sola
+schermata di accesso riservato, anche conoscendo direttamente l'URL.
+
+## Flusso ordini
+
+Il cliente non effettua login. Dal fondo del menu pubblico apre **Ordina qui**,
+conferma il disclaimer, sceglie uno pseudonimo, compone il carrello e invia
+l'ordine dopo una seconda conferma. Carrello e parziale restano nel browser:
+il database viene scritto soltanto all'invio definitivo.
+
+L'invio riserva le scorte in una transazione e restituisce numero progressivo,
+alias e QR. Alla cassa l'ordine può essere aperto tramite QR oppure cercando
+numero e alias insieme. Un ordine aperto è temporaneamente non selezionabile
+dalle altre casse; **Chiudi senza pagare** lo rende subito disponibile e un
+blocco abbandonato scade comunque dopo 10 minuti.
+
+La cassa batte sul registratore tutte le singole voci, riceve il pagamento e
+preme **Pagato e invia**. Solo le righe `cibo` arrivano alla cucina; le bevande
+restano sullo scontrino per il ritiro alle postazioni dedicate. La cucina vede
+numero, alias, prodotti alimentari e note, può attivare il segnale sonoro e
+anonimizza l'ordine premendo **Consegnato**.
+
+La sezione Evento della cassa gestisce:
+
+- nome, apertura e chiusura del singolo weekend;
+- limite configurabile degli ordini contemporaneamente in attesa (default 150);
+- sospensione e riapertura anticipata delle ordinazioni;
+- chiusura definitiva protetta dalla digitazione di `CHIUDI EVENTO`;
+- download del CSV finale senza alias e note;
+- creazione dell'evento successivo con numerazione nuovamente da 1.
+
+Alias, note e token QR sono temporanei: vengono eliminati alla consegna,
+all'annullamento o alla chiusura definitiva. Il PDF cliente viene generato
+localmente ed è indicato come documento non fiscale.
 
 ## Sviluppo locale
 
@@ -94,6 +128,14 @@ dei dati è affidata alle policy RLS.
 
 Per una prima verifica si può assegnare `admin` a un account di test; non è
 consigliato usare `admin` per tutti gli account reali.
+
+Dopo l'aggiornamento dello schema, entra una prima volta in **Cassa → Evento**:
+il nuovo evento nasce intenzionalmente con ordinazioni sospese. Imposta nome e
+orari, salva, quindi premi **Riapri ordinazioni** quando il sistema è pronto.
+
+Prima dell'evento reale è consigliato provare almeno questi casi con account di
+test: ultima porzione concorrente, ordine annullato, due casse che aprono lo
+stesso ordine, ordine composto solo da bevande, consegna cucina e CSV finale.
 
 ### Variabili opzionali
 
@@ -145,15 +187,31 @@ gli step di build e deploy risultino verdi.
 
 - Le tabelle pubbliche (`announcements`, `program_slots`, `menu_items`) sono
    leggibili senza login, ma scrivibili solo dai ruoli autorizzati.
-- Gli ordini non sono pubblici: cassa, cucina e admin hanno permessi distinti.
-- `create_order` ricalcola nomi e prezzi leggendo il menu dal database, invece
-   di fidarsi dei valori inviati dal browser.
-- Gli ordini vengono completati tramite `completed_at`; non vengono cancellati
-   fisicamente.
+- Gli ordini non sono leggibili pubblicamente: le RPC pubbliche restituiscono
+  esclusivamente il risultato dell'ordine appena creato.
+- La cassa può leggere soltanto gli ordini `in_attesa_pagamento`; la cucina
+  soltanto gli ordini `pagato`. Il passaggio di stato effettuato in cassa è il
+  confine tra i due flussi, oltre al controllo dei rispettivi ruoli Auth.
+- `submit_public_order`, aggiornamento cassa, annullamento e pagamento
+  ricalcolano prezzi e scorte nel database e applicano tutto atomicamente.
+- Il QR contiene un token casuale; nel database viene conservata soltanto la
+  sua impronta SHA-256 e viene eliminata al pagamento.
+- Il report permanente non duplica il dettaglio ordini: conserva solo
+  riepilogo e aggregati prodotto; il CSV viene ricostruito dalle righe già
+  anonimizzate quando viene riscaricato.
+- Le connessioni realtime sono limitate ai pochi dispositivi cassa/cucina. I
+  telefoni del pubblico effettuano solo le letture indispensabili.
 - Non inserire mai chiavi `service_role`, password o altri segreti nei file
    `VITE_*`, in `.env.local`, nel repository o nel bundle frontend.
 
 ## Limiti noti
+
+- La protezione pubblica è volutamente leggera (honeypot, idempotenza, un
+  riepilogo attivo per browser e cap di coda). Per contrastare un attacco
+  intenzionale servirebbe aggiungere Turnstile/CAPTCHA tramite una funzione
+  server-side.
+- Gli ordini non pagati non scadono automaticamente: restano prenotati finché
+  una cassa li annulla oppure chiude definitivamente l'evento.
 
 - Le notifiche in Annunci chiedono solo il permesso del browser — le push
   vere ad app chiusa servono un Service Worker + backend, non ancora costruiti.
