@@ -778,7 +778,7 @@ begin
   select * into existing_order from public.orders
   where event_id = event_row.id and client_request_id = p_client_request_id;
   if found then
-    if existing_order.qr_token_hash <> encode(digest(p_qr_token, 'sha256'), 'hex') then
+    if existing_order.qr_token_hash <> encode(extensions.digest(p_qr_token, 'sha256'), 'hex') then
       raise exception 'request_id_conflict';
     end if;
     return jsonb_build_object(
@@ -811,7 +811,7 @@ begin
   ) values (
     event_row.id, next_number, btrim(p_alias), nullif(btrim(coalesce(p_notes, '')), ''),
     normalized, calculated_total::numeric(7,2), 'in_attesa_pagamento',
-    encode(digest(p_qr_token, 'sha256'), 'hex'), p_client_request_id
+    encode(extensions.digest(p_qr_token, 'sha256'), 'hex'), p_client_request_id
   ) returning id into existing_order.id;
 
   return jsonb_build_object(
@@ -839,7 +839,7 @@ begin
   if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
     raise exception 'not_authorized' using errcode = '42501';
   end if;
-  token_hash := encode(digest(p_claim_token, 'sha256'), 'hex');
+  token_hash := encode(extensions.digest(p_claim_token, 'sha256'), 'hex');
   select * into order_row from public.orders where id = p_order_id for update;
   if not found or order_row.status <> 'in_attesa_pagamento' then raise exception 'order_not_available'; end if;
   if order_row.claimed_token_hash is not null and order_row.claim_expires_at > now()
@@ -866,7 +866,7 @@ begin
     raise exception 'not_authorized' using errcode = '42501';
   end if;
   select id into target_id from public.orders
-  where qr_token_hash = encode(digest(p_qr_token, 'sha256'), 'hex')
+  where qr_token_hash = encode(extensions.digest(p_qr_token, 'sha256'), 'hex')
     and status = 'in_attesa_pagamento';
   if target_id is null then raise exception 'order_not_available'; end if;
   return public.claim_order(target_id, p_claim_token);
@@ -888,7 +888,7 @@ begin
   end if;
   update public.orders set claimed_token_hash = null, claim_expires_at = null
   where id = p_order_id and status = 'in_attesa_pagamento'
-    and claimed_token_hash = encode(digest(p_claim_token, 'sha256'), 'hex');
+    and claimed_token_hash = encode(extensions.digest(p_claim_token, 'sha256'), 'hex');
 end;
 $$;
 
@@ -912,7 +912,7 @@ begin
   if length(coalesce(p_notes, '')) > 300 then raise exception 'notes_too_long'; end if;
   select * into order_row from public.orders where id = p_order_id for update;
   if not found or order_row.status <> 'in_attesa_pagamento'
-    or order_row.claimed_token_hash <> encode(digest(p_claim_token, 'sha256'), 'hex') then
+    or order_row.claimed_token_hash <> encode(extensions.digest(p_claim_token, 'sha256'), 'hex') then
     raise exception 'claim_lost';
   end if;
   normalized := public.normalize_order_items(p_items);
@@ -943,7 +943,7 @@ begin
   end if;
   select * into order_row from public.orders where id = p_order_id for update;
   if not found or order_row.status <> 'in_attesa_pagamento'
-    or order_row.claimed_token_hash <> encode(digest(p_claim_token, 'sha256'), 'hex') then
+    or order_row.claimed_token_hash <> encode(extensions.digest(p_claim_token, 'sha256'), 'hex') then
     raise exception 'claim_lost';
   end if;
   perform public.apply_order_stock(order_row.items, '[]'::jsonb);
@@ -969,7 +969,7 @@ begin
   end if;
   select * into order_row from public.orders where id = p_order_id for update;
   if not found or order_row.status <> 'in_attesa_pagamento'
-    or order_row.claimed_token_hash <> encode(digest(p_claim_token, 'sha256'), 'hex') then
+    or order_row.claimed_token_hash <> encode(extensions.digest(p_claim_token, 'sha256'), 'hex') then
     raise exception 'claim_lost';
   end if;
   select exists (select 1 from jsonb_array_elements(order_row.items) line where line->>'category' = 'cibo') into has_food;
