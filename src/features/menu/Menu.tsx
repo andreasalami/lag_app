@@ -52,7 +52,7 @@ const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
 export function Menu() {
   const { role } = useAuth();
   const canEdit = role === "staff" || role === "admin";
-  const { rows: items, setRows: setItems, loading, refetch } = useSupabaseRows<MenuItem>({
+  const { rows: items, setRows: setItems, loading, error: loadError, refetch } = useSupabaseRows<MenuItem>({
     table: "menu_items",
     select: "id, category, name, price, available_portions",
     orderBy: [
@@ -97,6 +97,21 @@ export function Menu() {
     setSaving(true);
     setSaveError(null);
 
+    const invalidItem = items.some((item) =>
+      !item.name.trim()
+      || item.name.length > 200
+      || !Number.isFinite(item.price)
+      || item.price < 0
+      || item.price > 9999.99
+      || (item.available_portions !== null
+        && (!Number.isInteger(item.available_portions) || item.available_portions < 0))
+    );
+    if (invalidItem) {
+      setSaveError("Controlla nomi, prezzi e porzioni: alcuni valori non sono validi.");
+      setSaving(false);
+      return;
+    }
+
     const created = items
       .filter((i) => isNewId(i.id))
       .map(({ category, name, price, available_portions }) => ({ category, name, price, available_portions }));
@@ -131,7 +146,9 @@ export function Menu() {
       <h2 className="mb-1 text-2xl font-semibold">Menu</h2>
       <p className="mb-4 text-sm text-[var(--text-secondary)]">Cibo e bevande disponibili all'evento.</p>
 
-      {loading ? (
+      {loadError ? (
+        <p className="text-sm text-[var(--state-error)]">Menu non disponibile. Ricarica la pagina.</p>
+      ) : loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico il menu...</p>
       ) : (
         CATEGORIES.map((category) => (
@@ -150,14 +167,17 @@ export function Menu() {
                       className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0 sm:flex sm:items-center sm:pb-2"
                     >
                       <input
+                        required
+                        maxLength={200}
                         value={item.name}
                         onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, name: e.target.value } : i)))}
                         className="field min-w-0 w-full sm:flex-1"
                       />
                       <input
                         type="number"
-                        step="0.5"
+                        step="0.01"
                         min="0"
+                        max="9999.99"
                         value={item.price}
                         onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, price: Number(e.target.value) } : i)))}
                         className="field w-full min-w-0 text-right font-mono sm:w-20"
@@ -172,7 +192,7 @@ export function Menu() {
                         value={item.available_portions ?? ""}
                         onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? {
                           ...i,
-                          available_portions: e.target.value === "" ? null : Math.max(0, Number(e.target.value)),
+                          available_portions: e.target.value === "" ? null : Number(e.target.value),
                         } : i)))}
                         className="field w-full min-w-0 text-right font-mono sm:w-20"
                       />

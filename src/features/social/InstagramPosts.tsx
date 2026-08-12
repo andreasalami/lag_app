@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { InstagramEmbed } from "./InstagramEmbed";
 
 /*
@@ -50,6 +50,11 @@ export function InstagramPosts() {
   const cardRef = useRef<HTMLDivElement>(null);
   const dragStartX = useRef(0);
   const dragging = useRef(false);
+  const animationTimer = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (animationTimer.current !== null) window.clearTimeout(animationTimer.current);
+  }, []);
 
   const total = CURATED_POSTS.length;
 
@@ -77,15 +82,14 @@ export function InstagramPosts() {
   }
 
   function handlePointerDown(e: React.PointerEvent) {
+    e.currentTarget.setPointerCapture(e.pointerId);
     dragging.current = true;
     dragStartX.current = e.clientX;
     const el = cardRef.current;
     if (el) el.style.transition = "none";
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
   }
 
-  function handlePointerMove(e: PointerEvent) {
+  function handlePointerMove(e: React.PointerEvent) {
     if (!dragging.current) return;
     const el = cardRef.current;
     if (!el) return;
@@ -93,9 +97,7 @@ export function InstagramPosts() {
     el.style.transform = `translateX(${deltaX}px) rotate(${deltaX / 14}deg)`;
   }
 
-  function handlePointerUp(e: PointerEvent) {
-    window.removeEventListener("pointermove", handlePointerMove);
-    window.removeEventListener("pointerup", handlePointerUp);
+  function handlePointerUp(e: React.PointerEvent) {
     if (!dragging.current) return;
     dragging.current = false;
 
@@ -103,7 +105,7 @@ export function InstagramPosts() {
     const el = cardRef.current;
 
     if (Math.abs(deltaX) < TAP_THRESHOLD) {
-      window.open(CURATED_POSTS[current], "_blank", "noreferrer");
+      window.open(CURATED_POSTS[current], "_blank", "noopener,noreferrer");
       snapBack();
       return;
     }
@@ -114,7 +116,7 @@ export function InstagramPosts() {
         el.style.transition = "transform 0.22s ease";
         el.style.transform = `translateX(${goingNext ? -600 : 600}px) rotate(${goingNext ? -25 : 25}deg)`;
       }
-      window.setTimeout(() => {
+      animationTimer.current = window.setTimeout(() => {
         if (goingNext) goNext();
         else goPrev();
         if (el) {
@@ -125,6 +127,11 @@ export function InstagramPosts() {
     } else {
       snapBack();
     }
+  }
+
+  function handlePointerCancel() {
+    dragging.current = false;
+    snapBack();
   }
 
   const depthCount = Math.min(VISIBLE_DEPTH, total);
@@ -153,6 +160,9 @@ export function InstagramPosts() {
                 <div
                   className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
                   onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerCancel}
                 />
               )}
             </div>

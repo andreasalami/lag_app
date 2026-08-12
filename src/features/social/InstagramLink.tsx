@@ -2,8 +2,7 @@ import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { InstagramPosts } from "./InstagramPosts";
 
-// Placeholder: sostituire con l'handle reale della pagina evento.
-const INSTAGRAM_HANDLE = "lagroaigiovani";
+const INSTAGRAM_HANDLE = (import.meta.env.VITE_INSTAGRAM_HANDLE || "lagroaigiovani").replace(/^@/, "");
 
 export function InstagramLink() {
   return (

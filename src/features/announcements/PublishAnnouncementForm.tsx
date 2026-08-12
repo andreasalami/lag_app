@@ -16,7 +16,18 @@ export function PublishAnnouncementForm({ onPublished }: PublishAnnouncementForm
     setSubmitting(true);
     setError(null);
 
-    const { error } = await supabase.from("announcements").insert({ title, message });
+    const normalizedTitle = title.trim();
+    const normalizedMessage = message.trim();
+    if (!normalizedTitle || !normalizedMessage) {
+      setError("Titolo e testo non possono essere vuoti.");
+      setSubmitting(false);
+      return;
+    }
+
+    const { error } = await supabase.from("announcements").insert({
+      title: normalizedTitle,
+      message: normalizedMessage,
+    });
 
     setSubmitting(false);
     if (error) {
@@ -32,6 +43,7 @@ export function PublishAnnouncementForm({ onPublished }: PublishAnnouncementForm
     <form onSubmit={handleSubmit} className="surface-solid mb-4 flex flex-col gap-2 rounded-[var(--radius-lg)] p-4">
       <input
         required
+        maxLength={200}
         placeholder="Titolo annuncio"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
@@ -39,6 +51,7 @@ export function PublishAnnouncementForm({ onPublished }: PublishAnnouncementForm
       />
       <textarea
         required
+        maxLength={5000}
         placeholder="Testo dell'annuncio"
         value={message}
         onChange={(e) => setMessage(e.target.value)}

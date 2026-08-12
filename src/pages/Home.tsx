@@ -17,8 +17,12 @@ export function Home() {
   // sezioni, quindi fallisce silenziosamente. Rifacciamo lo scroll
   // a mano una volta che il DOM è pronto.
   useEffect(() => {
-    if (window.location.hash) {
-      document.querySelector(window.location.hash)?.scrollIntoView();
+    if (!window.location.hash) return;
+    try {
+      const id = decodeURIComponent(window.location.hash.slice(1));
+      document.getElementById(id)?.scrollIntoView();
+    } catch {
+      // Hash malformato: mostra semplicemente la Home senza interrompere React.
     }
   }, []);
 

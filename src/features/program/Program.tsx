@@ -39,7 +39,7 @@ export function Program() {
   const canEdit = role === "staff" || role === "admin";
   const [days, setDays] = useState(1);
   const [savedDays, setSavedDays] = useState(1);
-  const { rows: slots, setRows: setSlots, loading, refetch } = useSupabaseRows<ProgramSlotData>({
+  const { rows: slots, setRows: setSlots, loading, error: loadError, refetch } = useSupabaseRows<ProgramSlotData>({
     table: "program_slots",
     select: "id, day, stage, title, start_time, end_time",
     orderBy: [{ column: "day" }, { column: "start_time" }],
@@ -107,6 +107,20 @@ export function Program() {
     setSaving(true);
     setSaveError(null);
 
+    const invalidSlot = slots.some((slot) =>
+      !slot.title.trim()
+      || slot.title.length > 200
+      || slot.day < 1
+      || slot.day > days
+      || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.start_time)
+      || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.end_time)
+    );
+    if (invalidSlot) {
+      setSaveError("Controlla titoli, giorni e orari. Ogni evento deve rientrare nei giorni pubblicati.");
+      setSaving(false);
+      return;
+    }
+
     const created = slots
       .filter((s) => isNewId(s.id))
       .map(({ day, stage, title, start_time, end_time }) => ({ day, stage, title, start_time, end_time }));
@@ -117,7 +131,8 @@ export function Program() {
       return original && JSON.stringify(original) !== JSON.stringify(s);
     });
 
-    const { error } = await supabase.rpc("bulk_upsert_program_slots", {
+    const { error } = await supabase.rpc("save_program", {
+      p_days: days,
       p_created: created,
       p_updated: updated,
       p_deleted: deletedIds,
@@ -130,22 +145,9 @@ export function Program() {
       return;
     }
 
-    if (days !== savedDays) {
-      const { error: settingsError } = await supabase
-        .from("program_settings")
-        .upsert({ id: "main", days, updated_at: new Date().toISOString() }, { onConflict: "id" });
-
-      if (settingsError) {
-        console.error("[Program] Errore salvataggio giorni:", settingsError.message);
-        setSaveError("Eventi salvati, ma il numero di giorni non è stato aggiornato. Riprova.");
-        setSaving(false);
-        return;
-      }
-      setSavedDays(days);
-    }
-
     const fresh = await refetch();
     if (fresh) setSavedSlots(fresh);
+    setSavedDays(days);
     setDeletedIds([]);
     setSaving(false);
   }
@@ -193,6 +195,8 @@ export function Program() {
                 ))}
               </select>
               <input
+                required
+                maxLength={200}
                 value={slot.title}
                 onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, title: e.target.value } : s)))}
                 className="field col-span-2 min-w-0 w-full sm:col-span-auto sm:min-w-[140px] sm:flex-1"
@@ -226,7 +230,9 @@ export function Program() {
         </Card>
       )}
 
-      {loading ? (
+      {loadError ? (
+        <p className="text-sm text-[var(--state-error)]">Programma non disponibile. Ricarica la pagina.</p>
+      ) : loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico il programma...</p>
       ) : (
         <ProgramGrid slots={slots} stages={STAGES} days={displayDays} />

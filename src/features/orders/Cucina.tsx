@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { Card } from "../../components/ui/Card";
@@ -21,31 +21,38 @@ type LowStockItem = { id: string; name: string; remaining: number; available: nu
   filtra `completed_at is null`, i dati restano nel DB per le stats.
 */
 export function Cucina() {
-  const { role } = useAuth();
+  const { role, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [completingIds, setCompletingIds] = useState<Set<string>>(() => new Set());
+  const completingRef = useRef(new Set<string>());
 
   async function refetch() {
+    setLoadError(null);
     const { data, error } = await supabase
       .from("orders")
       .select("id, queue_number, items, total, created_at")
       .is("completed_at", null)
       .order("queue_number", { ascending: true });
-    if (!error && data) setOrders(data as Order[]);
-    const { data: stockData } = await supabase.rpc("get_low_stock_items");
+    if (error) setLoadError("Coda ordini non disponibile. Riprova.");
+    else if (data) setOrders(data as Order[]);
+    const { data: stockData, error: stockError } = await supabase.rpc("get_low_stock_items");
     if (stockData) setLowStock(stockData as LowStockItem[]);
+    if (stockError) setLoadError("Scorte non disponibili. Riprova.");
     setLoading(false);
   }
 
   useEffect(() => {
     if (role !== "cucina" && role !== "admin") return;
 
-    refetch();
+    setLoading(true);
+    void refetch();
 
     const channel = supabase
       .channel("orders-kitchen")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => refetch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void refetch())
       .subscribe();
 
     return () => {
@@ -55,12 +62,28 @@ export function Cucina() {
   }, [role]);
 
   async function completeOrder(id: string) {
-    setOrders((prev) => prev.filter((o) => o.id !== id));
+    if (completingRef.current.has(id)) return;
+    completingRef.current.add(id);
+    setCompletingIds((prev) => new Set(prev).add(id));
     const { error } = await supabase
       .from("orders")
       .update({ completed_at: new Date().toISOString() })
       .eq("id", id);
-    if (error) refetch();
+    if (error) {
+      setLoadError("Ordine non completato. Riprova.");
+    } else {
+      setOrders((prev) => prev.filter((o) => o.id !== id));
+    }
+    setCompletingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    completingRef.current.delete(id);
+  }
+
+  if (authLoading) {
+    return <section className="mx-auto max-w-3xl px-4 py-10 text-sm text-[var(--text-secondary)]">Carico...</section>;
   }
 
   if (role !== "cucina" && role !== "admin") {
@@ -77,6 +100,8 @@ export function Cucina() {
       <h2 className="mb-1 text-2xl font-semibold">Cucina — coda ordini</h2>
       <p className="mb-4 text-sm text-[var(--text-secondary)]">{orders.length} ordini attivi.</p>
 
+      {loadError && <p className="mb-4 text-sm text-[var(--state-error)]">{loadError}</p>}
+
       {loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico...</p>
       ) : orders.length === 0 ? (
@@ -90,9 +115,10 @@ export function Cucina() {
                 <button
                   type="button"
                   onClick={() => completeOrder(order.id)}
-                  className="text-xs text-[var(--state-error)] hover:underline"
+                  disabled={completingIds.has(order.id)}
+                  className="text-xs text-[var(--state-error)] hover:underline disabled:opacity-50"
                 >
-                  Completato — rimuovi
+                  {completingIds.has(order.id) ? "Completo..." : "Completato — rimuovi"}
                 </button>
               </div>
               {order.items.map((it, i) => (

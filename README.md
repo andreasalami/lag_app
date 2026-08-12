@@ -58,6 +58,8 @@ login.
 
 ## Sviluppo locale
 
+Prerequisito: Node.js 20.19+ oppure 22.12+.
+
 ```bash
 npm install
 cp .env.example .env.local
@@ -79,15 +81,15 @@ dei dati è affidata alle policy RLS.
 ### Supabase
 
 1. Crea un progetto su [supabase.com](https://supabase.com).
-2. Esegui [supabase/schema.sql](supabase/schema.sql) una volta nell'SQL Editor.
-3. Esegui [supabase/migration_orders.sql](supabase/migration_orders.sql) per
-   aggiungere ordini, ruoli operativi, porzioni e funzioni SQL.
-4. In **Authentication → Users**, crea gli account con email e password.
-5. In `profiles`, assegna manualmente il ruolo corretto allo stesso `id`
+2. Esegui [supabase/schema.sql](supabase/schema.sql) nell'SQL Editor. Lo script
+   funziona sia su un database nuovo sia su quello esistente e non elimina dati
+   o account Auth.
+3. In **Authentication → Users**, crea gli account con email e password.
+4. In `profiles`, assegna manualmente il ruolo corretto allo stesso `id`
    dell'utente Auth. Gli account nuovi partono come `pending`.
-6. Disabilita il signup pubblico se gli account devono essere creati solo
+5. Disabilita il signup pubblico se gli account devono essere creati solo
    dall'amministratore.
-7. In **Database → Replication**, verifica che le tabelle usate dal realtime
+6. In **Database → Replication**, verifica che le tabelle usate dal realtime
    siano abilitate se il progetto Supabase non le ha già aggiunte tramite SQL.
 
 Per una prima verifica si può assegnare `admin` a un account di test; non è
@@ -107,6 +109,7 @@ npm run dev       # sviluppo, http://localhost:5173
 npm run build     # build di produzione in dist/
 npm run preview   # anteprima della build di produzione
 npm run lint      # controllo TypeScript senza generare la build
+npm test          # test unitari
 ```
 
 ## Deploy su GitHub Pages
@@ -154,8 +157,9 @@ gli step di build e deploy risultino verdi.
 
 - Le notifiche in Annunci chiedono solo il permesso del browser — le push
   vere ad app chiusa servono un Service Worker + backend, non ancora costruiti.
-- Il tabellone del torneo vive in `useState` locale: non è ancora
-  sincronizzato su Supabase, quindi non condiviso tra dispositivi diversi.
+- Le modifiche non ancora pubblicate al torneo restano una bozza nel browser;
+  dopo il salvataggio il tabellone è condiviso tramite Supabase e aggiornato
+  per il pubblico con polling mentre la pagina è visibile.
 - Il layout del calendario e del tabellone può usare uno scroll orizzontale
    interno su schermi molto stretti; la pagina principale e i moduli di
    modifica restano contenuti nella larghezza del viewport.

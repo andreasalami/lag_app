@@ -17,24 +17,27 @@ declare global {
 
 const WIDGET_SCRIPT_SRC = "https://www.eventbrite.com/static/widgets/eb_widgets.js";
 const EVENT_ID = import.meta.env.VITE_EVENTBRITE_EVENT_ID;
+let eventbriteScriptPromise: Promise<void> | null = null;
 
 function loadEventbriteScript(): Promise<void> {
-  return new Promise((resolve) => {
-    if (window.EBWidgets) {
-      resolve();
-      return;
-    }
+  if (window.EBWidgets) return Promise.resolve();
+  if (eventbriteScriptPromise) return eventbriteScriptPromise;
+
+  eventbriteScriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[src="${WIDGET_SCRIPT_SRC}"]`);
     if (existing) {
       existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error("Widget Eventbrite non disponibile")));
       return;
     }
     const script = document.createElement("script");
     script.src = WIDGET_SCRIPT_SRC;
     script.async = true;
     script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Widget Eventbrite non disponibile"));
     document.body.appendChild(script);
   });
+  return eventbriteScriptPromise;
 }
 
 /*
@@ -53,6 +56,7 @@ function loadEventbriteScript(): Promise<void> {
 */
 export function EventbriteCheckoutButton({ label = "Acquista su Eventbrite" }: { label?: string }) {
   const [scriptReady, setScriptReady] = useState(false);
+  const [scriptError, setScriptError] = useState(false);
   const reactId = useId().replace(/:/g, "");
   const containerId = `eventbrite-widget-container-${reactId}`;
 
@@ -61,6 +65,8 @@ export function EventbriteCheckoutButton({ label = "Acquista su Eventbrite" }: {
     let cancelled = false;
     loadEventbriteScript().then(() => {
       if (!cancelled) setScriptReady(true);
+    }).catch(() => {
+      if (!cancelled) setScriptError(true);
     });
     return () => {
       cancelled = true;
@@ -86,8 +92,8 @@ export function EventbriteCheckoutButton({ label = "Acquista su Eventbrite" }: {
 
   return (
     <>
-      <Button variant="primary" onClick={openCheckout} disabled={!scriptReady}>
-        {label}
+      <Button variant="primary" onClick={openCheckout} disabled={!scriptReady || scriptError}>
+        {scriptError ? "Biglietti non disponibili" : label}
       </Button>
       {/* Punto di aggancio per il modale del widget — Eventbrite lo popola lui */}
       <div id={containerId} />
