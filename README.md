@@ -142,6 +142,8 @@ test: ultima porzione concorrente, ordine annullato, due casse che aprono lo
 stesso ordine, ordine composto solo da bevande, consegna cucina e CSV finale.
 La suite locale automatizzata e i relativi vincoli di sicurezza sono descritti
 in [docs/STRESS_TEST.md](docs/STRESS_TEST.md).
+La configurazione completa delle notifiche broadcast è descritta in
+[docs/PUSH_NOTIFICATIONS.md](docs/PUSH_NOTIFICATIONS.md).
 
 ### Variabili opzionali
 
@@ -219,8 +221,9 @@ gli step di build e deploy risultino verdi.
 - Gli ordini non pagati non scadono automaticamente: restano prenotati finché
   una cassa li annulla oppure chiude definitivamente l'evento.
 
-- Le notifiche in Annunci chiedono solo il permesso del browser — le push
-  vere ad app chiusa servono un Service Worker + backend, non ancora costruiti.
+- Le notifiche Web Push richiedono la chiave VAPID pubblica nella build e la
+  Edge Function configurata con i relativi segreti; senza questi valori l'app
+  mostra un errore di configurazione senza registrare il dispositivo.
 - Le modifiche non ancora pubblicate al torneo restano una bozza nel browser;
   dopo il salvataggio il tabellone è condiviso tramite Supabase e aggiornato
   per il pubblico con polling mentre la pagina è visibile.

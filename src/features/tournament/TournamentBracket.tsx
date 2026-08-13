@@ -3,6 +3,7 @@ import { Card } from "../../components/ui/Card";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { NotificationPermission } from "../announcements/NotificationPermission";
+import { TournamentBroadcast } from "./TournamentBroadcast";
 import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
 import { MatchCard } from "./MatchCard";
 import {
@@ -315,6 +316,7 @@ export function TournamentBracket() {
 
       {canEdit && (
         <>
+          <TournamentBroadcast />
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <span className="text-sm text-[var(--text-secondary)]">Squadre:</span>
             {BRACKET_SIZES.map((s) => (

@@ -10,11 +10,13 @@ export function PublishAnnouncementForm({ onPublished }: PublishAnnouncementForm
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+    setNotice(null);
 
     const normalizedTitle = title.trim();
     const normalizedMessage = message.trim();
@@ -29,13 +31,24 @@ export function PublishAnnouncementForm({ onPublished }: PublishAnnouncementForm
       message: normalizedMessage,
     });
 
-    setSubmitting(false);
     if (error) {
+      setSubmitting(false);
       setError(error.message);
       return;
     }
+    const { data: pushResult, error: pushError } = await supabase.functions.invoke<{ sent: number }>("send-push-broadcast", {
+      body: {
+        kind: "announcement",
+        title: normalizedTitle.slice(0, 80),
+        message: normalizedMessage.slice(0, 240),
+      },
+    });
+    setSubmitting(false);
     setTitle("");
     setMessage("");
+    setNotice(pushError
+      ? "Annuncio pubblicato, ma la notifica non è stata inviata."
+      : `Annuncio pubblicato e notificato a ${pushResult?.sent ?? 0} dispositivi.`);
     onPublished();
   };
 
@@ -68,6 +81,7 @@ export function PublishAnnouncementForm({ onPublished }: PublishAnnouncementForm
         </button>
         {error && <p className="text-xs text-[var(--state-error)]">{error}</p>}
       </div>
+      {notice && <p className="text-xs text-[var(--text-secondary)]">{notice}</p>}
     </form>
   );
 }

@@ -19,6 +19,7 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 grant select on public.profiles to authenticated;
+grant select on public.profiles to service_role;
 
 drop policy if exists "Un utente legge solo il proprio profilo" on public.profiles;
 create policy "Un utente legge solo il proprio profilo"
@@ -1355,6 +1356,133 @@ $$;
 
 revoke execute on function public.get_low_stock_items() from public;
 grant execute on function public.get_low_stock_items() to authenticated;
+
+-- ============================================================
+-- NOTIFICHE WEB PUSH
+-- ============================================================
+-- Gli endpoint Push sono credenziali tecniche del dispositivo: nessun client
+-- può leggerli direttamente. La registrazione pubblica passa soltanto dalla
+-- RPC validata; l'invio e la pulizia sono affidati alla Edge Function con
+-- service_role, mai al browser del gestore.
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  endpoint text not null,
+  p256dh text not null,
+  auth text not null,
+  source text not null default 'announcements',
+  user_agent text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists push_subscriptions_endpoint_idx
+  on public.push_subscriptions (endpoint);
+
+alter table public.push_subscriptions enable row level security;
+revoke all on public.push_subscriptions from public, anon, authenticated;
+grant select, delete on public.push_subscriptions to service_role;
+
+alter table public.push_subscriptions drop constraint if exists push_subscriptions_values_valid;
+alter table public.push_subscriptions add constraint push_subscriptions_values_valid check (
+  endpoint ~ '^https://[^[:space:]]+$'
+  and length(endpoint) between 28 and 2048
+  and p256dh ~ '^[A-Za-z0-9_-]{80,120}$'
+  and auth ~ '^[A-Za-z0-9_-]{16,64}$'
+  and source in ('announcements', 'tournament')
+  and (user_agent is null or length(user_agent) <= 500)
+) not valid;
+
+create table if not exists public.push_broadcasts (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null check (kind in ('announcement', 'tournament')),
+  title text not null check (length(title) between 2 and 80),
+  message text not null check (length(message) between 2 and 240),
+  sent_by uuid references auth.users(id) on delete set null,
+  subscriber_count integer not null default 0 check (subscriber_count >= 0),
+  success_count integer not null default 0 check (success_count >= 0),
+  failure_count integer not null default 0 check (failure_count >= 0),
+  created_at timestamptz not null default now()
+);
+
+alter table public.push_broadcasts enable row level security;
+revoke all on public.push_broadcasts from public, anon, authenticated;
+grant select on public.push_broadcasts to authenticated;
+grant insert on public.push_broadcasts to service_role;
+
+drop policy if exists "Gestori leggono lo storico notifiche" on public.push_broadcasts;
+create policy "Gestori leggono lo storico notifiche"
+  on public.push_broadcasts for select
+  using (exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role in ('staff', 'tournament_manager', 'admin')
+  ));
+
+create or replace function public.upsert_push_subscription(
+  p_endpoint text,
+  p_p256dh text,
+  p_auth text,
+  p_source text,
+  p_user_agent text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare subscription_id uuid; subscription_count integer;
+begin
+  if p_endpoint is null or p_endpoint !~ '^https://[^[:space:]]+$'
+    or length(p_endpoint) not between 28 and 2048
+    or p_p256dh is null or p_p256dh !~ '^[A-Za-z0-9_-]{80,120}$'
+    or p_auth is null or p_auth !~ '^[A-Za-z0-9_-]{16,64}$'
+    or p_source is null or p_source not in ('announcements', 'tournament')
+    or length(coalesce(p_user_agent, '')) > 500 then
+    raise exception 'invalid_push_subscription';
+  end if;
+
+  -- Mantiene atomico il limite anche se molti telefoni si registrano nello
+  -- stesso istante; non interferisce con gli altri lock applicativi.
+  perform pg_advisory_xact_lock(hashtext('lag_push_subscriptions_capacity'));
+  if not exists (select 1 from public.push_subscriptions where endpoint = p_endpoint) then
+    select count(*) into subscription_count from public.push_subscriptions;
+    if subscription_count >= 5000 then raise exception 'push_capacity_reached'; end if;
+  end if;
+
+  insert into public.push_subscriptions (endpoint, p256dh, auth, source, user_agent)
+  values (p_endpoint, p_p256dh, p_auth, p_source, nullif(p_user_agent, ''))
+  on conflict (endpoint) do update set
+    p256dh = excluded.p256dh,
+    auth = excluded.auth,
+    source = excluded.source,
+    user_agent = excluded.user_agent,
+    updated_at = now()
+  returning id into subscription_id;
+  return subscription_id;
+end;
+$$;
+
+revoke execute on function public.upsert_push_subscription(text, text, text, text, text) from public;
+grant execute on function public.upsert_push_subscription(text, text, text, text, text) to anon, authenticated;
+
+create or replace function public.get_push_subscription_count()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare result integer;
+begin
+  if not exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role in ('tournament_manager', 'admin')
+  ) then raise exception 'not_authorized' using errcode = '42501'; end if;
+  select count(*) into result from public.push_subscriptions;
+  return result;
+end;
+$$;
+
+revoke execute on function public.get_push_subscription_count() from public;
+grant execute on function public.get_push_subscription_count() to authenticated;
 
 -- ============================================================
 -- TORNEO

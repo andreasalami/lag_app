@@ -1,0 +1,4 @@
+project_id = "lag-app"
+
+[functions.send-push-broadcast]
+verify_jwt = true
