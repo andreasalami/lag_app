@@ -10,20 +10,15 @@ type KitchenOrder = Pick<StaffOrder,
   "id" | "display_number" | "alias" | "notes" | "items" | "created_at" | "paid_at"
 >;
 
+const KITCHEN_ORDER_SOUND_URL = `${import.meta.env.BASE_URL}sounds/line-simple-bell.mp3`;
+let kitchenOrderAudio: HTMLAudioElement | null = null;
+
 function playNewOrderSound() {
-  const context = new AudioContext();
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.type = "sine";
-  oscillator.frequency.setValueAtTime(880, context.currentTime);
-  gain.gain.setValueAtTime(0.0001, context.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.25, context.currentTime + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.35);
-  oscillator.connect(gain);
-  gain.connect(context.destination);
-  oscillator.start();
-  oscillator.stop(context.currentTime + 0.36);
-  oscillator.addEventListener("ended", () => void context.close());
+  kitchenOrderAudio ??= new Audio(KITCHEN_ORDER_SOUND_URL);
+  kitchenOrderAudio.currentTime = 0;
+  void kitchenOrderAudio.play().catch(() => {
+    // Il browser può bloccare l'audio finché l'utente non attiva il toggle.
+  });
 }
 
 export function Cucina() {

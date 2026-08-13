@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
+import { NotificationPermission } from "../announcements/NotificationPermission";
 import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
 import { MatchCard } from "./MatchCard";
 import {
@@ -300,6 +301,8 @@ export function TournamentBracket() {
       <p className="mb-4 text-sm text-[var(--text-secondary)]">
         Eliminazione diretta — dimensione configurabile, con ripescaggio manuale.
       </p>
+
+      {!canEdit && <NotificationPermission context="tournament" />}
 
       {loadError && <p className="mb-4 text-sm text-[var(--state-error)]">{loadError}</p>}
 

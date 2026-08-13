@@ -1,0 +1,19 @@
+{
+  "id": "/lag_app/",
+  "name": "L'Agro ai Giovani",
+  "short_name": "LAG",
+  "description": "Festival L'Agro ai Giovani: avvisi, torneo, programma e ordini.",
+  "start_url": "/lag_app/#tornei",
+  "scope": "/lag_app/",
+  "display": "standalone",
+  "background_color": "#091422",
+  "theme_color": "#091422",
+  "icons": [
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
