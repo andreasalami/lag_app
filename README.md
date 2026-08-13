@@ -86,9 +86,11 @@ La sezione Evento della cassa gestisce:
 - download del CSV finale senza alias e note;
 - creazione dell'evento successivo con numerazione nuovamente da 1.
 
-Alias, note e token QR sono temporanei: vengono eliminati alla consegna,
-all'annullamento o alla chiusura definitiva. Il PDF cliente viene generato
-localmente ed è indicato come documento non fiscale.
+Alias e note sono temporanei e vengono eliminati alla consegna,
+all'annullamento o alla chiusura definitiva. Del token QR resta nel database
+solo l'impronta crittografica: insieme all'identità della richiesta viene
+conservata fino alla chiusura dell'evento per impedire duplicati tardivi. Il
+PDF cliente viene generato localmente ed è indicato come documento non fiscale.
 
 ## Sviluppo locale
 
@@ -117,7 +119,9 @@ dei dati è affidata alle policy RLS.
 1. Crea un progetto su [supabase.com](https://supabase.com).
 2. Esegui [supabase/schema.sql](supabase/schema.sql) nell'SQL Editor. Lo script
    funziona sia su un database nuovo sia su quello esistente e non elimina dati
-   o account Auth.
+   o account Auth. Se un database precedente contiene già hash QR duplicati, la
+   transazione si interrompe senza modificare lo schema: risolvi prima quelle
+   righe, quindi ripeti l'esecuzione.
 3. In **Authentication → Users**, crea gli account con email e password.
 4. In `profiles`, assegna manualmente il ruolo corretto allo stesso `id`
    dell'utente Auth. Gli account nuovi partono come `pending`.
@@ -136,6 +140,8 @@ orari, salva, quindi premi **Riapri ordinazioni** quando il sistema è pronto.
 Prima dell'evento reale è consigliato provare almeno questi casi con account di
 test: ultima porzione concorrente, ordine annullato, due casse che aprono lo
 stesso ordine, ordine composto solo da bevande, consegna cucina e CSV finale.
+La suite locale automatizzata e i relativi vincoli di sicurezza sono descritti
+in [docs/STRESS_TEST.md](docs/STRESS_TEST.md).
 
 ### Variabili opzionali
 
@@ -195,7 +201,7 @@ gli step di build e deploy risultino verdi.
 - `submit_public_order`, aggiornamento cassa, annullamento e pagamento
   ricalcolano prezzi e scorte nel database e applicano tutto atomicamente.
 - Il QR contiene un token casuale; nel database viene conservata soltanto la
-  sua impronta SHA-256 e viene eliminata al pagamento.
+  sua impronta SHA-256, eliminata alla chiusura definitiva dell'evento.
 - Il report permanente non duplica il dettaglio ordini: conserva solo
   riepilogo e aggregati prodotto; il CSV viene ricostruito dalle righe già
   anonimizzate quando viene riscaricato.

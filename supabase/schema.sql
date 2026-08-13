@@ -525,6 +525,16 @@ begin
     alter table public.orders add constraint orders_notes_valid
       check (notes is null or length(notes) <= 300) not valid;
   end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.orders'::regclass and conname = 'orders_pending_identity_valid') then
+    alter table public.orders add constraint orders_pending_identity_valid
+      check (status <> 'in_attesa_pagamento' or (qr_token_hash is not null and client_request_id is not null)) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.orders'::regclass and conname = 'orders_claim_pair_valid') then
+    alter table public.orders add constraint orders_claim_pair_valid check (
+      (claimed_token_hash is null) = (claim_expires_at is null)
+      and (claimed_token_hash is null or status = 'in_attesa_pagamento')
+    ) not valid;
+  end if;
 end
 $$;
 
@@ -558,7 +568,11 @@ create unique index if not exists orders_queue_number_idx on public.orders (queu
 create unique index if not exists orders_event_display_number_idx on public.orders (event_id, display_number);
 create unique index if not exists orders_event_request_idx
   on public.orders (event_id, client_request_id) where client_request_id is not null;
-create index if not exists orders_qr_token_hash_idx on public.orders (qr_token_hash) where qr_token_hash is not null;
+-- Il QR deve identificare un solo ordine. Il nome nuovo evita che una
+-- precedente versione non-univoca dell'indice renda questa migrazione un no-op.
+create unique index if not exists orders_qr_token_hash_unique_idx
+  on public.orders (qr_token_hash) where qr_token_hash is not null;
+drop index if exists public.orders_qr_token_hash_idx;
 create index if not exists orders_active_queue_idx
   on public.orders (event_id, status, display_number)
   where status in ('in_attesa_pagamento', 'pagato');
@@ -770,16 +784,20 @@ begin
     raise exception 'invalid_alias';
   end if;
   if length(coalesce(p_notes, '')) > 300 then raise exception 'notes_too_long'; end if;
+  if p_client_request_id is null then raise exception 'invalid_client_request_id'; end if;
   if p_qr_token is null or length(p_qr_token) not between 32 and 80 then raise exception 'invalid_qr_token'; end if;
 
-  select * into event_row from public.order_events where is_current for update;
+  select * into event_row from public.order_events where is_current for no key update;
   if not found then raise exception 'no_event'; end if;
 
   select * into existing_order from public.orders
   where event_id = event_row.id and client_request_id = p_client_request_id;
   if found then
-    if existing_order.qr_token_hash <> encode(extensions.digest(p_qr_token, 'sha256'), 'hex') then
+    if existing_order.qr_token_hash is distinct from encode(extensions.digest(p_qr_token, 'sha256'), 'hex') then
       raise exception 'request_id_conflict';
+    end if;
+    if existing_order.status <> 'in_attesa_pagamento' then
+      raise exception 'request_already_processed';
     end if;
     return jsonb_build_object(
       'event_id', event_row.id, 'event_name', event_row.name,
@@ -834,12 +852,20 @@ set search_path = public
 as $$
 declare
   order_row public.orders%rowtype;
+  event_row public.order_events%rowtype;
   token_hash text;
 begin
   if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
     raise exception 'not_authorized' using errcode = '42501';
   end if;
+  if p_claim_token is null or length(p_claim_token) not between 32 and 80 then
+    raise exception 'invalid_claim_token';
+  end if;
   token_hash := encode(extensions.digest(p_claim_token, 'sha256'), 'hex');
+  select event.* into event_row from public.order_events event
+  join public.orders target on target.event_id = event.id
+  where target.id = p_order_id for key share of event;
+  if not found or event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
   select * into order_row from public.orders where id = p_order_id for update;
   if not found or order_row.status <> 'in_attesa_pagamento' then raise exception 'order_not_available'; end if;
   if order_row.claimed_token_hash is not null and order_row.claim_expires_at > now()
@@ -865,6 +891,12 @@ begin
   if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
     raise exception 'not_authorized' using errcode = '42501';
   end if;
+  if p_qr_token is null or length(p_qr_token) not between 32 and 80 then
+    raise exception 'invalid_qr_token';
+  end if;
+  if p_claim_token is null or length(p_claim_token) not between 32 and 80 then
+    raise exception 'invalid_claim_token';
+  end if;
   select id into target_id from public.orders
   where qr_token_hash = encode(extensions.digest(p_qr_token, 'sha256'), 'hex')
     and status = 'in_attesa_pagamento';
@@ -882,10 +914,18 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare event_row public.order_events%rowtype;
 begin
   if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
     raise exception 'not_authorized' using errcode = '42501';
   end if;
+  if p_claim_token is null or length(p_claim_token) not between 32 and 80 then
+    raise exception 'invalid_claim_token';
+  end if;
+  select event.* into event_row from public.order_events event
+  join public.orders target on target.event_id = event.id
+  where target.id = p_order_id for key share of event;
+  if not found or event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
   update public.orders set claimed_token_hash = null, claim_expires_at = null
   where id = p_order_id and status = 'in_attesa_pagamento'
     and claimed_token_hash = encode(extensions.digest(p_claim_token, 'sha256'), 'hex');
@@ -903,16 +943,27 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare order_row public.orders%rowtype; normalized jsonb; calculated_total numeric;
+declare order_row public.orders%rowtype; event_row public.order_events%rowtype;
+  normalized jsonb; calculated_total numeric;
 begin
   if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
     raise exception 'not_authorized' using errcode = '42501';
   end if;
   if p_alias is null or length(btrim(p_alias)) not between 2 and 32 then raise exception 'invalid_alias'; end if;
   if length(coalesce(p_notes, '')) > 300 then raise exception 'notes_too_long'; end if;
+  if p_claim_token is null or length(p_claim_token) not between 32 and 80 then
+    raise exception 'invalid_claim_token';
+  end if;
+  -- Tutte le mutazioni di un ordine prendono prima il lock evento e poi il
+  -- lock ordine. La chiusura definitiva usa lo stesso ordine di lock.
+  select event.* into event_row from public.order_events event
+  join public.orders target on target.event_id = event.id
+  where target.id = p_order_id for key share of event;
+  if not found or event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
   select * into order_row from public.orders where id = p_order_id for update;
   if not found or order_row.status <> 'in_attesa_pagamento'
-    or order_row.claimed_token_hash <> encode(extensions.digest(p_claim_token, 'sha256'), 'hex') then
+    or order_row.claimed_token_hash is distinct from encode(extensions.digest(p_claim_token, 'sha256'), 'hex')
+    or order_row.claim_expires_at is null or order_row.claim_expires_at <= now() then
     raise exception 'claim_lost';
   end if;
   normalized := public.normalize_order_items(p_items);
@@ -936,19 +987,27 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare order_row public.orders%rowtype;
+declare order_row public.orders%rowtype; event_row public.order_events%rowtype;
 begin
   if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
     raise exception 'not_authorized' using errcode = '42501';
   end if;
+  if p_claim_token is null or length(p_claim_token) not between 32 and 80 then
+    raise exception 'invalid_claim_token';
+  end if;
+  select event.* into event_row from public.order_events event
+  join public.orders target on target.event_id = event.id
+  where target.id = p_order_id for key share of event;
+  if not found or event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
   select * into order_row from public.orders where id = p_order_id for update;
   if not found or order_row.status <> 'in_attesa_pagamento'
-    or order_row.claimed_token_hash <> encode(extensions.digest(p_claim_token, 'sha256'), 'hex') then
+    or order_row.claimed_token_hash is distinct from encode(extensions.digest(p_claim_token, 'sha256'), 'hex')
+    or order_row.claim_expires_at is null or order_row.claim_expires_at <= now() then
     raise exception 'claim_lost';
   end if;
   perform public.apply_order_stock(order_row.items, '[]'::jsonb);
   update public.orders set status = 'annullato', cancelled_at = now(),
-    alias = null, notes = null, qr_token_hash = null, client_request_id = null,
+    alias = null, notes = null,
     claimed_token_hash = null, claim_expires_at = null where id = p_order_id;
 end;
 $$;
@@ -962,14 +1021,22 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare order_row public.orders%rowtype; has_food boolean;
+declare order_row public.orders%rowtype; event_row public.order_events%rowtype; has_food boolean;
 begin
   if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
     raise exception 'not_authorized' using errcode = '42501';
   end if;
+  if p_claim_token is null or length(p_claim_token) not between 32 and 80 then
+    raise exception 'invalid_claim_token';
+  end if;
+  select event.* into event_row from public.order_events event
+  join public.orders target on target.event_id = event.id
+  where target.id = p_order_id for key share of event;
+  if not found or event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
   select * into order_row from public.orders where id = p_order_id for update;
   if not found or order_row.status <> 'in_attesa_pagamento'
-    or order_row.claimed_token_hash <> encode(extensions.digest(p_claim_token, 'sha256'), 'hex') then
+    or order_row.claimed_token_hash is distinct from encode(extensions.digest(p_claim_token, 'sha256'), 'hex')
+    or order_row.claim_expires_at is null or order_row.claim_expires_at <= now() then
     raise exception 'claim_lost';
   end if;
   select exists (select 1 from jsonb_array_elements(order_row.items) line where line->>'category' = 'cibo') into has_food;
@@ -978,7 +1045,6 @@ begin
     completed_at = case when has_food then null else now() end,
     alias = case when has_food then alias else null end,
     notes = case when has_food then notes else null end,
-    qr_token_hash = null, client_request_id = null,
     claimed_token_hash = null, claim_expires_at = null
   where id = p_order_id returning * into order_row;
   return to_jsonb(order_row) - 'qr_token_hash' - 'claimed_token_hash' - 'client_request_id';
@@ -1002,7 +1068,7 @@ begin
   end if;
   if p_alias is null or length(btrim(p_alias)) not between 2 and 32 then raise exception 'invalid_alias'; end if;
   if length(coalesce(p_notes, '')) > 300 then raise exception 'notes_too_long'; end if;
-  select * into event_row from public.order_events where is_current for update;
+  select * into event_row from public.order_events where is_current for no key update;
   if not found or event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
   normalized := public.normalize_order_items(p_items);
   perform public.apply_order_stock('[]'::jsonb, normalized);
@@ -1031,12 +1097,17 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare event_row public.order_events%rowtype;
 begin
   if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cucina', 'admin')) then
     raise exception 'not_authorized' using errcode = '42501';
   end if;
+  select event.* into event_row from public.order_events event
+  join public.orders target on target.event_id = event.id
+  where target.id = p_order_id for key share of event;
+  if not found or event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
   update public.orders set status = 'consegnato', delivered_at = now(), completed_at = now(),
-    alias = null, notes = null, qr_token_hash = null, client_request_id = null
+    alias = null, notes = null
   where id = p_order_id and status = 'pagato';
   if not found then raise exception 'order_not_available'; end if;
 end;
@@ -1125,7 +1196,13 @@ begin
     raise exception 'not_authorized' using errcode = '42501';
   end if;
   select * into event_row from public.order_events where is_current for update;
+  if not found then raise exception 'no_event'; end if;
   if event_row.permanently_closed_at is not null then return event_row.final_report; end if;
+
+  -- Completa l'ordine globale dei lock evento -> ordini -> menu. Le altre RPC
+  -- mutanti mantengono un lock condiviso sull'evento finché hanno finito.
+  perform 1 from public.orders
+  where event_id = event_row.id order by id for update;
 
   with reserved as (
     select (line->>'id')::uuid id, sum((line->>'qty')::integer)::integer qty
