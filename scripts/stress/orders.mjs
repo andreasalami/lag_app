@@ -237,13 +237,20 @@ async function idempotencyScenario(adminClient) {
 
   const orderId = successes[0]?.data?.order_id;
   const claimToken = crypto.randomUUID();
+  const pendingStatuses = await timedRpc(publicClient, "get_public_order_statuses", { p_qr_tokens: [qrToken] });
   const claim = await timedRpc(adminClient, "claim_order", { p_order_id: orderId, p_claim_token: claimToken });
   const payment = claim.error
     ? { error: claim.error }
     : await timedRpc(adminClient, "pay_claimed_order", { p_order_id: orderId, p_claim_token: claimToken });
+  const paidStatus = payment.error
+    ? { error: payment.error }
+    : await timedRpc(publicClient, "get_public_order_statuses", { p_qr_tokens: [qrToken] });
   const delivery = payment.error
     ? { error: payment.error }
-    : await timedRpc(adminClient, "deliver_order", { p_order_id: orderId });
+    : await timedRpc(adminClient, "deliver_order_by_qr", { p_qr_token: qrToken });
+  const deliveredStatus = delivery.error
+    ? { error: delivery.error }
+    : await timedRpc(publicClient, "get_public_order_statuses", { p_qr_tokens: [qrToken] });
   const lateRetry = await publicOrder(fixtureIds.limited, { requestId, qrToken });
   const finalRows = await requireQuery(serviceClient.from("orders").select("id,status").eq("event_id", eventId), "retry tardivo");
   const finalStock = (await requireQuery(
@@ -254,6 +261,9 @@ async function idempotencyScenario(adminClient) {
     !claim.error
     && !payment.error
     && !delivery.error
+    && pendingStatuses.data?.[0]?.status === "in_attesa_pagamento"
+    && paidStatus.data?.[0]?.status === "pagato"
+    && deliveredStatus.data?.[0]?.status === "consegnato"
     && messageOf(lateRetry.error).includes("request_already_processed")
     && finalRows.length === 1
     && finalRows[0]?.status === "consegnato"
@@ -265,6 +275,9 @@ async function idempotencyScenario(adminClient) {
       claim_error: messageOf(claim.error),
       payment_error: messageOf(payment.error),
       delivery_error: messageOf(delivery.error),
+      pending_public_status: pendingStatuses.data?.[0]?.status,
+      paid_public_status: paidStatus.data?.[0]?.status,
+      delivered_public_status: deliveredStatus.data?.[0]?.status,
       retry_error: messageOf(lateRetry.error),
       database_rows: finalRows,
       remaining_stock: finalStock,

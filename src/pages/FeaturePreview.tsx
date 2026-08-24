@@ -79,6 +79,12 @@ export function FeaturePreview() {
       .then(setQrUrl);
   }, [customerOrder]);
 
+  useEffect(() => {
+    if (!customerOrder) return;
+    const updated = orders.find((order) => order.order_id === customerOrder.order_id);
+    if (updated && updated !== customerOrder) setCustomerOrder(updated);
+  }, [customerOrder, orders]);
+
   function addToCustomerCart(item: OrderMenuItem) {
     if (item.available_portions === 0) return;
     setCart((current) => {
@@ -194,6 +200,22 @@ export function FeaturePreview() {
       : candidate));
   }
 
+  function startAnotherOrder() {
+    setCustomerOrder(null);
+    setCart({});
+    setNotes("");
+    setFinalTab("qr");
+    setQrUrl(null);
+    setMessage(null);
+  }
+
+  function customerStatus(order: DemoOrder) {
+    if (order.status === "pagato") return "In preparazione";
+    if (order.status === "consegnato") return "Ritirato";
+    if (order.status === "annullato") return "Annullato";
+    return "Da pagare";
+  }
+
   function closeDemoEvent() {
     const paid = orders.filter((order) => ["pagato", "consegnato"].includes(order.status));
     const productMap = new Map<string, { name: string; category: string; quantity: number; revenue: number }>();
@@ -299,14 +321,38 @@ export function FeaturePreview() {
 
       {view === "cliente" && customerOrder && (
         <section className="mx-auto mt-6 max-w-md text-center">
-          <p className="text-[var(--state-success)]">Ordine inviato · paga in cassa</p>
+          <p className={customerOrder.status === "consegnato" ? "text-[var(--state-success)]" : "text-[var(--state-warning)]"}>
+            {customerStatus(customerOrder)}
+          </p>
           <h2 className="mt-2 text-4xl">#{customerOrder.display_number}</h2>
           <p className="text-xl">{customerOrder.alias}</p>
+          <Card className="mt-4 text-left">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-semibold">I miei ordini</h3>
+              <span className="text-xs text-[var(--text-secondary)]">{orders.length} totali</span>
+            </div>
+            <div className="mt-3 max-h-44 space-y-2 overflow-y-auto">
+              {[...orders].reverse().map((order) => (
+                <button
+                  key={order.order_id}
+                  type="button"
+                  onClick={() => setCustomerOrder(order)}
+                  className={`flex w-full items-center justify-between rounded-[var(--radius-sm)] border p-3 ${order.order_id === customerOrder.order_id ? "border-[var(--accent-primary)]" : "border-[var(--surface-border)]"}`}
+                >
+                  <strong>#{order.display_number} · {order.alias}</strong>
+                  <span className="text-xs">{customerStatus(order)}</span>
+                </button>
+              ))}
+            </div>
+          </Card>
           <div className="mt-4 grid grid-cols-2 rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1"><button onClick={() => setFinalTab("qr")} className="py-2">QR</button><button onClick={() => setFinalTab("summary")} className="py-2">Riepilogo</button></div>
           {finalTab === "qr" ? qrUrl && <img src={qrUrl} alt="QR ordine demo" className="mx-auto mt-4 w-full max-w-xs rounded-xl bg-white" /> : (
             <Card className="mt-4 text-left">{customerOrder.items.map((line) => <p key={line.id}>{line.qty}× {line.name}</p>)}<strong className="mt-3 block">Totale {priceFormatter.format(customerOrder.total)}</strong></Card>
           )}
-          <div className="mt-4 flex flex-wrap justify-center gap-2"><Button variant="ghost" onClick={() => qrUrl && void downloadOrderPdf(customerOrder, qrUrl)}>Scarica PDF</Button></div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <Button variant="primary" onClick={startAnotherOrder}>Ordina di nuovo</Button>
+            <Button variant="ghost" onClick={() => qrUrl && void downloadOrderPdf(customerOrder, qrUrl)}>Scarica PDF</Button>
+          </div>
         </section>
       )}
 
@@ -320,7 +366,20 @@ export function FeaturePreview() {
 
       {view === "cucina" && (
         <section className="mt-6">
-          <div className="flex justify-end gap-2"><span className="text-sm">Suono</span><button role="switch" aria-checked={sound} onClick={() => { setSound(!sound); if (!sound) beep(); }} className={`relative h-7 w-12 rounded-full ${sound ? "bg-[var(--state-success)]" : "bg-[var(--surface-solid)]"}`}><span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white transition-transform ${sound ? "translate-x-5" : ""}`} /></button></div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Button
+              variant="primary"
+              disabled={!customerOrder || customerOrder.status !== "pagato"}
+              onClick={() => {
+                if (!customerOrder || customerOrder.status !== "pagato") return;
+                deliver(customerOrder);
+                setMessage(`Seconda scansione: ordine #${customerOrder.display_number} consegnato.`);
+              }}
+            >
+              Simula seconda scansione QR
+            </Button>
+            <div className="flex justify-end gap-2"><span className="text-sm">Suono</span><button role="switch" aria-checked={sound} onClick={() => { setSound(!sound); if (!sound) beep(); }} className={`relative h-7 w-12 rounded-full ${sound ? "bg-[var(--state-success)]" : "bg-[var(--surface-solid)]"}`}><span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white transition-transform ${sound ? "translate-x-5" : ""}`} /></button></div>
+          </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">{kitchenOrders.map((order) => <Card key={order.order_id} className="border-l-4 border-l-[var(--accent-primary)]"><div className="flex justify-between"><h2>#{order.display_number} · {order.alias}</h2><Button variant="ghost" onClick={() => deliver(order)}>Consegnato</Button></div>{order.items.filter((line) => line.category === "cibo").map((line) => <p key={line.id} className="mt-2 font-semibold">{line.qty}× {line.name}</p>)}{order.notes && <p className="mt-3 border-2 border-[var(--state-warning)] p-2 text-[var(--state-warning)]"><strong>NOTE:</strong> {order.notes}</p>}</Card>)}</div>
           {kitchenOrders.length === 0 && <p className="text-sm text-[var(--text-secondary)]">Nessun ordine in cucina. Pagane uno dalla cassa demo.</p>}
         </section>

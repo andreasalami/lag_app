@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Modal } from "../../components/ui/Modal";
@@ -10,24 +10,46 @@ import {
   orderingReasonMessage,
   priceFormatter,
 } from "./orderUtils";
+import {
+  addOrderToHistory,
+  isPublicOrderStatus,
+  ordersForEvent,
+  readOrderHistory,
+  saveOrderHistory,
+  type PublicOrderStatus,
+  type StoredOrder,
+} from "./orderHistory";
 import type { OrderLine, OrderMenuItem, OrderingCatalog, SubmittedOrder } from "./types";
 
-const SAVED_ORDER_KEY = "lag:last-submitted-order";
+const STATUS_LABEL: Record<PublicOrderStatus, string> = {
+  in_attesa_pagamento: "Da pagare",
+  pagato: "In preparazione",
+  consegnato: "Ritirato",
+  annullato: "Annullato",
+};
 
-function readSavedOrder() {
-  try {
-    const raw = localStorage.getItem(SAVED_ORDER_KEY);
-    return raw ? JSON.parse(raw) as SubmittedOrder : null;
-  } catch {
-    return null;
+function statusMessage(status: PublicOrderStatus) {
+  switch (status) {
+    case "pagato": return "Pagamento registrato. Il tuo ordine è in preparazione.";
+    case "consegnato": return "Ordine consegnato. Grazie!";
+    case "annullato": return "Questo ordine è stato annullato.";
+    default: return "Ordine inviato. Ora raggiungi la cassa per pagare.";
   }
 }
 
+function statusClass(status: PublicOrderStatus) {
+  if (status === "consegnato") return "text-[var(--state-success)]";
+  if (status === "annullato") return "text-[var(--state-error)]";
+  if (status === "pagato") return "text-[var(--state-warning)]";
+  return "text-[var(--accent-primary)]";
+}
+
 export function OrderPage() {
+  const [orderHistory, setOrderHistory] = useState<StoredOrder[]>(readOrderHistory);
   const [catalog, setCatalog] = useState<OrderingCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [showIntro, setShowIntro] = useState(() => readSavedOrder() === null);
+  const [showIntro, setShowIntro] = useState(() => readOrderHistory().length === 0);
   const [alias, setAlias] = useState("");
   const [notes, setNotes] = useState("");
   const [cart, setCart] = useState<Record<string, OrderLine>>({});
@@ -35,43 +57,101 @@ export function OrderPage() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submittedOrder, setSubmittedOrder] = useState<SubmittedOrder | null>(() => readSavedOrder());
+  const [submittedOrder, setSubmittedOrder] = useState<StoredOrder | null>(() => readOrderHistory()[0] ?? null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [finalTab, setFinalTab] = useState<"qr" | "summary">("qr");
   const [showCopyPrompt, setShowCopyPrompt] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [botField, setBotField] = useState("");
+  const [startingNewOrder, setStartingNewOrder] = useState(false);
+  const [newOrderMessage, setNewOrderMessage] = useState<string | null>(null);
   const requestIdentityRef = useRef({ requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() });
+  const historyRef = useRef(orderHistory);
 
-  async function loadCatalog() {
+  useEffect(() => {
+    historyRef.current = orderHistory;
+  }, [orderHistory]);
+
+  const refreshOrderStatuses = useCallback(async (orders = historyRef.current) => {
+    if (orders.length === 0) return;
+    const batches = Array.from({ length: Math.ceil(orders.length / 50) }, (_, index) =>
+      orders.slice(index * 50, (index + 1) * 50));
+    const results = await Promise.all(batches.map(async (batch) => {
+      const { data, error } = await supabase.rpc("get_public_order_statuses", {
+        p_qr_tokens: batch.map((order) => order.qr_token),
+      });
+      return error ? [] : data as Array<{ order_id?: unknown; status?: unknown }>;
+    }));
+    const statuses = new Map<string, PublicOrderStatus>();
+    results.flat().forEach((result) => {
+      if (typeof result.order_id === "string" && isPublicOrderStatus(result.status)) {
+        statuses.set(result.order_id, result.status);
+      }
+    });
+    if (statuses.size === 0) return;
+    setOrderHistory((current) => {
+      const next = current.map((order) => {
+        const status = statuses.get(order.order_id);
+        return status ? { ...order, status } : order;
+      });
+      saveOrderHistory(next);
+      historyRef.current = next;
+      return next;
+    });
+    setSubmittedOrder((current) => current
+      ? { ...current, status: statuses.get(current.order_id) ?? current.status }
+      : null);
+  }, []);
+
+  async function loadCatalog(restoreLatestOrder = false) {
     setLoading(true);
     setLoadError(null);
     const { data, error } = await supabase.rpc("get_ordering_catalog");
     if (error || !data) {
       setLoadError("Menu ordinazioni non disponibile. Controlla la connessione e riprova.");
       setLoading(false);
-      return;
+      return null;
     }
     const nextCatalog = data as OrderingCatalog;
     setCatalog(nextCatalog);
-    const saved = readSavedOrder();
-    if (saved && saved.event_id !== nextCatalog.event_id) {
-      localStorage.removeItem(SAVED_ORDER_KEY);
-      setSubmittedOrder(null);
-      setShowIntro(true);
-    } else if (saved) {
-      setSubmittedOrder(saved);
-      setShowIntro(false);
+    const currentHistory = ordersForEvent(readOrderHistory(), nextCatalog.event_id);
+    saveOrderHistory(currentHistory);
+    historyRef.current = currentHistory;
+    setOrderHistory(currentHistory);
+    if (restoreLatestOrder) {
+      const latest = currentHistory[0] ?? null;
+      setSubmittedOrder(latest);
+      setShowIntro(latest === null);
     }
     setLoading(false);
+    void refreshOrderStatuses(currentHistory);
+    return nextCatalog;
   }
 
   useEffect(() => {
-    void loadCatalog();
+    void loadCatalog(true);
+  // Il catalogo iniziale e lo storico si caricano una sola volta all'apertura.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!submittedOrder) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void refreshOrderStatuses();
+    };
+    const timer = window.setInterval(refresh, 30_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [refreshOrderStatuses]);
+
+  useEffect(() => {
+    if (!submittedOrder) {
+      setQrDataUrl(null);
+      return;
+    }
+    setQrDataUrl(null);
     let cancelled = false;
     void import("qrcode").then((module) => module.default.toDataURL(
       `LAGORDER:${submittedOrder.qr_token}`,
@@ -162,10 +242,55 @@ export function OrderPage() {
       return;
     }
     const order = data as SubmittedOrder;
-    localStorage.setItem(SAVED_ORDER_KEY, JSON.stringify(order));
-    setSubmittedOrder(order);
+    const storedOrder: StoredOrder = {
+      ...order,
+      status: "in_attesa_pagamento",
+      saved_at: new Date().toISOString(),
+    };
+    setOrderHistory((current) => {
+      const next = addOrderToHistory(current, storedOrder);
+      saveOrderHistory(next);
+      historyRef.current = next;
+      return next;
+    });
+    setSubmittedOrder(storedOrder);
     setCart({});
     setShowCopyPrompt(true);
+  }
+
+  function viewOrder(order: StoredOrder) {
+    setSubmittedOrder(order);
+    setFinalTab("qr");
+    setSubmitError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    void refreshOrderStatuses();
+  }
+
+  async function startNewOrder() {
+    setStartingNewOrder(true);
+    setNewOrderMessage(null);
+    const nextCatalog = await loadCatalog(false);
+    setStartingNewOrder(false);
+    if (!nextCatalog) {
+      setNewOrderMessage("Non riesco a verificare le ordinazioni. Controlla la connessione e riprova.");
+      return;
+    }
+    if (!nextCatalog.accepting) {
+      setNewOrderMessage(orderingReasonMessage(nextCatalog.reason, nextCatalog.opens_at));
+      return;
+    }
+    setAlias(historyRef.current[0]?.alias ?? submittedOrder?.alias ?? "");
+    setNotes("");
+    setCart({});
+    setCartExpanded(false);
+    setSubmitError(null);
+    setBotField("");
+    setShowIntro(false);
+    setShowCopyPrompt(false);
+    setFinalTab("qr");
+    requestIdentityRef.current = { requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() };
+    setSubmittedOrder(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function handlePdfDownload() {
@@ -182,13 +307,51 @@ export function OrderPage() {
   if (submittedOrder) {
     return (
       <main className="mx-auto min-h-full max-w-xl px-4 py-8">
-        <a href={import.meta.env.BASE_URL} className="text-xs text-[var(--text-secondary)] hover:underline">← Torna al sito</a>
+        <a href={`${import.meta.env.BASE_URL}#menu`} className="text-xs text-[var(--text-secondary)] hover:underline">← Torna al menu del sito</a>
         <section className="mt-5 text-center">
-          <p className="text-sm text-[var(--state-success)]">Ordine inviato. Ora raggiungi la cassa per pagare.</p>
+          <p className={`text-sm ${statusClass(submittedOrder.status)}`}>{statusMessage(submittedOrder.status)}</p>
           <h1 className="mt-2 text-4xl">#{submittedOrder.display_number}</h1>
           <p className="mt-1 text-xl font-semibold">{submittedOrder.alias}</p>
-          <p className="mt-2 text-xs text-[var(--text-secondary)]">Mostra QR, numero e alias alla cassa.</p>
+          <p className="mt-2 text-xs text-[var(--text-secondary)]">
+            {submittedOrder.status === "in_attesa_pagamento"
+              ? "Mostra QR, numero e alias alla cassa."
+              : submittedOrder.status === "pagato"
+                ? "Mostra lo stesso QR in cucina quando ritiri l’ordine."
+                : "Il QR e il riepilogo restano disponibili per tutta la durata dell’evento."}
+          </p>
         </section>
+
+        <Card className="mt-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-semibold">I miei ordini</h2>
+            <span className="text-xs text-[var(--text-secondary)]">{orderHistory.length} totali</span>
+          </div>
+          <div className="mt-3 max-h-48 space-y-2 overflow-y-auto pr-1">
+            {orderHistory.map((order) => (
+              <button
+                key={order.order_id}
+                type="button"
+                onClick={() => viewOrder(order)}
+                aria-current={order.order_id === submittedOrder.order_id ? "true" : undefined}
+                className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] border p-3 text-left ${
+                  order.order_id === submittedOrder.order_id
+                    ? "border-[var(--accent-primary)] bg-white/5"
+                    : "border-[var(--surface-border)]"
+                }`}
+              >
+                <span>
+                  <strong>#{order.display_number} · {order.alias}</strong>
+                  <span className="mt-0.5 block text-xs text-[var(--text-secondary)]">
+                    {order.items.reduce((sum, line) => sum + line.qty, 0)} articoli · {priceFormatter.format(Number(order.total))}
+                  </span>
+                </span>
+                <span className={`shrink-0 text-xs font-semibold ${statusClass(order.status)}`}>
+                  {STATUS_LABEL[order.status]}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Card>
 
         <div className="mx-auto mt-5 grid max-w-xs grid-cols-2 rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1">
           {(["qr", "summary"] as const).map((tab) => (
@@ -218,7 +381,7 @@ export function OrderPage() {
               </div>
             ))}
             <div className="mt-2 flex justify-between border-t border-[var(--surface-border)] pt-2 font-semibold">
-              <span>Totale da pagare</span>
+              <span>{submittedOrder.status === "in_attesa_pagamento" ? "Totale da pagare" : "Totale ordine"}</span>
               <span className="font-mono">{priceFormatter.format(Number(submittedOrder.total))}</span>
             </div>
             {submittedOrder.notes && (
@@ -229,14 +392,22 @@ export function OrderPage() {
           </Card>
         )}
 
-        <Button
-          variant="ghost"
-          className="mx-auto mt-5 block"
-          onClick={() => void handlePdfDownload()}
-          disabled={!qrDataUrl || pdfLoading}
-        >
-          {pdfLoading ? "Preparo il PDF…" : "Scarica copia PDF"}
-        </Button>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <Button variant="primary" className="w-full" onClick={() => void startNewOrder()} disabled={startingNewOrder}>
+            {startingNewOrder ? "Verifico…" : "Ordina di nuovo"}
+          </Button>
+          <Button variant="ghost" className="w-full" href={`${import.meta.env.BASE_URL}#menu`}>
+            Torna al menu del sito
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full sm:col-span-2"
+            onClick={() => void handlePdfDownload()}
+            disabled={!qrDataUrl || pdfLoading}
+          >
+            {pdfLoading ? "Preparo il PDF…" : "Scarica copia PDF"}
+          </Button>
+        </div>
 
         <Modal
           open={showCopyPrompt}
@@ -252,13 +423,31 @@ export function OrderPage() {
         >
           <p>Puoi scaricare un riepilogo non fiscale dell’ordine. Lo scontrino sarà emesso in cassa.</p>
         </Modal>
+
+        <Modal
+          open={newOrderMessage !== null}
+          title="Nuovo ordine non disponibile"
+          dismissible
+          onClose={() => setNewOrderMessage(null)}
+          actions={<Button variant="primary" onClick={() => setNewOrderMessage(null)}>Ho capito</Button>}
+        >
+          <p>{newOrderMessage}</p>
+          <p className="mt-2">I tuoi ordini precedenti restano consultabili qui.</p>
+        </Modal>
       </main>
     );
   }
 
   return (
     <main className="mx-auto min-h-full max-w-3xl px-4 pb-40 pt-8">
-      <a href={import.meta.env.BASE_URL} className="text-xs text-[var(--text-secondary)] hover:underline">← Torna al sito</a>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <a href={`${import.meta.env.BASE_URL}#menu`} className="text-xs text-[var(--text-secondary)] hover:underline">← Torna al menu del sito</a>
+        {orderHistory.length > 0 && (
+          <Button variant="ghost" onClick={() => viewOrder(orderHistory[0])}>
+            I miei ordini ({orderHistory.length})
+          </Button>
+        )}
+      </div>
       <h1 className="mt-5 text-3xl">Ordina qui</h1>
       <label className="mt-5 block">
         <span className="mb-1 block text-sm font-semibold">Alias dell’ordine</span>

@@ -4,6 +4,8 @@ import { Card } from "../../components/ui/Card";
 import { supabase } from "../../lib/supabaseClient";
 import { Menu } from "../menu/Menu";
 import { useAuth } from "../auth/AuthContext";
+import { parseQrPayload } from "./orderUtils";
+import { QrScanner } from "./QrScanner";
 import type { OrderLine, StaffOrder } from "./types";
 
 type KitchenOrder = Pick<StaffOrder,
@@ -32,6 +34,9 @@ export function Cucina() {
   const [aliasSearch, setAliasSearch] = useState("");
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("lag:kitchen-sound") === "on");
   const [delivering, setDelivering] = useState<Set<string>>(() => new Set());
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerBusy, setScannerBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const knownOrderIds = useRef<Set<string> | null>(null);
 
   const refetch = useCallback(async () => {
@@ -109,6 +114,25 @@ export function Cucina() {
     });
   }
 
+  const handleQrDetected = useCallback(async (rawValue: string) => {
+    const token = parseQrPayload(rawValue);
+    setScannerOpen(false);
+    if (!token) {
+      setMessage("QR non riconosciuto. Cerca l’ordine manualmente.");
+      return;
+    }
+    setScannerBusy(true);
+    const { data, error } = await supabase.rpc("deliver_order_by_qr", { p_qr_token: token });
+    setScannerBusy(false);
+    if (error || !data) {
+      setMessage("QR non associato a un ordine pagato ancora da consegnare.");
+      return;
+    }
+    const delivered = data as { display_number: number };
+    setMessage(`Ordine #${delivered.display_number} contrassegnato come consegnato.`);
+    void refetch();
+  }, [refetch]);
+
   if (authLoading) return <section className="mx-auto max-w-4xl px-4 py-10 text-sm text-[var(--text-secondary)]">Carico…</section>;
   if (!authorized) {
     return (
@@ -134,9 +158,19 @@ export function Cucina() {
         <button type="button" onClick={() => setTab("menu")} className={`rounded-[var(--radius-pill)] px-3 py-2 text-sm ${tab === "menu" ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]" : "text-[var(--text-secondary)]"}`}>Menu e scorte</button>
       </div>
 
+      {message && (
+        <div className="mt-4 flex items-start justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--surface-border)] p-3 text-sm">
+          <span>{message}</span>
+          <button type="button" onClick={() => setMessage(null)} aria-label="Chiudi">×</button>
+        </div>
+      )}
+
       {tab === "coda" ? (
         <section className="mt-6">
           <div className="flex flex-wrap items-end gap-3">
+            <Button variant="primary" onClick={() => setScannerOpen(true)} disabled={scannerBusy}>
+              {scannerBusy ? "Confermo…" : "Scansiona QR consegna"}
+            </Button>
             <label className="min-w-28 flex-1">
               <span className="mb-1 block text-xs">Numero</span>
               <input type="number" inputMode="numeric" value={numberSearch} onChange={(event) => setNumberSearch(event.target.value)} className="field w-full py-2" />
@@ -197,6 +231,15 @@ export function Cucina() {
           </p>
           <Menu />
         </section>
+      )}
+
+      {scannerOpen && (
+        <QrScanner
+          title="Consegna ordine"
+          description="Scansiona lo stesso QR usato in cassa. L’ordine deve risultare già pagato."
+          onDetected={handleQrDetected}
+          onClose={() => setScannerOpen(false)}
+        />
       )}
     </main>
   );

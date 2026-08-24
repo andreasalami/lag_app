@@ -845,6 +845,42 @@ $$;
 revoke execute on function public.submit_public_order(text, text, jsonb, uuid, text, text) from public;
 grant execute on function public.submit_public_order(text, text, jsonb, uuid, text, text) to anon, authenticated;
 
+-- Il token QR è una credenziale ad alta entropia conservata nel browser.
+-- Permette al cliente anonimo di leggere soltanto lo stato del proprio ordine,
+-- senza concedere accesso diretto alla tabella orders o ai dati di altri clienti.
+drop function if exists public.get_public_order_status(text);
+
+create or replace function public.get_public_order_statuses(p_qr_tokens text[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare result jsonb;
+begin
+  if p_qr_tokens is null or cardinality(p_qr_tokens) < 1 or cardinality(p_qr_tokens) > 50 then
+    raise exception 'invalid_qr_tokens';
+  end if;
+  if exists (
+    select 1 from unnest(p_qr_tokens) token
+    where token is null or length(token) not between 32 and 80
+  ) then raise exception 'invalid_qr_tokens'; end if;
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'order_id', order_row.id,
+    'status', order_row.status
+  )), '[]'::jsonb) into result
+  from public.orders order_row
+  where order_row.qr_token_hash in (
+    select encode(extensions.digest(token, 'sha256'), 'hex')
+    from unnest(p_qr_tokens) token
+  );
+  return result;
+end;
+$$;
+
+revoke execute on function public.get_public_order_statuses(text[]) from public;
+grant execute on function public.get_public_order_statuses(text[]) to anon, authenticated;
+
 create or replace function public.claim_order(p_order_id uuid, p_claim_token text)
 returns jsonb
 language plpgsql
@@ -1116,6 +1152,36 @@ $$;
 
 revoke execute on function public.deliver_order(uuid) from public;
 grant execute on function public.deliver_order(uuid) to authenticated;
+
+create or replace function public.deliver_order_by_qr(p_qr_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare order_row public.orders%rowtype;
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cucina', 'admin')) then
+    raise exception 'not_authorized' using errcode = '42501';
+  end if;
+  if p_qr_token is null or length(p_qr_token) not between 32 and 80 then
+    raise exception 'invalid_qr_token';
+  end if;
+  select * into order_row from public.orders
+  where qr_token_hash = encode(extensions.digest(p_qr_token, 'sha256'), 'hex')
+    and status = 'pagato';
+  if not found then raise exception 'order_not_available'; end if;
+  perform public.deliver_order(order_row.id);
+  return jsonb_build_object(
+    'order_id', order_row.id,
+    'display_number', order_row.display_number,
+    'status', 'consegnato'
+  );
+end;
+$$;
+
+revoke execute on function public.deliver_order_by_qr(text) from public, anon;
+grant execute on function public.deliver_order_by_qr(text) to authenticated;
 
 create or replace function public.get_order_event_admin_state()
 returns jsonb

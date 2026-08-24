@@ -1,7 +1,8 @@
 # Stress test degli ordini
 
 Il runner `scripts/stress/orders.mjs` verifica automaticamente concorrenza,
-capienza, scorte, idempotenza, claim della cassa e chiusura evento.
+capienza, scorte, idempotenza, claim della cassa, lettura pubblica dello stato,
+seconda scansione QR in cucina e chiusura evento.
 
 Per sicurezza accetta esclusivamente un Supabase raggiungibile via HTTP su
 `localhost`, `127.0.0.1` o `::1`. Non può essere puntato alla produzione.

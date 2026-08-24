@@ -66,16 +66,26 @@ l'ordine dopo una seconda conferma. Carrello e parziale restano nel browser:
 il database viene scritto soltanto all'invio definitivo.
 
 L'invio riserva le scorte in una transazione e restituisce numero progressivo,
-alias e QR. Alla cassa l'ordine può essere aperto tramite QR oppure cercando
-numero e alias insieme. Un ordine aperto è temporaneamente non selezionabile
-dalle altre casse; **Chiudi senza pagare** lo rende subito disponibile e un
-blocco abbandonato scade comunque dopo 10 minuti.
+alias e QR. Tutti gli ordini creati nello stesso browser durante l'evento
+restano nello storico locale: il cliente può selezionarli, mostrare il QR
+corretto in cassa, scaricare nuovamente il PDF e usare **Ordina di nuovo** per
+aprire un carrello vuoto con l'alias precedente già compilato. Ogni nuovo
+ordine riceve un'identità e un QR indipendenti, anche quando altri ordini dello
+stesso cliente sono ancora in sospeso.
+
+Alla cassa l'ordine può essere aperto tramite QR oppure cercando numero e alias
+insieme. Un ordine aperto è temporaneamente non selezionabile dalle altre
+casse; **Chiudi senza pagare** lo rende subito disponibile e un blocco
+abbandonato scade comunque dopo 10 minuti.
 
 La cassa batte sul registratore tutte le singole voci, riceve il pagamento e
 preme **Pagato e invia**. Solo le righe `cibo` arrivano alla cucina; le bevande
 restano sullo scontrino per il ritiro alle postazioni dedicate. La cucina vede
 numero, alias, prodotti alimentari e note, può attivare il segnale sonoro e
-anonimizza l'ordine premendo **Consegnato**.
+anonimizza l'ordine premendo **Consegnato** oppure scansionando una seconda
+volta lo stesso QR già usato in cassa. Il cliente può consultare lo stato del
+proprio ordine mediante il token del QR, senza accesso pubblico alla tabella
+degli ordini.
 
 La sezione Evento della cassa gestisce:
 
