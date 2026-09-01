@@ -62,6 +62,7 @@ export function TournamentBroadcast() {
           <p className="mt-1 text-xs text-[var(--text-secondary)]">
             {subscriberCount === null ? "Controllo i dispositivi iscritti…" : `${subscriberCount} dispositivi iscritti alle notifiche.`}
           </p>
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">Per una prova completa su iPhone, chiudi la Web App sul telefono e invia qui un messaggio di test.</p>
         </div>
         <button type="button" onClick={() => void loadCount()} className="text-xs text-[var(--text-secondary)] hover:underline">
           Aggiorna conteggio

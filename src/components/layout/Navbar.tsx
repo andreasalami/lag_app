@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { readOrderHistory, type PublicOrderStatus, type StoredOrder } from "../../features/orders/orderHistory";
+import { orderStatusClassName, readOrderHistory, syncOrderHistoryStatuses, type PublicOrderStatus, type StoredOrder } from "../../features/orders/orderHistory";
 import { priceFormatter } from "../../features/orders/orderUtils";
 
 const ORDER_STATUS_LABELS: Record<PublicOrderStatus, string> = {
@@ -13,10 +13,20 @@ const ORDER_STATUS_LABELS: Record<PublicOrderStatus, string> = {
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [orders, setOrders] = useState<StoredOrder[]>([]);
+  const [refreshingOrders, setRefreshingOrders] = useState(false);
   const staffPath = `${import.meta.env.BASE_URL}#staff`;
 
+  async function refreshOrders() {
+    const stored = readOrderHistory();
+    setOrders(stored);
+    if (stored.length === 0) return;
+    setRefreshingOrders(true);
+    setOrders(await syncOrderHistoryStatuses(stored));
+    setRefreshingOrders(false);
+  }
+
   function openMenu() {
-    setOrders(readOrderHistory());
+    void refreshOrders();
     setMenuOpen(true);
   }
 
@@ -74,7 +84,9 @@ export function Navbar() {
                 <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--surface-border)] bg-[var(--surface-solid)] p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold">I miei ordini</p>
-                    <span className="text-xs text-[var(--text-secondary)]">{orders.length}</span>
+                    <button type="button" onClick={() => void refreshOrders()} disabled={refreshingOrders} className="text-xs text-[var(--text-secondary)] hover:underline disabled:opacity-60">
+                      {refreshingOrders ? "Aggiorno…" : "Aggiorna"}
+                    </button>
                   </div>
                   {orders.length === 0 ? (
                     <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">Non hai ancora ordini salvati su questo telefono.</p>
@@ -86,7 +98,7 @@ export function Navbar() {
                             <strong className="block truncate">#{order.display_number} · {order.alias}</strong>
                             <span className="text-[var(--text-secondary)]">{priceFormatter.format(Number(order.total))}</span>
                           </span>
-                          <span className="shrink-0 text-[var(--accent-primary)]">{ORDER_STATUS_LABELS[order.status]}</span>
+                          <span className={`shrink-0 font-semibold ${orderStatusClassName(order.status)}`}>{ORDER_STATUS_LABELS[order.status]}</span>
                         </li>
                       ))}
                     </ul>

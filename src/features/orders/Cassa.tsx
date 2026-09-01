@@ -66,6 +66,7 @@ export function Cassa() {
   const [eventCloses, setEventCloses] = useState("");
   const [eventLimit, setEventLimit] = useState(150);
   const [closeEventModal, setCloseEventModal] = useState(false);
+  const [cancelOrderModal, setCancelOrderModal] = useState(false);
   const [closeEventText, setCloseEventText] = useState("");
   const [, setClockTick] = useState(0);
   const deviceIdRef = useRef(localStorage.getItem("lag:cash-device-id") ?? crypto.randomUUID());
@@ -247,7 +248,6 @@ export function Cassa() {
 
   async function cancelActiveOrder() {
     if (!activeOrder || !cashStation) return;
-    if (!window.confirm(`Annullare definitivamente l’ordine #${activeOrder.display_number}? Le scorte verranno ripristinate.`)) return;
     setActionBusy(true);
     const { error } = await supabase.rpc("cancel_order_for_station", {
       p_order_id: activeOrder.id,
@@ -257,6 +257,7 @@ export function Cassa() {
     setActionBusy(false);
     if (error) setMessage("Ordine non annullato. Riprova.");
     else {
+      setCancelOrderModal(false);
       setMessage(`Ordine #${activeOrder.display_number} annullato.`);
       setActiveOrder(null);
       void refetchOrders();
@@ -399,13 +400,27 @@ export function Cassa() {
         </Card>
         {message && <p className="mt-3 text-sm text-[var(--state-error)]">{message}</p>}
         <div className="mt-5 flex flex-wrap justify-between gap-3">
-          <Button variant="ghost" onClick={() => void cancelActiveOrder()} disabled={actionBusy}>Annulla ordine</Button>
+          <Button variant="ghost" onClick={() => setCancelOrderModal(true)} disabled={actionBusy}>Annulla ordine</Button>
           <div className="flex flex-wrap gap-2">
             <Button variant="primary" onClick={() => void payActiveOrder()} disabled={actionBusy}>
               {actionBusy ? "Attendi…" : "Pagato e invia"}
             </Button>
           </div>
         </div>
+        <Modal
+          open={cancelOrderModal}
+          title={`Annullare l’ordine #${activeOrder.display_number}?`}
+          dismissible={!actionBusy}
+          onClose={() => setCancelOrderModal(false)}
+          actions={(
+            <>
+              <Button variant="ghost" onClick={() => setCancelOrderModal(false)} disabled={actionBusy}>No, torna all’ordine</Button>
+              <Button variant="primary" onClick={() => void cancelActiveOrder()} disabled={actionBusy}>{actionBusy ? "Annullamento…" : "Sì, annulla ordine"}</Button>
+            </>
+          )}
+        >
+          <p>L’annullamento è definitivo e ripristina le scorte. Usa questa azione solo se l’ordine deve essere eliminato.</p>
+        </Modal>
       </main>
     );
   }

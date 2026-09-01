@@ -8,6 +8,8 @@ type Props = {
   description?: string;
 };
 
+const CAMERA_DEVICE_KEY = "lag:qr-camera-device";
+
 export function QrScanner({
   onDetected,
   onClose,
@@ -23,13 +25,24 @@ export function QrScanner({
     void import("@zxing/browser").then(async ({ BrowserQRCodeReader }) => {
       if (!videoRef.current || stopped) return;
       const reader = new BrowserQRCodeReader();
-      controls = await reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
+      const decode = (deviceId?: string) => reader.decodeFromVideoDevice(deviceId, videoRef.current ?? undefined, (result) => {
         if (!stopped && result) {
           stopped = true;
           controls?.stop();
           onDetected(result.getText());
         }
       });
+      const savedDevice = localStorage.getItem(CAMERA_DEVICE_KEY) ?? undefined;
+      try {
+        controls = await decode(savedDevice);
+      } catch (firstError) {
+        if (!savedDevice) throw firstError;
+        localStorage.removeItem(CAMERA_DEVICE_KEY);
+        controls = await decode();
+      }
+      const selectedDevice = (videoRef.current.srcObject as MediaStream | null)
+        ?.getVideoTracks()[0]?.getSettings().deviceId;
+      if (selectedDevice) localStorage.setItem(CAMERA_DEVICE_KEY, selectedDevice);
     }).catch(() => {
       setError("Fotocamera non disponibile. Usa la ricerca manuale per numero e alias.");
     });
@@ -48,6 +61,9 @@ export function QrScanner({
       <video ref={videoRef} className="mx-auto mt-4 max-h-[70vh] w-full max-w-xl rounded-[var(--radius-lg)] bg-black object-cover" muted playsInline />
       <p className="mx-auto mt-4 max-w-xl text-center text-sm text-[var(--text-secondary)]">
         {description}
+      </p>
+      <p className="mx-auto mt-2 max-w-xl text-center text-xs text-[var(--text-secondary)]">
+        Dopo il primo consenso verrà riutilizzata automaticamente la stessa fotocamera.
       </p>
       {error && <p className="mx-auto mt-3 max-w-xl text-center text-sm text-[var(--state-error)]">{error}</p>}
     </div>

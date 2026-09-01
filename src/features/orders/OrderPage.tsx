@@ -13,6 +13,7 @@ import {
 import {
   addOrderToHistory,
   isPublicOrderStatus,
+  orderStatusClassName,
   ordersForEvent,
   readOrderHistory,
   saveOrderHistory,
@@ -20,6 +21,7 @@ import {
   type StoredOrder,
 } from "./orderHistory";
 import type { OrderLine, OrderMenuItem, OrderingCatalog, SubmittedOrder } from "./types";
+import { MENU_SECTIONS } from "../menu/menuSections";
 
 const STATUS_LABEL: Record<PublicOrderStatus, string> = {
   in_attesa_pagamento: "Da pagare",
@@ -37,13 +39,6 @@ function statusMessage(status: PublicOrderStatus) {
     case "annullato": return "Questo ordine è stato annullato.";
     default: return "Ordine inviato. Ora raggiungi la cassa per pagare.";
   }
-}
-
-function statusClass(status: PublicOrderStatus) {
-  if (status === "consegnato") return "text-[var(--state-success)]";
-  if (status === "annullato") return "text-[var(--state-error)]";
-  if (status === "pagato" || status === "ritiro_parziale") return "text-[var(--state-warning)]";
-  return "text-[var(--accent-primary)]";
 }
 
 export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
@@ -66,6 +61,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [botField, setBotField] = useState("");
   const [startingNewOrder, setStartingNewOrder] = useState(false);
+  const [refreshingStatuses, setRefreshingStatuses] = useState(false);
   const [newOrderMessage, setNewOrderMessage] = useState<string | null>(null);
   const requestIdentityRef = useRef({ requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() });
   const historyRef = useRef(orderHistory);
@@ -314,7 +310,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       <main className="mx-auto min-h-full max-w-xl px-4 py-8">
         <a href={`${import.meta.env.BASE_URL}#menu`} className="text-xs text-[var(--text-secondary)] hover:underline">← Torna al menu del sito</a>
         <section className="mt-5 text-center">
-          <p className={`text-sm ${statusClass(submittedOrder.status)}`}>{statusMessage(submittedOrder.status)}</p>
+          <p className={`text-sm ${orderStatusClassName(submittedOrder.status)}`}>{statusMessage(submittedOrder.status)}</p>
           <h1 className="mt-2 text-4xl">#{submittedOrder.display_number}</h1>
           <p className="mt-1 text-xl font-semibold">{submittedOrder.alias}</p>
           <p className="mt-2 text-xs text-[var(--text-secondary)]">
@@ -364,13 +360,17 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
                     {order.items.reduce((sum, line) => sum + line.qty, 0)} articoli · {priceFormatter.format(Number(order.total))}
                   </span>
                 </span>
-                <span className={`shrink-0 text-xs font-semibold ${statusClass(order.status)}`}>
+                <span className={`shrink-0 text-xs font-semibold ${orderStatusClassName(order.status)}`}>
                   {STATUS_LABEL[order.status]}
                 </span>
               </button>
             ))}
           </div>
         </Card>
+
+        <Button variant="ghost" className="mt-3 w-full" onClick={async () => { setRefreshingStatuses(true); await refreshOrderStatuses(); setRefreshingStatuses(false); }} disabled={refreshingStatuses}>
+          {refreshingStatuses ? "Aggiorno lo stato…" : "Aggiorna stato ordini"}
+        </Button>
 
         <div className="mx-auto mt-5 grid max-w-xs grid-cols-2 rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1">
           {(["qr", "summary"] as const).map((tab) => (
@@ -505,38 +505,37 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         </p>
       ) : (
         (["cibo", "bevande"] as const).map((category) => (
-          <section key={category} className="mt-7">
-            <h2 className="text-xl">{category === "cibo" ? "Cibo" : "Bevande"}</h2>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {catalog.items.filter((item) => item.category === category).map((item) => {
-                const almostFinished = item.available_portions !== null
-                  && item.stock_capacity !== null
-                  && item.available_portions > 0
-                  && item.available_portions <= Math.ceil(item.stock_capacity * 0.2);
-                const finished = item.available_portions === 0;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => addItem(item)}
-                    disabled={finished}
-                    className="surface-solid flex min-h-20 items-start justify-between gap-3 rounded-[var(--radius-md)] p-3 text-left transition-colors hover:bg-[var(--surface-solid-hover)] disabled:cursor-not-allowed disabled:opacity-55"
-                  >
-                    <span>
-                      <span className="block text-sm font-semibold">{item.name}</span>
-                      {item.allergens.length > 0 && (
-                        <span className="mt-1 block text-xs text-[var(--text-secondary)]">
-                          Allergeni: {item.allergens.join(", ")}
-                        </span>
-                      )}
-                      {almostFinished && <span className="mt-1 block text-xs text-[var(--state-warning)]">Quasi terminato</span>}
-                      {finished && <span className="mt-1 block text-xs text-[var(--state-error)]">Terminato</span>}
-                    </span>
-                    <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">{priceFormatter.format(Number(item.price))}</span>
-                  </button>
-                );
-              })}
-            </div>
+          <section key={category} className="mt-8">
+            <h2 className="text-2xl">{category === "cibo" ? "Cucina" : "Bar"}</h2>
+            {MENU_SECTIONS[category].map((section) => {
+              const sectionItems = catalog.items.filter((item) => item.category === category && item.subcategory === section.key);
+              if (sectionItems.length === 0) return null;
+              return (
+                <div key={section.key} className="mt-5">
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent-primary)]">{section.label}</h3>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {sectionItems.map((item) => {
+                      const almostFinished = item.available_portions !== null
+                        && item.stock_capacity !== null
+                        && item.available_portions > 0
+                        && item.available_portions <= Math.ceil(item.stock_capacity * 0.2);
+                      const finished = item.available_portions === 0;
+                      return (
+                        <button key={item.id} type="button" onClick={() => addItem(item)} disabled={finished} className="surface-solid flex min-h-20 items-start justify-between gap-3 rounded-[var(--radius-md)] p-3 text-left transition-colors hover:bg-[var(--surface-solid-hover)] disabled:cursor-not-allowed disabled:opacity-55">
+                          <span>
+                            <span className="block text-sm font-semibold">{item.name}</span>
+                            {item.allergens.length > 0 && <span className="mt-1 block text-xs text-[var(--text-secondary)]">Allergeni: {item.allergens.join(", ")}</span>}
+                            {almostFinished && <span className="mt-1 block text-xs text-[var(--state-warning)]">Quasi terminato</span>}
+                            {finished && <span className="mt-1 block text-xs text-[var(--state-error)]">Terminato</span>}
+                          </span>
+                          <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">{priceFormatter.format(Number(item.price))}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </section>
         ))
       )}

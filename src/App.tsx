@@ -7,6 +7,7 @@ import { TournamentBoard } from "./pages/TournamentBoard";
 import { TournamentManagement } from "./pages/TournamentManagement";
 import { ProgramManagement } from "./pages/ProgramManagement";
 import { MenuManagement } from "./pages/MenuManagement";
+import { StaffBackButton } from "./components/layout/StaffBackButton";
 
 const FeaturePreview = lazy(() => import("./pages/FeaturePreview").then((module) => ({ default: module.FeaturePreview })));
 const Cassa = lazy(() => import("./features/orders/Cassa").then((module) => ({ default: module.Cassa })));
@@ -44,9 +45,14 @@ function ProtectedOperationalPage({
   }
 
   return (
-    <Suspense fallback={<section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Carico…</section>}>
-      <Component />
-    </Suspense>
+    <>
+      <div className="mx-auto w-full max-w-5xl px-4 pt-4">
+        <StaffBackButton />
+      </div>
+      <Suspense fallback={<section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Carico…</section>}>
+        <Component />
+      </Suspense>
+    </>
   );
 }
 

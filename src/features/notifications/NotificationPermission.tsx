@@ -35,6 +35,7 @@ export function NotificationPermission() {
   const [platform, setPlatform] = useState<MobilePlatform | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
+  const [testFeedback, setTestFeedback] = useState<string | null>(null);
   const standalone = typeof window !== "undefined" && isStandaloneWebApp();
 
   useEffect(() => {
@@ -104,6 +105,23 @@ export function NotificationPermission() {
     }
   }
 
+  async function triggerDeviceTest() {
+    setActivationError(null);
+    setTestFeedback(null);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification("Test notifiche Torneo LAG", {
+        body: "Se leggi questo messaggio, le notifiche sono abilitate correttamente su questo dispositivo.",
+        icon: `${import.meta.env.BASE_URL}apple-touch-icon.png`,
+        tag: `lag-device-test-${Date.now()}`,
+        data: { url: `${window.location.origin}${import.meta.env.BASE_URL}#tornei` },
+      });
+      setTestFeedback("Notifica di prova attivata su questo dispositivo.");
+    } catch (error) {
+      setActivationError(activationErrorMessage(error));
+    }
+  }
+
   const buttonLabel = state === "granted"
     ? "Completa attivazione"
     : "Attiva notifiche del torneo";
@@ -111,9 +129,12 @@ export function NotificationPermission() {
   return (
     <>
       {state === "granted" && subscribed ? (
-        <p className="mb-4 flex items-center gap-2 text-sm text-[var(--state-success)]">
-          <span aria-hidden>✓</span> Notifiche attive su questo dispositivo
-        </p>
+        <div className="mb-4 flex flex-col items-start gap-2">
+          <p className="flex items-center gap-2 text-sm text-[var(--state-success)]"><span aria-hidden>✓</span> Notifiche attive su questo dispositivo</p>
+          <Button variant="ghost" onClick={() => void triggerDeviceTest()} className="w-full justify-start sm:w-64">Prova notifica su questo dispositivo</Button>
+          {testFeedback && <p className="text-xs text-[var(--state-success)]">{testFeedback}</p>}
+          {activationError && <p className="text-xs text-[var(--state-error)]">{activationError}</p>}
+        </div>
       ) : state === "denied" ? (
         <div className="mb-3 flex flex-col items-start gap-3">
           <p className="text-sm text-[var(--text-secondary)]">
