@@ -34,6 +34,12 @@ h1, h2, h3 {
   font-weight: 600;
 }
 
+/* Le sezioni hanno 40px di padding superiore: fermandone l'inizio 48px
+   sotto il bordo alto, il titolo resta appena sotto la navbar sticky. */
+section[id] {
+  scroll-margin-top: 3rem;
+}
+
 :focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;

@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { Navbar } from "../components/layout/Navbar";
 import { TabBar } from "../components/layout/TabBar";
 import { EventbriteTickets } from "../features/tickets/EventbriteTickets";
-import { EventbriteCheckoutButton } from "../features/tickets/EventbriteCheckoutButton";
 import { Program } from "../features/program/Program";
 import { Menu } from "../features/menu/Menu";
 import { InstagramLink } from "../features/social/InstagramLink";
@@ -39,11 +38,6 @@ export function Home() {
         <p className="mx-auto mt-4 max-w-md text-[var(--text-secondary)]">
           Festival benefico — DJ set e musica live. Il ricavato sostiene Agropolis ONLUS.
         </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <EventbriteCheckoutButton label="Acquista biglietti" />
-          <Button variant="ghost" href="#programma">Scopri il programma</Button>
-          <Button variant="ghost" href="#menu">Menu</Button>
-        </div>
       </section>
 
       <EventbriteTickets />
