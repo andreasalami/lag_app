@@ -19,6 +19,12 @@ const PX_PER_MIN = 2;
 const MIN_BOX_HEIGHT = 32;
 const DAY_MINUTES = 24 * 60;
 
+function dayLabel(day: number) {
+  if (day === 1) return "Venerdì";
+  if (day === 2) return "Sabato";
+  return `Giorno ${day}`;
+}
+
 function timelineTimes(slots: ProgramSlotData[]) {
   const starts = slots.map((slot) => toMinutes(slot.start_time)).sort((a, b) => a - b);
   let largestGap = -1;
@@ -65,7 +71,7 @@ export function ProgramGrid({ slots, stages, days }: ProgramGridProps) {
         if (daySlots.length === 0) {
           return (
             <div key={day} className="px-4 sm:px-0">
-              <h3 className="mb-3 font-display text-lg text-[var(--accent-primary)]">Giorno {day}</h3>
+              <h3 className="mb-3 font-display text-lg text-[var(--accent-primary)]">{dayLabel(day)}</h3>
               <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-center text-sm text-[var(--text-secondary)]">
                 Programma non ancora pubblicato.
               </p>
@@ -88,7 +94,7 @@ export function ProgramGrid({ slots, stages, days }: ProgramGridProps) {
 
         return (
           <div key={day} className="w-full min-w-0">
-            <h3 className="mb-3 px-4 font-display text-lg text-[var(--accent-primary)] sm:px-0">Giorno {day}</h3>
+            <h3 className="mb-3 px-4 font-display text-lg text-[var(--accent-primary)] sm:px-0">{dayLabel(day)}</h3>
             <div className="w-full min-w-0 px-1 pb-2 sm:px-0">
               <div className="grid w-full min-w-0 grid-cols-[38px_minmax(0,1fr)_minmax(0,1fr)] gap-1.5 sm:grid-cols-[48px_minmax(0,1fr)_minmax(0,1fr)] sm:gap-3">
                 <div />

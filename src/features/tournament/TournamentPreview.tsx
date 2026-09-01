@@ -73,7 +73,7 @@ export function TournamentPreview() {
 
       {canManage && (
         <Button href={`${import.meta.env.BASE_URL}#gestione-torneo`} className="mb-5 w-full justify-start sm:w-64">
-          Gestisci torneo
+          Gestisci Torneo
         </Button>
       )}
 

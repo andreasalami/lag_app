@@ -27,7 +27,7 @@ type EventState = {
   final_report: EventReport | null;
 };
 
-type Tab = "ordini" | "manuale" | "evento";
+type Tab = "ordini" | "manuale";
 
 function toLocalDateTime(iso: string) {
   const date = new Date(iso);
@@ -353,11 +353,72 @@ export function Cassa() {
     }
   }
 
+  function renderEventManagement() {
+    if (!eventState) {
+      return (
+        <StaffPanel eyebrow="Configurazione ordini" title="Carico l’evento…" description="Recupero apertura, chiusura e limite degli ordini.">
+          <p className="text-sm text-[var(--text-secondary)]">Attendi un momento.</p>
+        </StaffPanel>
+      );
+    }
+
+    return (
+      <StaffPanel eyebrow="Configurazione ordini" title={eventState.name} description={`${eventState.pending_count} ordini in attesa su ${eventState.max_pending_orders}`} action={eventState.permanently_closed_at ? (
+        <span className="text-sm text-[var(--state-error)]">Evento chiuso definitivamente</span>
+      ) : (
+        <span className={`text-sm ${eventState.manual_closed ? "text-[var(--state-warning)]" : "text-[var(--state-success)]"}`}>
+          {eventState.manual_closed ? "Ordinazioni sospese" : "Gestione automatica attiva"}
+        </span>
+      )}>
+        <div className="flex flex-col gap-3">
+          <label>
+            <span className="mb-1 block text-xs">Nome evento</span>
+            <input value={eventName} onChange={(event) => setEventName(event.target.value)} className="field w-full py-2" />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label>
+              <span className="mb-1 block text-xs">Apertura ordini</span>
+              <input type="datetime-local" value={eventOpens} onChange={(event) => setEventOpens(event.target.value)} className="field w-full py-2" />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs">Chiusura ordini</span>
+              <input type="datetime-local" value={eventCloses} onChange={(event) => setEventCloses(event.target.value)} className="field w-full py-2" />
+            </label>
+          </div>
+          <label>
+            <span className="mb-1 block text-xs">Massimo ordini contemporaneamente in attesa</span>
+            <input type="number" min={10} max={1000} value={eventLimit} onChange={(event) => setEventLimit(Number(event.target.value))} className="field w-full py-2 sm:w-40" />
+          </label>
+
+          {eventState.permanently_closed_at ? (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="staff-secondary" onClick={() => void downloadExistingReport()}>Scarica di nuovo il CSV</Button>
+              <Button variant="staff-primary" onClick={() => void createNextEvent()} disabled={actionBusy}>Crea nuovo evento</Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="staff-primary" onClick={() => void saveEventSettings()} disabled={actionBusy}>Salva orari e limite</Button>
+                <Button variant={eventState.manual_closed ? "staff-primary" : "staff-secondary"} onClick={() => void toggleOrderingPaused()} disabled={actionBusy}>
+                  {eventState.manual_closed ? "Riapri ordinazioni" : "Chiudi ordinazioni ora"}
+                </Button>
+              </div>
+              <div className="mt-3 border-t border-[var(--surface-border)] pt-3">
+                <p className="text-xs text-[var(--state-error)]">La chiusura definitiva annulla gli ordini non pagati, anonimizza i dati e produce il CSV finale.</p>
+                <Button variant="staff-danger" className="mt-2" onClick={() => setCloseEventModal(true)}>Chiudi definitivamente l’evento</Button>
+              </div>
+            </>
+          )}
+        </div>
+      </StaffPanel>
+    );
+  }
+
   if (authLoading) return <section className="mx-auto max-w-4xl px-4 py-10 text-sm text-[var(--text-secondary)]">Carico…</section>;
   if (!authorized) {
     return (
       <section className="mx-auto max-w-4xl px-4 py-10">
-        <h1 className="text-2xl">Cassa</h1>
+        <h1 className="text-2xl">Casse</h1>
         <p className="mt-3 text-sm text-[var(--text-secondary)]">Accedi dall’area Staff con un account cassa.</p>
       </section>
     );
@@ -366,7 +427,14 @@ export function Cassa() {
   if (!cashStation) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <StaffPageHeading title="Cassa" description="Configura questo dispositivo prima di iniziare il turno." />
+        <StaffPageHeading title="Casse" description="Gestisci l’evento e configura questo dispositivo prima di iniziare il turno." />
+        {message && (
+          <div className="mb-5 flex items-start justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--surface-border)] p-3 text-sm">
+            <span>{message}</span>
+            <button type="button" onClick={() => setMessage(null)} aria-label="Chiudi">×</button>
+          </div>
+        )}
+        <div className="mb-6">{renderEventManagement()}</div>
         <StaffPanel eyebrow="Configurazione dispositivo" title="Scegli la cassa" description="Uno o due dispositivi possono lavorare sulla stessa cassa.">
           <div className="grid gap-3 sm:grid-cols-2">
             {CASH_STATIONS.map((station) => (
@@ -377,6 +445,23 @@ export function Cassa() {
             ))}
           </div>
         </StaffPanel>
+        <Modal
+          open={closeEventModal}
+          title="Chiusura definitiva evento"
+          dismissible={!actionBusy}
+          onClose={() => setCloseEventModal(false)}
+          actions={(
+            <>
+              <Button variant="staff-secondary" onClick={() => setCloseEventModal(false)} disabled={actionBusy}>Annulla</Button>
+              <Button variant="staff-danger" onClick={() => void closeEventPermanently()} disabled={closeEventText !== "CHIUDI EVENTO" || actionBusy}>
+                Chiudi e scarica CSV
+              </Button>
+            </>
+          )}
+        >
+          <p>L’operazione è irreversibile. Digita <strong className="text-[var(--text-primary)]">CHIUDI EVENTO</strong> per confermare.</p>
+          <input value={closeEventText} onChange={(event) => setCloseEventText(event.target.value)} className="field mt-3 w-full py-2" />
+        </Modal>
       </main>
     );
   }
@@ -421,17 +506,17 @@ export function Cassa() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <StaffPageHeading title={cashStationLabel(cashStation)} description="Preordini, ordine eccezionale e impostazioni dell’evento." action={<Button variant="staff-secondary" onClick={() => setCashStation(null)}>Cambia cassa</Button>} />
+      <StaffPageHeading title={cashStationLabel(cashStation)} description="Preordini e ordini eccezionali della postazione." action={<Button variant="staff-secondary" onClick={() => setCashStation(null)}>Cambia cassa</Button>} />
 
-      <div className="mt-5 grid grid-cols-3 rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1">
-        {(["ordini", "manuale", "evento"] as Tab[]).map((value) => (
+      <div className="mt-5 grid grid-cols-2 rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1">
+        {(["ordini", "manuale"] as Tab[]).map((value) => (
           <button
             key={value}
             type="button"
             onClick={() => setTab(value)}
             className={`rounded-[var(--radius-pill)] px-2 py-2 text-xs sm:text-sm ${tab === value ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]" : "text-[var(--text-secondary)]"}`}
           >
-            {value === "ordini" ? "Ordini" : value === "manuale" ? "Ordine in cassa" : "Evento"}
+            {value === "ordini" ? "Ordini" : "Ordine in cassa"}
           </button>
         ))}
       </div>
@@ -501,76 +586,7 @@ export function Cassa() {
         </StaffPanel>
       )}
 
-      {tab === "evento" && eventState && (
-        <StaffPanel className="mt-6" eyebrow="Configurazione ordini" title={eventState.name} description={`${eventState.pending_count} ordini in attesa su ${eventState.max_pending_orders}`} action={eventState.permanently_closed_at ? (
-                <span className="text-sm text-[var(--state-error)]">Evento chiuso definitivamente</span>
-              ) : (
-                <span className={`text-sm ${eventState.manual_closed ? "text-[var(--state-warning)]" : "text-[var(--state-success)]"}`}>
-                  {eventState.manual_closed ? "Ordinazioni sospese" : "Gestione automatica attiva"}
-                </span>
-              )}>
-          <div className="flex flex-col gap-3">
-            <label>
-              <span className="mb-1 block text-xs">Nome evento</span>
-              <input value={eventName} onChange={(event) => setEventName(event.target.value)} className="field w-full py-2" />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label>
-                <span className="mb-1 block text-xs">Apertura ordini</span>
-                <input type="datetime-local" value={eventOpens} onChange={(event) => setEventOpens(event.target.value)} className="field w-full py-2" />
-              </label>
-              <label>
-                <span className="mb-1 block text-xs">Chiusura ordini</span>
-                <input type="datetime-local" value={eventCloses} onChange={(event) => setEventCloses(event.target.value)} className="field w-full py-2" />
-              </label>
-            </div>
-            <label>
-              <span className="mb-1 block text-xs">Massimo ordini contemporaneamente in attesa</span>
-              <input type="number" min={10} max={1000} value={eventLimit} onChange={(event) => setEventLimit(Number(event.target.value))} className="field w-full py-2 sm:w-40" />
-            </label>
-
-            {eventState.permanently_closed_at ? (
-              <div className="flex flex-wrap gap-2">
-                <Button variant="staff-secondary" onClick={() => void downloadExistingReport()}>Scarica di nuovo il CSV</Button>
-                <Button variant="staff-primary" onClick={() => void createNextEvent()} disabled={actionBusy}>Crea nuovo evento</Button>
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="staff-primary" onClick={() => void saveEventSettings()} disabled={actionBusy}>Salva orari e limite</Button>
-                  <Button variant={eventState.manual_closed ? "staff-primary" : "staff-secondary"} onClick={() => void toggleOrderingPaused()} disabled={actionBusy}>
-                    {eventState.manual_closed ? "Riapri ordinazioni" : "Chiudi ordinazioni ora"}
-                  </Button>
-                </div>
-                <div className="mt-3 border-t border-[var(--surface-border)] pt-3">
-                  <p className="text-xs text-[var(--state-error)]">La chiusura definitiva annulla gli ordini non pagati, anonimizza i dati e produce il CSV finale.</p>
-                  <Button variant="staff-danger" className="mt-2" onClick={() => setCloseEventModal(true)}>Chiudi definitivamente l’evento</Button>
-                </div>
-              </>
-            )}
-          </div>
-        </StaffPanel>
-      )}
-
       {scannerOpen && <QrScanner onDetected={handleQrDetected} onClose={() => setScannerOpen(false)} />}
-
-      <Modal
-        open={closeEventModal}
-        title="Chiusura definitiva evento"
-        dismissible={!actionBusy}
-        onClose={() => setCloseEventModal(false)}
-        actions={(
-          <>
-            <Button variant="staff-secondary" onClick={() => setCloseEventModal(false)} disabled={actionBusy}>Annulla</Button>
-            <Button variant="staff-danger" onClick={() => void closeEventPermanently()} disabled={closeEventText !== "CHIUDI EVENTO" || actionBusy}>
-              Chiudi e scarica CSV
-            </Button>
-          </>
-        )}
-      >
-        <p>L’operazione è irreversibile. Digita <strong className="text-[var(--text-primary)]">CHIUDI EVENTO</strong> per confermare.</p>
-        <input value={closeEventText} onChange={(event) => setCloseEventText(event.target.value)} className="field mt-3 w-full py-2" />
-      </Modal>
     </main>
   );
 }

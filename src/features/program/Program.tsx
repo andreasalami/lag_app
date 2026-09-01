@@ -157,7 +157,7 @@ export function Program({ management = false }: { management?: boolean }) {
   return (
     <section id="programma" className="mx-auto w-full max-w-3xl py-10 sm:px-4">
       <div className="px-4 sm:px-0">
-        <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione programma" : "Programma"}</h2>
+        <h2 className="mb-1 text-2xl font-semibold">{management ? "Scaletta" : "Programma"}</h2>
         <p className="mb-4 text-sm text-[var(--text-secondary)]">
           {management
             ? "Modifica giorni, palchi e orari pubblicati nella Home."
@@ -165,7 +165,7 @@ export function Program({ management = false }: { management?: boolean }) {
         </p>
         {!management && canManage && (
           <Button href={`${import.meta.env.BASE_URL}#gestione-programma`} className="mb-5 w-full justify-start sm:w-64">
-            Gestione programma
+            Gestisci Scaletta
           </Button>
         )}
       </div>

@@ -15,15 +15,15 @@ import { StaffPageHeading, StaffPanel } from "../components/ui/StaffPanel";
   navigazione, non un semplice salto d'ancora nella stessa pagina.
 */
 const DESTINATIONS = [
-  { label: "Gestione programma", path: "/#gestione-programma", roles: ["staff", "admin"] },
+  { label: "Scaletta", path: "/#gestione-programma", roles: ["staff", "admin"] },
   { label: "Gestione Menu e Scorte", path: "/#gestione-menu", roles: ["staff", "cucina", "admin"] },
   { label: "Gestione torneo", path: "/#gestione-torneo", roles: ["admin"] },
 ];
 
 const OPERATIONS = [
-  { label: "Cassa", path: "/#cassa" },
-  { label: "Cucina", path: "/#cucina" },
-  { label: "Bar", path: "/#bar" },
+  { label: "Casse", path: "/#cassa", role: "cassa" },
+  { label: "Cucina", path: "/#cucina", role: "cucina" },
+  { label: "Bar", path: "/#bar", role: "bar" },
 ];
 
 export function Staff() {
@@ -154,7 +154,7 @@ export function Staff() {
 
         {(role === "cassa" || role === "cucina" || role === "bar" || role === "admin") && <StaffPanel eyebrow="Evento live" title="Operatività" description="Apri la postazione assegnata durante il servizio.">
           <div className="grid gap-3 sm:grid-cols-3">
-            {OPERATIONS.filter((d) => role === "admin" || d.label.toLowerCase() === role).map((d) => (
+            {OPERATIONS.filter((d) => role === "admin" || d.role === role).map((d) => (
               <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left font-semibold text-[var(--accent-primary)] transition-colors hover:bg-[rgba(242,128,46,0.16)]">
                 {d.label}
                 <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Avvia postazione →</span>

@@ -82,7 +82,7 @@ function App() {
       {internalPage === "staff" ? (
         <Staff />
       ) : internalPage === "cassa" ? (
-        <ProtectedOperationalPage allowedRoles={["cassa", "admin"]} component={Cassa} title="Cassa" />
+        <ProtectedOperationalPage allowedRoles={["cassa", "admin"]} component={Cassa} title="Casse" />
       ) : internalPage === "cucina" ? (
         <ProtectedOperationalPage allowedRoles={["cucina", "admin"]} component={Cucina} title="Cucina" />
       ) : internalPage === "bar" ? (
@@ -97,7 +97,7 @@ function App() {
         <ProtectedOperationalPage
           allowedRoles={["staff", "admin"]}
           component={ProgramManagement}
-          title="Gestione programma"
+          title="Scaletta"
         />
       ) : internalPage === "gestione-menu" ? (
         <ProtectedOperationalPage
