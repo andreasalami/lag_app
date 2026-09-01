@@ -13,6 +13,13 @@ export type TournamentSnapshot = {
   overrides: OverridesMap;
 };
 
+export type TournamentArchive = TournamentSnapshot & {
+  id: string;
+  reason: "size_change" | "restore";
+  targetSize: BracketSize | null;
+  createdAt: string;
+};
+
 export const EMPTY_TOURNAMENT_SNAPSHOT: TournamentSnapshot = {
   size: 8,
   teams: defaultTeams(8),
@@ -44,5 +51,37 @@ export function parseTournamentSnapshot(value: unknown): TournamentSnapshot | nu
   });
   if (!matchesAreValid) return null;
 
-  return candidate as TournamentSnapshot;
+  return {
+    size: candidate.size as BracketSize,
+    teams: candidate.teams,
+    matches: candidate.matches,
+    overrides: candidate.overrides,
+  };
+}
+
+export function parseTournamentArchive(value: unknown): TournamentArchive | null {
+  const snapshot = parseTournamentSnapshot(value);
+  if (!snapshot || !value || typeof value !== "object") return null;
+  const candidate = value as {
+    id?: unknown;
+    reason?: unknown;
+    target_size?: unknown;
+    created_at?: unknown;
+  };
+  const targetSize = candidate.target_size === null
+    ? null
+    : BRACKET_SIZES.includes(candidate.target_size as BracketSize)
+      ? candidate.target_size as BracketSize
+      : undefined;
+  if (typeof candidate.id !== "string" || candidate.id.length === 0) return null;
+  if (candidate.reason !== "size_change" && candidate.reason !== "restore") return null;
+  if (targetSize === undefined) return null;
+  if (typeof candidate.created_at !== "string" || Number.isNaN(Date.parse(candidate.created_at))) return null;
+  return {
+    ...snapshot,
+    id: candidate.id,
+    reason: candidate.reason,
+    targetSize,
+    createdAt: candidate.created_at,
+  };
 }

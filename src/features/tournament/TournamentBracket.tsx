@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/Button";
+import { Modal } from "../../components/ui/Modal";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { StaffPanel } from "../../components/ui/StaffPanel";
 import { useAuth } from "../auth/AuthContext";
@@ -22,7 +23,9 @@ import {
 } from "./bracketUtils";
 import {
   EMPTY_TOURNAMENT_SNAPSHOT,
+  parseTournamentArchive,
   parseTournamentSnapshot,
+  type TournamentArchive,
   type TournamentSnapshot,
 } from "./tournamentState";
 
@@ -85,6 +88,11 @@ export function TournamentBracket({ management = false }: { management?: boolean
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [showCloseWarning, setShowCloseWarning] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [latestArchive, setLatestArchive] = useState<TournamentArchive | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [pendingSize, setPendingSize] = useState<BracketSize | null>(null);
+  const [showRestoreWarning, setShowRestoreWarning] = useState(false);
 
   // Caricamento iniziale: per l'editor, la bozza locale (se esiste)
   // vince sull'ultimo pubblicato, perché rappresenta lavoro più
@@ -128,6 +136,18 @@ export function TournamentBracket({ management = false }: { management?: boolean
       setMatches(starting.matches);
       setOverrides(starting.overrides);
       setHydratedMode(canEdit);
+
+      if (canEdit) {
+        const { data: archiveData, error: archiveLoadError } = await supabase
+          .from("tournament_snapshots")
+          .select("id, size, teams, matches, overrides, reason, target_size, created_at")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        setLatestArchive(parseTournamentArchive(archiveData));
+        setArchiveError(archiveLoadError ? "Archivio del torneo non disponibile." : null);
+      }
     }
 
     load();
@@ -244,11 +264,68 @@ export function TournamentBracket({ management = false }: { management?: boolean
   const matchStep = matchHeight + matchGap;
   const bracketHeight = firstRoundMatches * matchHeight + (firstRoundMatches - 1) * matchGap;
 
-  function changeSize(newSize: BracketSize) {
-    setSize(newSize);
-    setTeams(defaultTeams(newSize));
+  async function archiveCurrentState(
+    reason: TournamentArchive["reason"],
+    targetSize: BracketSize,
+  ): Promise<TournamentArchive | null> {
+    if (!isSupabaseConfigured) {
+      setArchiveError("Archivio non disponibile: collega Supabase prima di cambiare il tabellone.");
+      return null;
+    }
+    setArchiveLoading(true);
+    setArchiveError(null);
+    const { data, error } = await supabase
+      .from("tournament_snapshots")
+      .insert({
+        size,
+        teams,
+        matches,
+        overrides,
+        reason,
+        target_size: targetSize,
+      })
+      .select("id, size, teams, matches, overrides, reason, target_size, created_at")
+      .single();
+    const archive = parseTournamentArchive(data);
+    setArchiveLoading(false);
+    if (error || !archive) {
+      setArchiveError("Copia di sicurezza non creata. Il tabellone non è stato modificato.");
+      return null;
+    }
+    setLatestArchive(archive);
+    return archive;
+  }
+
+  function requestSizeChange(newSize: BracketSize) {
+    if (newSize === size) return;
+    setArchiveError(null);
+    setPendingSize(newSize);
+  }
+
+  async function confirmSizeChange() {
+    if (!pendingSize) return;
+    const nextSize = pendingSize;
+    const archived = await archiveCurrentState("size_change", nextSize);
+    if (!archived) return;
+    setSize(nextSize);
+    setTeams(defaultTeams(nextSize));
     setMatches({});
     setOverrides({});
+    setEditingTeams(true);
+    setPendingSize(null);
+  }
+
+  async function confirmRestore() {
+    const archiveToRestore = latestArchive;
+    if (!archiveToRestore) return;
+    const safeguarded = await archiveCurrentState("restore", archiveToRestore.size);
+    if (!safeguarded) return;
+    setSize(archiveToRestore.size);
+    setTeams(archiveToRestore.teams);
+    setMatches(archiveToRestore.matches);
+    setOverrides(archiveToRestore.overrides);
+    setEditingTeams(true);
+    setShowRestoreWarning(false);
   }
 
   function setScore(round: number, index: number, side: Side, value: number | null) {
@@ -309,7 +386,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
               {BRACKET_SIZES.map((s) => (
                 <button
                   key={s}
-                  onClick={() => changeSize(s)}
+                  onClick={() => requestSizeChange(s)}
                   className={`rounded-[var(--radius-pill)] border px-3 py-1 text-sm transition-colors ${
                     size === s
                       ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
@@ -341,6 +418,23 @@ export function TournamentBracket({ management = false }: { management?: boolean
                 ))}
               </div>
             )}
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--surface-border)] pt-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">Copia di sicurezza</p>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                  {latestArchive
+                    ? `${latestArchive.size} squadre · ${new Date(latestArchive.createdAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}`
+                    : "Nessuna copia ancora disponibile."}
+                </p>
+              </div>
+              {latestArchive && (
+                <Button variant="staff-secondary" className="px-4 py-2 text-xs" onClick={() => { setArchiveError(null); setShowRestoreWarning(true); }}>
+                  Ripristina ultima copia
+                </Button>
+              )}
+            </div>
+            {archiveError && <p className="mt-3 text-xs text-[var(--state-error)]">{archiveError}</p>}
           </StaffPanel>
         </>
       )}
@@ -403,6 +497,53 @@ export function TournamentBracket({ management = false }: { management?: boolean
           onSave={handlePublish}
         />
       )}
+
+      <Modal
+        open={pendingSize !== null}
+        title="Cambiare numero di squadre?"
+        dismissible={!archiveLoading}
+        onClose={() => { if (!archiveLoading) { setPendingSize(null); setArchiveError(null); } }}
+        actions={(
+          <>
+            <Button variant="staff-secondary" onClick={() => { setPendingSize(null); setArchiveError(null); }} disabled={archiveLoading}>Annulla</Button>
+            <Button variant="staff-primary" onClick={() => void confirmSizeChange()} disabled={archiveLoading}>
+              {archiveLoading ? "Creo la copia…" : "Crea copia e cambia"}
+            </Button>
+          </>
+        )}
+      >
+        <p>
+          Passando da <strong>{size}</strong> a <strong>{pendingSize ?? size}</strong> squadre, nomi, risultati e avanzamento del tabellone corrente verranno azzerati nella nuova bozza.
+        </p>
+        <p className="mt-2">
+          Prima del cambio verrà salvata automaticamente una copia completa su Supabase. Il tabellone pubblico resterà invariato finché non premi Salva.
+        </p>
+        {archiveError && <p className="mt-3 text-[var(--state-error)]">{archiveError}</p>}
+      </Modal>
+
+      <Modal
+        open={showRestoreWarning}
+        title="Ripristinare l’ultima copia?"
+        dismissible={!archiveLoading}
+        onClose={() => { if (!archiveLoading) { setShowRestoreWarning(false); setArchiveError(null); } }}
+        actions={(
+          <>
+            <Button variant="staff-secondary" onClick={() => { setShowRestoreWarning(false); setArchiveError(null); }} disabled={archiveLoading}>Annulla</Button>
+            <Button variant="staff-primary" onClick={() => void confirmRestore()} disabled={archiveLoading || !latestArchive}>
+              {archiveLoading ? "Proteggo lo stato attuale…" : "Proteggi e ripristina"}
+            </Button>
+          </>
+        )}
+      >
+        <p>
+          Verrà ripristinata la copia da <strong>{latestArchive?.size ?? size} squadre</strong>
+          {latestArchive ? ` del ${new Date(latestArchive.createdAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}` : ""}.
+        </p>
+        <p className="mt-2">
+          Anche lo stato corrente verrà archiviato prima del ripristino, così potrai tornare indietro. Per renderlo pubblico dovrai poi premere Salva.
+        </p>
+        {archiveError && <p className="mt-3 text-[var(--state-error)]">{archiveError}</p>}
+      </Modal>
 
       {showCloseWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
