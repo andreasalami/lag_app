@@ -88,15 +88,13 @@ export function Staff() {
               onChange={(e) => setPassword(e.target.value)}
               className="field"
             />
-            <Button type="submit" disabled={submitting || !isSupabaseConfigured} className="w-full">
+            <Button variant="staff-primary" type="submit" disabled={submitting || !isSupabaseConfigured} className="w-full">
               {submitting ? "..." : "Accedi"}
             </Button>
             {error && <p className="text-xs text-[var(--state-error)]">{error}</p>}
           </form>
         </StaffPanel>
-        <a href={`${basePath}/`} className="mt-4 block text-center text-xs text-[var(--text-secondary)] hover:underline">
-          ← Torna al sito
-        </a>
+        <Button variant="staff-secondary" href={`${basePath}/`} className="mt-4 w-full">Torna al sito</Button>
       </section>
     );
   }

@@ -37,23 +37,23 @@ const tabs: Tab[] = [
     ),
   },
   {
-    label: "Instagram",
-    href: "#social",
-    icon: (
-      <svg {...iconProps}>
-        <rect x="3" y="3" width="18" height="18" rx="5" />
-        <circle cx="12" cy="12" r="4" />
-        <circle cx="17.2" cy="6.8" r="0.6" fill="currentColor" stroke="none" />
-      </svg>
-    ),
-  },
-  {
     label: "Menu",
     href: "#menu",
     icon: (
       <svg {...iconProps}>
         <path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10" />
         <path d="M16 3v18M16 3c3 1 4 4 4 7h-4" />
+      </svg>
+    ),
+  },
+  {
+    label: "Torneo",
+    href: "#tornei",
+    icon: (
+      <svg {...iconProps}>
+        <path d="M8 4h8v4a4 4 0 0 1-8 0Z" />
+        <path d="M8 6H5v1a4 4 0 0 0 4 4M16 6h3v1a4 4 0 0 1-4 4" />
+        <path d="M12 12v5M8 21h8M9 17h6v4" />
       </svg>
     ),
   },

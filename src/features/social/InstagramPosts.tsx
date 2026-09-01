@@ -38,7 +38,8 @@ const CURATED_POSTS: string[] = [
   "https://www.instagram.com/p/DWi1z2cjMOa/",
   "https://www.instagram.com/p/DY9S5ZNMktl/",
   "https://www.instagram.com/p/DYUemPXjB46/",
-  "https://www.instagram.com/p/DWrDeL8DPET/",
+  "https://www.instagram.com/p/CrRPN_gLWt-/",
+  "https://www.instagram.com/p/ChjnmW-LSUy/",
 ];
 
 const VISIBLE_DEPTH = 3;

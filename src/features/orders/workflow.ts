@@ -5,10 +5,13 @@ export type KitchenStation = "cucina" | "primi" | "secondi" | "contorni" | "dolc
 export type BarStation = "birre" | "drinks" | "bar";
 export type FulfillmentStation = KitchenStation | BarStation;
 
-export const CASH_STATIONS: { key: CashStation; label: string }[] = Array.from(
-  { length: 5 },
-  (_, index) => ({ key: `cassa_${index + 1}` as CashStation, label: `Cassa ${index + 1}` }),
-);
+export const CASH_STATIONS: { key: CashStation; label: string }[] = [
+  { key: "cassa_1", label: "Cassa 1" },
+  { key: "cassa_2", label: "Cassa 2" },
+  { key: "cassa_3", label: "Cassa 3" },
+  { key: "cassa_4", label: "Cassa 4" },
+  { key: "cassa_5", label: "Cassa Esterna" },
+];
 
 export const KITCHEN_STATIONS: { key: KitchenStation; label: string; description: string }[] = [
   { key: "cucina", label: "Cucina generale", description: "Tutti gli ordini alimentari in preparazione" },

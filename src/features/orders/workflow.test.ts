@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cashStationLabel,
   fulfillmentStationForSubcategory,
   isCashStation,
   publicOrderStatusFromProgress,
@@ -10,6 +11,7 @@ describe("order workflow", () => {
     expect(isCashStation("cassa_1")).toBe(true);
     expect(isCashStation("cassa_5")).toBe(true);
     expect(isCashStation("cassa_6")).toBe(false);
+    expect(cashStationLabel("cassa_5")).toBe("Cassa Esterna");
   });
 
   it("riunisce vini e bevande nella postazione Bar", () => {

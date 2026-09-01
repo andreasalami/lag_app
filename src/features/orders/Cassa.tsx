@@ -9,7 +9,7 @@ import { downloadCsv, parseQrPayload, priceFormatter, type EventReport } from ".
 import { OrderEditor } from "./OrderEditor";
 import { QrScanner } from "./QrScanner";
 import type { OrderLine, OrderMenuItem, StaffOrder } from "./types";
-import { CASH_STATIONS, cashStationLabel, isCashStation, type CashStation } from "./workflow";
+import { CASH_STATIONS, cashStationLabel, type CashStation } from "./workflow";
 
 type PendingOrder = Pick<StaffOrder,
   "id" | "event_id" | "display_number" | "alias" | "total" | "created_at" | "status" | "claim_expires_at"
@@ -51,10 +51,7 @@ export function Cassa() {
   const [aliasSearch, setAliasSearch] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<StaffOrder | null>(null);
-  const [cashStation, setCashStation] = useState<CashStation | null>(() => {
-    const saved = localStorage.getItem("lag:cash-station");
-    return isCashStation(saved) ? saved : null;
-  });
+  const [cashStation, setCashStation] = useState<CashStation | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [counterAlias, setCounterAlias] = useState("");

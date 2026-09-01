@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../auth/AuthContext";
 import { parseQrPayload } from "./orderUtils";
 import { QrScanner } from "./QrScanner";
-import { BAR_STATIONS, KITCHEN_STATIONS, isFulfillmentStation, type FulfillmentStation } from "./workflow";
+import { BAR_STATIONS, KITCHEN_STATIONS, type FulfillmentStation } from "./workflow";
 
 type FulfillmentItem = {
   id: string;
@@ -51,10 +51,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   const options = area === "cucina" ? KITCHEN_STATIONS : BAR_STATIONS;
   const areaLabel = area === "cucina" ? "Cucina" : "Bar";
   const authorized = role === area || role === "admin";
-  const [station, setStation] = useState<FulfillmentStation | null>(() => {
-    const saved = localStorage.getItem(AREA_STORAGE[area]);
-    return isFulfillmentStation(saved) && options.some((option) => option.key === saved) ? saved : null;
-  });
+  const [station, setStation] = useState<FulfillmentStation | null>(null);
   const [orders, setOrders] = useState<FulfillmentOrder[]>([]);
   const [activeOrder, setActiveOrder] = useState<FulfillmentOrder | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
