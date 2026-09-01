@@ -1,3 +1,5 @@
+import { Button } from "../ui/Button";
+
 export function StaffBackButton() {
   function goBack() {
     if (window.history.length > 1) {
@@ -8,8 +10,8 @@ export function StaffBackButton() {
   }
 
   return (
-    <button type="button" onClick={goBack} className="inline-flex min-h-10 items-center rounded-[var(--radius-pill)] border border-[var(--surface-border)] px-4 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+    <Button type="button" variant="staff-secondary" onClick={goBack} className="min-h-10 px-4 py-2">
       ← Indietro
-    </button>
+    </Button>
   );
 }

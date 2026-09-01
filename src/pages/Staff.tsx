@@ -107,7 +107,7 @@ export function Staff() {
         <StaffPageHeading title="Profilo non disponibile" description="Non è stato possibile caricare i permessi dell’account." />
         <StaffPanel eyebrow="Accesso interrotto" title="Controlla il profilo">
           <p className="text-sm text-[var(--state-error)]">{profileError}</p>
-          <Button variant="ghost" className="mt-5" onClick={signOut}>Esci</Button>
+          <Button variant="staff-secondary" className="mt-5" onClick={signOut}>Esci</Button>
         </StaffPanel>
       </section>
     );
@@ -130,8 +130,8 @@ export function Staff() {
             Contatta l’amministratore per ricevere il ruolo necessario.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <Button variant="ghost" onClick={signOut}>Esci</Button>
-            <Button variant="ghost" href={`${basePath}/`}>Torna al sito</Button>
+            <Button variant="staff-secondary" onClick={signOut}>Esci</Button>
+            <Button variant="staff-secondary" href={`${basePath}/`}>Torna al sito</Button>
           </div>
         </StaffPanel>
       </section>
@@ -146,7 +146,7 @@ export function Staff() {
         {(role === "staff" || role === "cucina" || role === "admin") && <StaffPanel eyebrow="Contenuti pubblici" title="Sezioni del sito" description="Aggiorna ciò che viene mostrato nella Home.">
           <div className="grid gap-3 sm:grid-cols-2">
             {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
-              <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--surface-border)] p-4 text-left font-semibold transition-colors hover:border-[var(--accent-primary)] hover:bg-white/5">
+              <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left font-semibold text-[var(--accent-primary)] transition-colors hover:bg-[rgba(242,128,46,0.16)]">
                 {d.label}
                 <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Apri la pagina di gestione →</span>
               </a>
@@ -157,7 +157,7 @@ export function Staff() {
         {(role === "cassa" || role === "cucina" || role === "bar" || role === "admin") && <StaffPanel eyebrow="Evento live" title="Operatività" description="Apri la postazione assegnata durante il servizio.">
           <div className="grid gap-3 sm:grid-cols-3">
             {OPERATIONS.filter((d) => role === "admin" || d.label.toLowerCase() === role).map((d) => (
-              <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--surface-border)] p-4 text-left font-semibold transition-colors hover:border-[var(--accent-primary)] hover:bg-white/5">
+              <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left font-semibold text-[var(--accent-primary)] transition-colors hover:bg-[rgba(242,128,46,0.16)]">
                 {d.label}
                 <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Avvia postazione →</span>
               </a>
@@ -167,8 +167,8 @@ export function Staff() {
       </div>
 
       <div className="mt-6 flex flex-wrap justify-center gap-2">
-        <Button variant="ghost" onClick={signOut}>Esci</Button>
-        <Button variant="ghost" href={`${basePath}/`}>Torna al sito</Button>
+        <Button variant="staff-secondary" onClick={signOut}>Esci</Button>
+        <Button variant="staff-secondary" href={`${basePath}/`}>Torna al sito</Button>
       </div>
     </section>
   );

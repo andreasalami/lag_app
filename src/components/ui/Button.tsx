@@ -1,7 +1,7 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
 
 interface CommonProps {
-  variant?: "primary" | "ghost";
+  variant?: "primary" | "ghost" | "staff-primary" | "staff-secondary" | "staff-danger";
   children: ReactNode;
   className?: string;
 }
@@ -25,10 +25,13 @@ export function Button({ variant = "primary", className = "", children, ...props
   const base =
     "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-[var(--radius-pill)] font-semibold text-sm transition-transform active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
 
-  const variantClasses =
-    variant === "ghost"
-      ? "border border-[var(--surface-border)] text-[var(--text-primary)] hover:bg-white/5"
-      : "glass-elevated glass-elevated--strong signature-glow text-[var(--text-primary)] hover:brightness-110";
+  const variantClasses = {
+    primary: "glass-elevated glass-elevated--strong signature-glow text-[var(--text-primary)] hover:brightness-110",
+    ghost: "border border-[var(--surface-border)] text-[var(--text-primary)] hover:bg-white/5",
+    "staff-primary": "signature-glow border border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)] hover:brightness-110",
+    "staff-secondary": "border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] text-[var(--accent-primary)] hover:bg-[rgba(242,128,46,0.16)]",
+    "staff-danger": "border border-[var(--state-error)]/55 bg-[rgba(239,68,68,0.08)] text-[var(--state-error)] hover:bg-[rgba(239,68,68,0.16)]",
+  }[variant];
 
   const classes = `${base} ${variantClasses} ${className}`;
 

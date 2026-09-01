@@ -180,7 +180,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
         <StaffPanel eyebrow="Configurazione dispositivo" title="Scegli la postazione" description="La scelta resta memorizzata e può essere cambiata in seguito.">
           <div className="grid gap-3 sm:grid-cols-2">
             {options.map((option) => (
-              <button key={option.key} type="button" onClick={() => chooseStation(option.key)} className="rounded-[var(--radius-md)] border border-[var(--surface-border)] p-4 text-left transition-colors hover:border-[var(--accent-primary)] hover:bg-white/5">
+              <button key={option.key} type="button" onClick={() => chooseStation(option.key)} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)]">
                 <strong className="font-display text-lg text-[var(--accent-primary)]">{option.label}</strong>
                 <span className="mt-1 block text-sm text-[var(--text-secondary)]">{option.description}</span>
               </button>
@@ -195,7 +195,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
     const overview = station === "cucina";
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <StaffPageHeading title="Gestione ritiro" description={`${areaLabel} · ${stationLabel}`} action={<Button variant="ghost" onClick={() => setActiveOrder(null)}>Torna alla coda</Button>} />
+        <StaffPageHeading title="Gestione ritiro" description={`${areaLabel} · ${stationLabel}`} action={<Button variant="staff-secondary" onClick={() => setActiveOrder(null)}>Torna alla coda</Button>} />
         <StaffPanel eyebrow={`Ordine #${activeOrder.display_number}`} title={activeOrder.alias ?? "Senza nome"} description={overview ? "Vista generale di preparazione" : "Seleziona le quantità effettivamente consegnate"}>
           {activeOrder.notes && <div className="mb-4 rounded-[var(--radius-sm)] border-2 border-[var(--state-warning)] p-3 text-sm"><strong>NOTE:</strong> {activeOrder.notes}</div>}
           <div className="flex flex-col gap-3">
@@ -217,7 +217,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
           {overview ? (
             <p className="mt-4 border-t border-[var(--surface-border)] pt-4 text-sm text-[var(--text-secondary)]">La consegna viene registrata dalle singole postazioni.</p>
           ) : (
-            <Button variant="primary" className="mt-5 w-full" onClick={() => void confirmDelivery()} disabled={busy}>{busy ? "Registro…" : "Conferma consegna selezionata"}</Button>
+            <Button variant="staff-primary" className="mt-5 w-full" onClick={() => void confirmDelivery()} disabled={busy}>{busy ? "Registro…" : "Conferma consegna selezionata"}</Button>
           )}
         </StaffPanel>
       </main>
@@ -226,17 +226,17 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <StaffPageHeading title={stationLabel} description={`${areaLabel} · coda ordinata dall’orario di pagamento`} action={<Button variant="ghost" onClick={() => setStation(null)}>Cambia postazione</Button>} />
+      <StaffPageHeading title={stationLabel} description={`${areaLabel} · coda ordinata dall’orario di pagamento`} action={<Button variant="staff-secondary" onClick={() => setStation(null)}>Cambia postazione</Button>} />
       {message && <div className="mb-4 rounded-[var(--radius-sm)] border border-[var(--surface-border)] p-3 text-sm">{message}</div>}
       <StaffPanel eyebrow="Ritiro ordini" title="Coda della postazione" description={loading ? "Aggiornamento in corso…" : `${filtered.length} ordini da gestire`}>
         <div className="flex flex-wrap items-end gap-3">
-          {station !== "cucina" && <Button variant="primary" onClick={() => setScannerOpen(true)} disabled={busy}>Scansiona QR</Button>}
+          {station !== "cucina" && <Button variant="staff-primary" onClick={() => setScannerOpen(true)} disabled={busy}>Scansiona QR</Button>}
           <label className="min-w-24 flex-1"><span className="mb-1 block text-xs">Numero</span><input type="number" value={numberSearch} onChange={(event) => setNumberSearch(event.target.value)} className="field w-full py-2" /></label>
           <label className="min-w-36 flex-[2]"><span className="mb-1 block text-xs">Nome ordine</span><input value={aliasSearch} onChange={(event) => setAliasSearch(event.target.value)} className="field w-full py-2" /></label>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {filtered.map((order) => (
-            <button key={order.id} type="button" onClick={() => selectOrder(order)} className="rounded-[var(--radius-md)] border border-[var(--surface-border)] p-4 text-left transition-colors hover:border-[var(--accent-primary)] hover:bg-white/5">
+            <button key={order.id} type="button" onClick={() => selectOrder(order)} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)]">
               <strong className="font-display text-xl text-[var(--accent-primary)]">#{order.display_number} · {order.alias}</strong>
               <span className="mt-2 block text-sm">{order.items.map((item) => `${item.quantity - item.delivered_quantity}× ${item.name}`).join(" · ")}</span>
               {order.notes && <span className="mt-2 block text-sm font-semibold text-[var(--state-warning)]">NOTE: {order.notes}</span>}
@@ -252,7 +252,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
             {recent.map((delivery) => (
               <div key={delivery.id} className="flex items-center justify-between gap-3 border-b border-[var(--surface-border)] py-2 last:border-0">
                 <span>#{delivery.display_number} · {delivery.alias}</span>
-                <Button variant="ghost" onClick={() => void undoDelivery(delivery.id)} disabled={busy || (!delivery.can_undo && role !== "admin")}>Annulla consegna</Button>
+                <Button variant="staff-secondary" onClick={() => void undoDelivery(delivery.id)} disabled={busy || (!delivery.can_undo && role !== "admin")}>Annulla consegna</Button>
               </div>
             ))}
           </div>

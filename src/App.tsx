@@ -8,6 +8,7 @@ import { TournamentManagement } from "./pages/TournamentManagement";
 import { ProgramManagement } from "./pages/ProgramManagement";
 import { MenuManagement } from "./pages/MenuManagement";
 import { StaffBackButton } from "./components/layout/StaffBackButton";
+import { Button } from "./components/ui/Button";
 
 const FeaturePreview = lazy(() => import("./pages/FeaturePreview").then((module) => ({ default: module.FeaturePreview })));
 const Cassa = lazy(() => import("./features/orders/Cassa").then((module) => ({ default: module.Cassa })));
@@ -37,9 +38,9 @@ function ProtectedOperationalPage({
         <p className="mt-3 text-sm text-[var(--text-secondary)]">
           Questa sezione non è pubblica. Serve un account con il ruolo corretto.
         </p>
-        <a href={`${basePath}/#staff`} className="signature-glow glass-elevated glass-elevated--strong mt-6 inline-block rounded-[var(--radius-pill)] px-5 py-2 text-sm font-semibold">
+        <Button href={`${basePath}/#staff`} variant="staff-primary" className="mt-6">
           Accedi all’area staff
-        </a>
+        </Button>
       </section>
     );
   }

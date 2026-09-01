@@ -373,7 +373,7 @@ export function Cassa() {
         <StaffPanel eyebrow="Configurazione dispositivo" title="Scegli la cassa" description="Uno o due dispositivi possono lavorare sulla stessa cassa.">
           <div className="grid gap-3 sm:grid-cols-2">
             {CASH_STATIONS.map((station) => (
-              <button key={station.key} type="button" onClick={() => { localStorage.setItem("lag:cash-station", station.key); setCashStation(station.key); }} className="rounded-[var(--radius-md)] border border-[var(--surface-border)] p-4 text-left transition-colors hover:border-[var(--accent-primary)] hover:bg-white/5">
+              <button key={station.key} type="button" onClick={() => { localStorage.setItem("lag:cash-station", station.key); setCashStation(station.key); }} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)]">
                 <strong className="font-display text-lg text-[var(--accent-primary)]">{station.label}</strong>
                 <span className="mt-1 block text-xs text-[var(--text-secondary)]">Memorizza questa postazione sul dispositivo</span>
               </button>
@@ -387,7 +387,7 @@ export function Cassa() {
   if (activeOrder) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <StaffPageHeading title="Gestione ordine" description={`${cashStationLabel(cashStation)} · ordine in sola lettura`} action={<Button variant="ghost" onClick={() => void releaseActiveOrder()} disabled={actionBusy}>Chiudi senza pagare</Button>} />
+        <StaffPageHeading title="Gestione ordine" description={`${cashStationLabel(cashStation)} · ordine in sola lettura`} action={<Button variant="staff-secondary" onClick={() => void releaseActiveOrder()} disabled={actionBusy}>Chiudi senza pagare</Button>} />
         <StaffPanel eyebrow={`Ordine #${activeOrder.display_number}`} title={activeOrder.alias ?? "Senza nome"} description="Prepara lo scontrino sul registratore. L’ordine non può essere modificato dalla cassa.">
           {activeOrder.notes && <div className="mb-4 rounded-[var(--radius-sm)] border-2 border-[var(--state-warning)] p-3 text-sm"><strong>NOTE:</strong> {activeOrder.notes}</div>}
           <div className="flex flex-col gap-3">
@@ -397,9 +397,9 @@ export function Cassa() {
         </StaffPanel>
         {message && <p className="mt-3 text-sm text-[var(--state-error)]">{message}</p>}
         <div className="mt-5 flex flex-wrap justify-between gap-3">
-          <Button variant="ghost" onClick={() => setCancelOrderModal(true)} disabled={actionBusy}>Annulla ordine</Button>
+          <Button variant="staff-danger" onClick={() => setCancelOrderModal(true)} disabled={actionBusy}>Annulla ordine</Button>
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" onClick={() => void payActiveOrder()} disabled={actionBusy}>
+            <Button variant="staff-primary" onClick={() => void payActiveOrder()} disabled={actionBusy}>
               {actionBusy ? "Attendi…" : "Pagato e invia"}
             </Button>
           </div>
@@ -411,8 +411,8 @@ export function Cassa() {
           onClose={() => setCancelOrderModal(false)}
           actions={(
             <>
-              <Button variant="ghost" onClick={() => setCancelOrderModal(false)} disabled={actionBusy}>No, torna all’ordine</Button>
-              <Button variant="primary" onClick={() => void cancelActiveOrder()} disabled={actionBusy}>{actionBusy ? "Annullamento…" : "Sì, annulla ordine"}</Button>
+              <Button variant="staff-secondary" onClick={() => setCancelOrderModal(false)} disabled={actionBusy}>No, torna all’ordine</Button>
+              <Button variant="staff-danger" onClick={() => void cancelActiveOrder()} disabled={actionBusy}>{actionBusy ? "Annullamento…" : "Sì, annulla ordine"}</Button>
             </>
           )}
         >
@@ -424,7 +424,7 @@ export function Cassa() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <StaffPageHeading title={cashStationLabel(cashStation)} description="Preordini, ordine eccezionale e impostazioni dell’evento." action={<Button variant="ghost" onClick={() => setCashStation(null)}>Cambia cassa</Button>} />
+      <StaffPageHeading title={cashStationLabel(cashStation)} description="Preordini, ordine eccezionale e impostazioni dell’evento." action={<Button variant="staff-secondary" onClick={() => setCashStation(null)}>Cambia cassa</Button>} />
 
       <div className="mt-5 grid grid-cols-3 rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1">
         {(["ordini", "manuale", "evento"] as Tab[]).map((value) => (
@@ -449,7 +449,7 @@ export function Cassa() {
       {tab === "ordini" && (
         <StaffPanel className="mt-6" eyebrow="Flusso cassa" title="Ordini in attesa" description="Scansiona il QR oppure cerca per numero e nome ordine.">
           <div className="flex flex-wrap items-end gap-3">
-            <Button variant="primary" onClick={() => setScannerOpen(true)} disabled={actionBusy}>Scansiona QR</Button>
+            <Button variant="staff-primary" onClick={() => setScannerOpen(true)} disabled={actionBusy}>Scansiona QR</Button>
             <label className="min-w-28 flex-1">
               <span className="mb-1 block text-xs">Numero</span>
               <input type="number" inputMode="numeric" value={numberSearch} onChange={(event) => setNumberSearch(event.target.value)} className="field w-full py-2" />
@@ -475,7 +475,7 @@ export function Cassa() {
                         {claimed ? `In gestione a ${cashStationLabel(order.claimed_station!)}` : orderAge(order.created_at)}
                       </span>
                     </span>
-                    <div className="flex items-center gap-2"><span className="font-mono text-[var(--accent-primary)]">{priceFormatter.format(Number(order.total))}</span>{(!claimed || ours) ? <Button variant="ghost" onClick={() => void claimOrder(order.id)} disabled={actionBusy}>Apri</Button> : <Button variant="ghost" onClick={async () => { await supabase.rpc("force_release_order", { p_order_id: order.id }); void refetchOrders(); }} disabled={actionBusy}>Sblocca</Button>}</div>
+                    <div className="flex items-center gap-2"><span className="font-mono text-[var(--accent-primary)]">{priceFormatter.format(Number(order.total))}</span>{(!claimed || ours) ? <Button variant="staff-secondary" onClick={() => void claimOrder(order.id)} disabled={actionBusy}>Apri</Button> : <Button variant="staff-secondary" onClick={async () => { await supabase.rpc("force_release_order", { p_order_id: order.id }); void refetchOrders(); }} disabled={actionBusy}>Sblocca</Button>}</div>
                   </div>
                 );
               })}
@@ -498,7 +498,7 @@ export function Cassa() {
               setNotes={setCounterNotes}
             />
           )}
-          <Button variant="primary" className="mt-4 w-full sm:w-auto" onClick={() => void createCounterOrder()} disabled={actionBusy || menuLoading}>
+          <Button variant="staff-primary" className="mt-4 w-full sm:w-auto" onClick={() => void createCounterOrder()} disabled={actionBusy || menuLoading}>
             {actionBusy ? "Invio…" : "Conferma pagamento e invia"}
           </Button>
         </StaffPanel>
@@ -534,20 +534,20 @@ export function Cassa() {
 
             {eventState.permanently_closed_at ? (
               <div className="flex flex-wrap gap-2">
-                <Button variant="ghost" onClick={() => void downloadExistingReport()}>Scarica di nuovo il CSV</Button>
-                <Button variant="primary" onClick={() => void createNextEvent()} disabled={actionBusy}>Crea nuovo evento</Button>
+                <Button variant="staff-secondary" onClick={() => void downloadExistingReport()}>Scarica di nuovo il CSV</Button>
+                <Button variant="staff-primary" onClick={() => void createNextEvent()} disabled={actionBusy}>Crea nuovo evento</Button>
               </div>
             ) : (
               <>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="ghost" onClick={() => void saveEventSettings()} disabled={actionBusy}>Salva orari e limite</Button>
-                  <Button variant={eventState.manual_closed ? "primary" : "ghost"} onClick={() => void toggleOrderingPaused()} disabled={actionBusy}>
+                  <Button variant="staff-primary" onClick={() => void saveEventSettings()} disabled={actionBusy}>Salva orari e limite</Button>
+                  <Button variant={eventState.manual_closed ? "staff-primary" : "staff-secondary"} onClick={() => void toggleOrderingPaused()} disabled={actionBusy}>
                     {eventState.manual_closed ? "Riapri ordinazioni" : "Chiudi ordinazioni ora"}
                   </Button>
                 </div>
                 <div className="mt-3 border-t border-[var(--surface-border)] pt-3">
                   <p className="text-xs text-[var(--state-error)]">La chiusura definitiva annulla gli ordini non pagati, anonimizza i dati e produce il CSV finale.</p>
-                  <Button variant="ghost" className="mt-2" onClick={() => setCloseEventModal(true)}>Chiudi definitivamente l’evento</Button>
+                  <Button variant="staff-danger" className="mt-2" onClick={() => setCloseEventModal(true)}>Chiudi definitivamente l’evento</Button>
                 </div>
               </>
             )}
@@ -564,8 +564,8 @@ export function Cassa() {
         onClose={() => setCloseEventModal(false)}
         actions={(
           <>
-            <Button variant="ghost" onClick={() => setCloseEventModal(false)} disabled={actionBusy}>Annulla</Button>
-            <Button variant="primary" onClick={() => void closeEventPermanently()} disabled={closeEventText !== "CHIUDI EVENTO" || actionBusy}>
+            <Button variant="staff-secondary" onClick={() => setCloseEventModal(false)} disabled={actionBusy}>Annulla</Button>
+            <Button variant="staff-danger" onClick={() => void closeEventPermanently()} disabled={closeEventText !== "CHIUDI EVENTO" || actionBusy}>
               Chiudi e scarica CSV
             </Button>
           </>

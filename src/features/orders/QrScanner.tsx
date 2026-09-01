@@ -56,7 +56,7 @@ export function QrScanner({
     <div className="fixed inset-0 z-[110] flex flex-col bg-black p-4">
       <div className="mx-auto flex w-full max-w-xl items-center justify-between py-2">
         <h2 className="text-xl">{title}</h2>
-        <Button variant="ghost" onClick={onClose}>Chiudi</Button>
+        <Button variant="staff-secondary" onClick={onClose}>Chiudi</Button>
       </div>
       <video ref={videoRef} className="mx-auto mt-4 max-h-[70vh] w-full max-w-xl rounded-[var(--radius-lg)] bg-black object-cover" muted playsInline />
       <p className="mx-auto mt-4 max-w-xl text-center text-sm text-[var(--text-secondary)]">

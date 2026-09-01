@@ -60,7 +60,7 @@ export function TournamentBroadcast() {
       eyebrow="Notifiche torneo"
       title="Avviso a tutti"
       description={subscriberCount === null ? "Controllo i dispositivi iscritti…" : `${subscriberCount} dispositivi iscritti alle notifiche.`}
-      action={<button type="button" onClick={() => void loadCount()} className="text-xs text-[var(--text-secondary)] hover:underline">Aggiorna conteggio</button>}
+      action={<Button variant="staff-secondary" className="px-4 py-2 text-xs" onClick={() => void loadCount()}>Aggiorna conteggio</Button>}
     >
       <p className="mb-3 text-xs text-[var(--text-secondary)]">Per una prova completa su iPhone, chiudi la Web App sul telefono e invia qui un messaggio di test.</p>
       <textarea
@@ -73,7 +73,7 @@ export function TournamentBroadcast() {
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
         <span className="text-xs text-[var(--text-secondary)]">{message.length}/240</span>
-        <Button onClick={() => void sendBroadcast()} disabled={sending || subscriberCount === 0}>
+        <Button variant="staff-primary" onClick={() => void sendBroadcast()} disabled={sending || subscriberCount === 0}>
           {sending ? "Invio…" : "Invia avviso a tutti"}
         </Button>
       </div>

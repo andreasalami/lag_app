@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Button } from "../../components/ui/Button";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { StaffPanel } from "../../components/ui/StaffPanel";
 import { useAuth } from "../auth/AuthContext";
@@ -318,9 +319,9 @@ export function TournamentBracket({ management = false }: { management?: boolean
                   {s}
                 </button>
               ))}
-              <button onClick={handleCloseClick} className="ml-auto text-xs text-[var(--text-secondary)] underline-offset-2 hover:text-[var(--accent-primary)] hover:underline">
+              <Button variant="staff-secondary" className="ml-auto px-4 py-2 text-xs" onClick={handleCloseClick}>
                 {editingTeams ? "Chiudi nomi" : "Modifica nomi"}
-              </button>
+              </Button>
             </div>
 
             {editingTeams && (
@@ -412,19 +413,21 @@ export function TournamentBracket({ management = false }: { management?: boolean
               tabellone aggiornato, devi pubblicare ora — altrimenti restano solo su questo browser.
             </p>
             <div className="flex justify-end gap-2">
-              <button
+              <Button
+                variant="staff-danger"
                 onClick={handleCloseWithoutSaving}
-                className="rounded-[var(--radius-pill)] border border-[var(--surface-border)] px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                className="px-4 py-2 text-xs"
               >
                 Chiudi senza pubblicare
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="staff-primary"
                 onClick={handlePublishAndClose}
                 disabled={publishing}
-                className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-1.5 text-xs font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
+                className="px-4 py-2 text-xs"
               >
                 {publishing ? "Salvo..." : "Salva ora"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
