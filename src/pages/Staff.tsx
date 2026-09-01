@@ -13,8 +13,8 @@ import { isSupabaseConfigured } from "../lib/supabaseClient";
   navigazione, non un semplice salto d'ancora nella stessa pagina.
 */
 const DESTINATIONS = [
-  { label: "Programma", path: "/#programma", roles: ["staff", "admin"] },
-  { label: "Menu", path: "/#menu", roles: ["staff", "admin"] },
+  { label: "Gestione programma", path: "/#gestione-programma", roles: ["staff", "admin"] },
+  { label: "Gestione Menu e Scorte", path: "/#gestione-menu", roles: ["staff", "cucina", "admin"] },
   { label: "Gestione torneo", path: "/#gestione-torneo", roles: ["admin"] },
 ];
 
@@ -147,7 +147,7 @@ export function Staff() {
       <p className="mb-6 text-center text-xs text-[var(--text-secondary)]">{session.user.email}</p>
 
       <div className="flex flex-col gap-6">
-        {(role === "staff" || role === "admin") && <div className="flex flex-col gap-2">
+        {(role === "staff" || role === "cucina" || role === "admin") && <div className="flex flex-col gap-2">
           <h2 className="font-display text-sm text-[var(--text-secondary)]">Sezioni del sito</h2>
           {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
             <a key={d.label} href={`${basePath}${d.path}`} className="field text-center font-semibold">

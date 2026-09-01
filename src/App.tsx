@@ -5,6 +5,8 @@ import { OrderPage } from "./features/orders/OrderPage";
 import { AuthProvider, useAuth, type Role } from "./features/auth/AuthContext";
 import { TournamentBoard } from "./pages/TournamentBoard";
 import { TournamentManagement } from "./pages/TournamentManagement";
+import { ProgramManagement } from "./pages/ProgramManagement";
+import { MenuManagement } from "./pages/MenuManagement";
 
 const FeaturePreview = lazy(() => import("./pages/FeaturePreview").then((module) => ({ default: module.FeaturePreview })));
 const Cassa = lazy(() => import("./features/orders/Cassa").then((module) => ({ default: module.Cassa })));
@@ -63,8 +65,8 @@ function App() {
 
   const previewEnabled = import.meta.env.VITE_FEATURE_PREVIEW === "true";
   const internalPages = previewEnabled
-    ? ["staff", "cassa", "cucina", "ordina", "tabellone", "gestione-torneo", "anteprima"]
-    : ["staff", "cassa", "cucina", "ordina", "tabellone", "gestione-torneo"];
+    ? ["staff", "cassa", "cucina", "ordina", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo", "anteprima"]
+    : ["staff", "cassa", "cucina", "ordina", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo"];
   const internalPage = internalPages.includes(hashPath) ? hashPath : path.slice(1);
 
   return (
@@ -79,6 +81,18 @@ function App() {
         <OrderPage />
       ) : internalPage === "tabellone" ? (
         <TournamentBoard />
+      ) : internalPage === "gestione-programma" ? (
+        <ProtectedOperationalPage
+          allowedRoles={["staff", "admin"]}
+          component={ProgramManagement}
+          title="Gestione programma"
+        />
+      ) : internalPage === "gestione-menu" ? (
+        <ProtectedOperationalPage
+          allowedRoles={["staff", "cucina", "admin"]}
+          component={MenuManagement}
+          title="Gestione Menu e Scorte"
+        />
       ) : internalPage === "gestione-torneo" ? (
         <ProtectedOperationalPage
           allowedRoles={["tournament_manager", "admin"]}

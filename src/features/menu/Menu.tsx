@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "../../components/ui/Card";
+import { Button } from "../../components/ui/Button";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
 import { ALLERGENS, priceFormatter } from "../orders/orderUtils";
 import { OrderEntryButton } from "../orders/OrderEntryButton";
+import { MENU_SECTIONS, menuSectionFor, type MenuCategory } from "./menuSections";
 
-type Category = "cibo" | "bevande";
+type Category = MenuCategory;
 
 type MenuItem = {
   id: string;
@@ -20,7 +22,11 @@ type MenuItem = {
 };
 
 const CATEGORIES: Category[] = ["cibo", "bevande"];
-const CATEGORY_LABEL: Record<Category, string> = { cibo: "Cibo", bevande: "Bevande" };
+const CATEGORY_LABEL: Record<Category, string> = { cibo: "Cucina", bevande: "Bar" };
+const CATEGORY_DESCRIPTION: Record<Category, string> = {
+  cibo: "Piatti preparati durante l’evento",
+  bevande: "Birre, vini, drinks e analcolici",
+};
 
 const FALLBACK_ITEMS: MenuItem[] = [
   { id: "f1", category: "cibo", name: "Panino salamella — esempio", price: 5, available_portions: null, stock_capacity: null, allergens: [1] },
@@ -51,9 +57,10 @@ const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
   sapere SE mostrare il tasto Salva, non ci serve sapere esattamente
   cosa è cambiato per farlo.
 */
-export function Menu() {
+export function Menu({ management = false }: { management?: boolean }) {
   const { role } = useAuth();
-  const canEdit = role === "staff" || role === "cucina" || role === "admin";
+  const canManage = role === "staff" || role === "cucina" || role === "admin";
+  const canEdit = management && canManage;
   const { rows: items, setRows: setItems, loading, error: loadError, refetch } = useSupabaseRows<MenuItem>({
     table: "menu_items",
     select: "id, category, name, price, available_portions, stock_capacity, allergens",
@@ -164,8 +171,16 @@ export function Menu() {
 
   return (
     <section id="menu" className="mx-auto max-w-3xl px-4 py-10">
-      <h2 className="mb-1 text-2xl font-semibold">Menu</h2>
-      <p className="mb-4 text-sm text-[var(--text-secondary)]">Cibo e bevande disponibili all'evento.</p>
+      <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione Menu e Scorte" : "Menu"}</h2>
+      <p className="mb-4 text-sm text-[var(--text-secondary)]">
+        {management ? "Aggiorna prodotti, prezzi, disponibilità e allergeni." : "Cucina e Bar disponibili durante l’evento."}
+      </p>
+
+      {!management && canManage && (
+        <Button href={`${import.meta.env.BASE_URL}#gestione-menu`} className="mb-5 w-full justify-start sm:w-64">
+          Gestione Menu e Scorte
+        </Button>
+      )}
 
       {loadError ? (
         <p className="text-sm text-[var(--state-error)]">Menu non disponibile. Ricarica la pagina.</p>
@@ -173,115 +188,123 @@ export function Menu() {
         <p className="text-sm text-[var(--text-secondary)]">Carico il menu...</p>
       ) : (
         CATEGORIES.map((category) => (
-          <div key={category} className="mb-6">
-            <h3 className="mb-2 font-display text-lg">{CATEGORY_LABEL[category]}</h3>
-            <Card className="flex flex-col gap-2">
-              {items.filter((i) => i.category === category).length === 0 && !canEdit && (
-                <p className="text-sm text-[var(--text-secondary)]">Nessun prodotto ancora pubblicato.</p>
-              )}
-              {items
-                .filter((i) => i.category === category)
-                .map((item) =>
-                  canEdit ? (
-                    <div
-                      key={item.id}
-                      className="border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0"
-                    >
-                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center">
-                        <input
-                          required
-                          maxLength={200}
-                          value={item.name}
-                          onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, name: e.target.value } : i)))}
-                          className="field min-w-0 w-full sm:flex-1"
-                        />
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="9999.99"
-                          aria-label={`Prezzo di ${item.name}`}
-                          value={item.price}
-                          onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, price: Number(e.target.value) } : i)))}
-                          className="field w-full min-w-0 text-right font-mono sm:w-20"
-                        />
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          placeholder="∞"
-                          aria-label={`Porzioni disponibili per ${item.name}`}
-                          value={item.available_portions ?? ""}
-                          onChange={(e) => setItems((prev) => prev.map((i) => (i.id === item.id ? {
-                            ...i,
-                            available_portions: e.target.value === "" ? null : Number(e.target.value),
-                          } : i)))}
-                          className="field w-full min-w-0 text-right font-mono sm:w-24"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => deleteItem(item.id)}
-                          className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto"
-                        >
-                          Elimina
-                        </button>
+          <Card key={category} className="mb-6 overflow-hidden !p-0">
+            <div className="border-b border-[var(--surface-border)] bg-[linear-gradient(135deg,rgba(242,128,46,0.16),transparent_65%)] px-5 py-5 sm:px-6">
+              <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-secondary)]">Menu dell’evento</p>
+              <h3 className="mt-1 font-display text-2xl text-[var(--accent-primary)]">{CATEGORY_LABEL[category]}</h3>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">{CATEGORY_DESCRIPTION[category]}</p>
+            </div>
+
+            <div className="px-4 py-2 sm:px-6">
+              {MENU_SECTIONS[category].map((section) => {
+                const sectionItems = items.filter((item) =>
+                  item.category === category && menuSectionFor(category, item.name) === section.key
+                );
+
+                return (
+                  <div key={section.key} className="border-b border-[var(--surface-border)] py-4 last:border-0">
+                    <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">{section.label}</h4>
+                    {sectionItems.length === 0 ? (
+                      <p className="text-sm text-[var(--text-secondary)]">Nessuna proposta al momento.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {sectionItems.map((item) => canEdit ? (
+                          <div key={item.id} className="border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0">
+                            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center">
+                              <input
+                                required
+                                maxLength={200}
+                                value={item.name}
+                                onChange={(e) => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? { ...candidate, name: e.target.value } : candidate))}
+                                className="field min-w-0 w-full sm:flex-1"
+                              />
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max="9999.99"
+                                aria-label={`Prezzo di ${item.name}`}
+                                value={item.price}
+                                onChange={(e) => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? { ...candidate, price: Number(e.target.value) } : candidate))}
+                                className="field w-full min-w-0 text-right font-mono sm:w-20"
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                placeholder="∞"
+                                aria-label={`Porzioni disponibili per ${item.name}`}
+                                value={item.available_portions ?? ""}
+                                onChange={(e) => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? {
+                                  ...candidate,
+                                  available_portions: e.target.value === "" ? null : Number(e.target.value),
+                                } : candidate))}
+                                className="field w-full min-w-0 text-right font-mono sm:w-24"
+                              />
+                              <button type="button" onClick={() => deleteItem(item.id)} className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto">
+                                Elimina
+                              </button>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-1.5" aria-label={`Allergeni di ${item.name}`}>
+                              {ALLERGENS.map((allergen, index) => {
+                                const number = index + 1;
+                                const selected = item.allergens.includes(number);
+                                return (
+                                  <button
+                                    key={allergen}
+                                    type="button"
+                                    title={`${number}. ${allergen}`}
+                                    aria-pressed={selected}
+                                    onClick={() => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? {
+                                      ...candidate,
+                                      allergens: selected
+                                        ? candidate.allergens.filter((value) => value !== number)
+                                        : [...candidate.allergens, number].sort((a, b) => a - b),
+                                    } : candidate))}
+                                    className={`h-7 w-7 rounded-full border text-xs ${selected
+                                      ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                                      : "border-[var(--surface-border)] text-[var(--text-secondary)]"}`}
+                                  >
+                                    {number}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div key={item.id} className="flex items-start justify-between gap-3">
+                            <span className="text-sm text-[var(--text-primary)]">
+                              {item.name}
+                              {item.allergens.length > 0 && (
+                                <span className="ml-2 text-xs text-[var(--text-secondary)]">Allergeni: {item.allergens.join(", ")}</span>
+                              )}
+                            </span>
+                            <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">{priceFormatter.format(item.price)}</span>
+                          </div>
+                        ))}
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5" aria-label={`Allergeni di ${item.name}`}>
-                        {ALLERGENS.map((allergen, index) => {
-                          const number = index + 1;
-                          const selected = item.allergens.includes(number);
-                          return (
-                            <button
-                              key={allergen}
-                              type="button"
-                              title={`${number}. ${allergen}`}
-                              aria-pressed={selected}
-                              onClick={() => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? {
-                                ...candidate,
-                                allergens: selected
-                                  ? candidate.allergens.filter((value) => value !== number)
-                                  : [...candidate.allergens, number].sort((a, b) => a - b),
-                              } : candidate))}
-                              className={`h-7 w-7 rounded-full border text-xs ${selected
-                                ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
-                                : "border-[var(--surface-border)] text-[var(--text-secondary)]"}`}
-                            >
-                              {number}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <div key={item.id} className="flex items-start justify-between gap-3">
-                      <span className="text-sm text-[var(--text-primary)]">
-                        {item.name}
-                        {item.allergens.length > 0 && (
-                          <span className="ml-2 text-xs text-[var(--text-secondary)]">
-                            Allergeni: {item.allergens.join(", ")}
-                          </span>
-                        )}
-                      </span>
-                      <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">
-                        {priceFormatter.format(item.price)}
-                      </span>
-                    </div>
-                  )
-                )}
+                    )}
+                  </div>
+                );
+              })}
+
               {canEdit && (
-                <button
-                  onClick={() => addItem(category)}
-                  className="mt-1 self-start text-xs text-[var(--accent-primary)] hover:underline"
-                >
-                  + Aggiungi prodotto
+                <button onClick={() => addItem(category)} className="mb-4 mt-2 text-xs text-[var(--accent-primary)] hover:underline">
+                  + Aggiungi prodotto in {CATEGORY_LABEL[category]}
                 </button>
               )}
-            </Card>
-          </div>
+
+              {category === "bevande" && (
+                <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--accent-primary)]/40 bg-[rgba(242,128,46,0.08)] px-4 py-3 text-sm font-semibold text-[var(--accent-primary)]">
+                  Acqua Gratis
+                </div>
+              )}
+            </div>
+          </Card>
         ))
       )}
 
-      {!canEdit && <OrderEntryButton />}
+      {!management && <OrderEntryButton />}
 
       {/* Banner di salvataggio condiviso (vedi SaveBanner.tsx): appare solo
           con modifiche in sospeso, fisso in basso così resta visibile

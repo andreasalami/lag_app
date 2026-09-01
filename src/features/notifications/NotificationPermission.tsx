@@ -115,15 +115,15 @@ export function NotificationPermission() {
           <span aria-hidden>✓</span> Notifiche attive su questo dispositivo
         </p>
       ) : state === "denied" ? (
-        <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="mb-3 flex flex-col items-start gap-3">
           <p className="text-sm text-[var(--text-secondary)]">
             Notifiche bloccate dal browser — riattivale nelle impostazioni del sito.
           </p>
-          <Button variant="ghost" onClick={openInstructions}>Vedi istruzioni</Button>
+          <Button variant="ghost" onClick={openInstructions} className="w-full justify-start sm:w-64">Vedi istruzioni</Button>
         </div>
       ) : (
-        <div className="mb-4">
-          <Button variant="primary" onClick={openInstructions}>{buttonLabel}</Button>
+        <div className="mb-3">
+          <Button variant="primary" onClick={openInstructions} className="w-full justify-start sm:w-64">{buttonLabel}</Button>
           {activationError && <p className="mt-2 text-xs text-[var(--state-error)]">{activationError}</p>}
         </div>
       )}

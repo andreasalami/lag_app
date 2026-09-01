@@ -72,11 +72,9 @@ export function TournamentPreview() {
       <NotificationPermission />
 
       {canManage && (
-        <div className="mb-3 flex justify-end">
-          <Button href={`${import.meta.env.BASE_URL}#gestione-torneo`} className="!px-4 !py-2">
-            Gestisci il torneo
-          </Button>
-        </div>
+        <Button href={`${import.meta.env.BASE_URL}#gestione-torneo`} className="mb-5 w-full justify-start sm:w-64">
+          Gestisci torneo
+        </Button>
       )}
 
       <Card className="overflow-hidden !p-0">

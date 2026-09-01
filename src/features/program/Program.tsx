@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "../../components/ui/Card";
+import { Button } from "../../components/ui/Button";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
@@ -34,9 +35,10 @@ const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
   solo lo stato locale: la scrittura vera è deferita al tasto Salva,
   come tutto il resto.
 */
-export function Program() {
+export function Program({ management = false }: { management?: boolean }) {
   const { role } = useAuth();
-  const canEdit = role === "staff" || role === "admin";
+  const canManage = role === "staff" || role === "admin";
+  const canEdit = management && canManage;
   const [days, setDays] = useState(1);
   const [savedDays, setSavedDays] = useState(1);
   const { rows: slots, setRows: setSlots, loading, error: loadError, refetch } = useSupabaseRows<ProgramSlotData>({
@@ -155,10 +157,17 @@ export function Program() {
   return (
     <section id="programma" className="mx-auto w-full max-w-3xl py-10 sm:px-4">
       <div className="px-4 sm:px-0">
-        <h2 className="mb-1 text-2xl font-semibold">Programma</h2>
+        <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione programma" : "Programma"}</h2>
         <p className="mb-4 text-sm text-[var(--text-secondary)]">
-          Due palchi in contemporanea — l’orario può continuare dopo mezzanotte.
+          {management
+            ? "Modifica giorni, palchi e orari pubblicati nella Home."
+            : "Due palchi in contemporanea — l’orario può continuare dopo mezzanotte."}
         </p>
+        {!management && canManage && (
+          <Button href={`${import.meta.env.BASE_URL}#gestione-programma`} className="mb-5 w-full justify-start sm:w-64">
+            Gestione programma
+          </Button>
+        )}
       </div>
 
       {canEdit && (
