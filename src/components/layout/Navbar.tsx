@@ -65,10 +65,9 @@ export function Navbar() {
                 <a
                   href="#programma"
                   onClick={() => setMenuOpen(false)}
-                  className="surface-solid flex min-h-12 items-center justify-between rounded-[var(--radius-md)] px-4 text-sm font-semibold"
+                  className="surface-solid flex min-h-12 items-center justify-center rounded-[var(--radius-md)] px-4 text-sm font-semibold"
                 >
-                  Programma della serata
-                  <span aria-hidden className="text-[var(--accent-primary)]">↓</span>
+                  Programma
                 </a>
 
                 <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--surface-border)] bg-[var(--surface-solid)] p-3">
