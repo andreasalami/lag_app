@@ -21,6 +21,7 @@ const DESTINATIONS = [
 const OPERATIONS = [
   { label: "Cassa", path: "/#cassa" },
   { label: "Cucina", path: "/#cucina" },
+  { label: "Bar", path: "/#bar" },
 ];
 
 export function Staff() {
@@ -156,7 +157,7 @@ export function Staff() {
           ))}
         </div>}
 
-        {(role === "cassa" || role === "cucina" || role === "admin") && <div className="flex flex-col gap-2">
+        {(role === "cassa" || role === "cucina" || role === "bar" || role === "admin") && <div className="flex flex-col gap-2">
           <h2 className="font-display text-sm text-[var(--text-secondary)]">Operatività</h2>
           {OPERATIONS.filter((d) => role === "admin" || d.label.toLowerCase() === role).map((d) => (
             <a key={d.label} href={`${basePath}${d.path}`} className="field text-center font-semibold">

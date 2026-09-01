@@ -1,10 +1,12 @@
 import type { SubmittedOrder } from "./types";
+import type { FulfillmentProgress } from "./workflow";
 
-export type PublicOrderStatus = "in_attesa_pagamento" | "pagato" | "consegnato" | "annullato";
+export type PublicOrderStatus = "in_attesa_pagamento" | "pagato" | "ritiro_parziale" | "consegnato" | "annullato";
 
 export type StoredOrder = SubmittedOrder & {
   status: PublicOrderStatus;
   saved_at: string;
+  progress?: FulfillmentProgress[];
 };
 
 type BrowserStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -15,6 +17,7 @@ const LEGACY_ORDER_KEY = "lag:last-submitted-order";
 const VALID_STATUSES = new Set<PublicOrderStatus>([
   "in_attesa_pagamento",
   "pagato",
+  "ritiro_parziale",
   "consegnato",
   "annullato",
 ]);

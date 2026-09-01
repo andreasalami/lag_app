@@ -5,6 +5,7 @@ import { priceFormatter } from "../../features/orders/orderUtils";
 const ORDER_STATUS_LABELS: Record<PublicOrderStatus, string> = {
   in_attesa_pagamento: "Da pagare",
   pagato: "In preparazione",
+  ritiro_parziale: "Ritiro parziale",
   consegnato: "Ritirato",
   annullato: "Annullato",
 };

@@ -11,6 +11,7 @@ import { MenuManagement } from "./pages/MenuManagement";
 const FeaturePreview = lazy(() => import("./pages/FeaturePreview").then((module) => ({ default: module.FeaturePreview })));
 const Cassa = lazy(() => import("./features/orders/Cassa").then((module) => ({ default: module.Cassa })));
 const Cucina = lazy(() => import("./features/orders/Cucina").then((module) => ({ default: module.Cucina })));
+const Bar = lazy(() => import("./features/orders/Bar").then((module) => ({ default: module.Bar })));
 
 function ProtectedOperationalPage({
   allowedRoles,
@@ -65,8 +66,8 @@ function App() {
 
   const previewEnabled = import.meta.env.VITE_FEATURE_PREVIEW === "true";
   const internalPages = previewEnabled
-    ? ["staff", "cassa", "cucina", "ordina", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo", "anteprima"]
-    : ["staff", "cassa", "cucina", "ordina", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo"];
+    ? ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo", "anteprima"]
+    : ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo"];
   const internalPage = internalPages.includes(hashPath) ? hashPath : path.slice(1);
 
   return (
@@ -77,6 +78,10 @@ function App() {
         <ProtectedOperationalPage allowedRoles={["cassa", "admin"]} component={Cassa} title="Cassa" />
       ) : internalPage === "cucina" ? (
         <ProtectedOperationalPage allowedRoles={["cucina", "admin"]} component={Cucina} title="Cucina" />
+      ) : internalPage === "bar" ? (
+        <ProtectedOperationalPage allowedRoles={["bar", "admin"]} component={Bar} title="Bar" />
+      ) : internalPage === "ordina-nuovo" ? (
+        <OrderPage startFresh />
       ) : internalPage === "ordina" ? (
         <OrderPage />
       ) : internalPage === "tabellone" ? (

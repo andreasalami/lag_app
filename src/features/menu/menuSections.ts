@@ -1,5 +1,5 @@
 export type MenuCategory = "cibo" | "bevande";
-export type KitchenSection = "primi" | "secondi" | "contorni" | "dolci";
+export type KitchenSection = "primi" | "secondi" | "contorni" | "dolci" | "furgone";
 export type BarSection = "birre" | "vini" | "drinks" | "bevande";
 export type MenuSection = KitchenSection | BarSection;
 
@@ -9,6 +9,7 @@ export const MENU_SECTIONS: Record<MenuCategory, { key: MenuSection; label: stri
     { key: "secondi", label: "Secondi" },
     { key: "contorni", label: "Contorni" },
     { key: "dolci", label: "Dolci" },
+    { key: "furgone", label: "Furgone esterno" },
   ],
   bevande: [
     { key: "birre", label: "Birre" },

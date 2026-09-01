@@ -19,6 +19,7 @@ describe("menuSectionFor", () => {
   it("impedisce combinazioni tra reparto e sezione non valide", () => {
     expect(isMenuSectionForCategory("cibo", "primi")).toBe(true);
     expect(isMenuSectionForCategory("cibo", "birre")).toBe(false);
+    expect(isMenuSectionForCategory("cibo", "furgone")).toBe(true);
     expect(isMenuSectionForCategory("bevande", "drinks")).toBe(true);
     expect(isMenuSectionForCategory("bevande", "dolci")).toBe(false);
   });

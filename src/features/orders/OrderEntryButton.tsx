@@ -22,7 +22,7 @@ export function OrderEntryButton() {
       setMessage(orderingReasonMessage(status.reason, status.opens_at));
       return;
     }
-    window.location.hash = "ordina";
+    window.location.hash = "ordina-nuovo";
   }
 
   return (

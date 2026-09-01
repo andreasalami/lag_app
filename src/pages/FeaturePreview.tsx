@@ -20,10 +20,10 @@ type DemoOrder = SubmittedOrder & {
 };
 
 const INITIAL_MENU: OrderMenuItem[] = [
-  { id: "11111111-1111-4111-8111-111111111111", category: "cibo", name: "Panino salamella", price: 5, available_portions: 12, stock_capacity: 60, allergens: [1] },
-  { id: "22222222-2222-4222-8222-222222222222", category: "cibo", name: "Patatine fritte", price: 3.5, available_portions: 40, stock_capacity: 100, allergens: [] },
-  { id: "33333333-3333-4333-8333-333333333333", category: "bevande", name: "Birra media", price: 4.5, available_portions: 18, stock_capacity: 100, allergens: [1] },
-  { id: "44444444-4444-4444-8444-444444444444", category: "bevande", name: "Acqua", price: 1.5, available_portions: 0, stock_capacity: 80, allergens: [] },
+  { id: "11111111-1111-4111-8111-111111111111", category: "cibo", subcategory: "secondi", name: "Panino salamella", price: 5, available_portions: 12, stock_capacity: 60, allergens: [1] },
+  { id: "22222222-2222-4222-8222-222222222222", category: "cibo", subcategory: "contorni", name: "Patatine fritte", price: 3.5, available_portions: 40, stock_capacity: 100, allergens: [] },
+  { id: "33333333-3333-4333-8333-333333333333", category: "bevande", subcategory: "birre", name: "Birra media", price: 4.5, available_portions: 18, stock_capacity: 100, allergens: [1] },
+  { id: "44444444-4444-4444-8444-444444444444", category: "bevande", subcategory: "bevande", name: "Acqua", price: 1.5, available_portions: 0, stock_capacity: 80, allergens: [] },
 ];
 
 function cartFromLines(lines: OrderLine[]) {
@@ -95,6 +95,7 @@ export function FeaturePreview() {
         [item.id]: {
           id: item.id,
           category: item.category,
+          subcategory: item.subcategory,
           name: item.name,
           price: item.price,
           qty: (previous?.qty ?? 0) + 1,

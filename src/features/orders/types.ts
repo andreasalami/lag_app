@@ -3,6 +3,7 @@ export type OrderCategory = "cibo" | "bevande";
 export type OrderMenuItem = {
   id: string;
   category: OrderCategory;
+  subcategory: import("../menu/menuSections").MenuSection;
   name: string;
   price: number;
   available_portions: number | null;
@@ -13,6 +14,7 @@ export type OrderMenuItem = {
 export type OrderLine = {
   id: string;
   category: OrderCategory;
+  subcategory: import("../menu/menuSections").MenuSection;
   name: string;
   price: number;
   qty: number;
@@ -50,7 +52,7 @@ export type StaffOrder = {
   notes: string | null;
   items: OrderLine[];
   total: number;
-  status: "in_attesa_pagamento" | "pagato" | "consegnato" | "annullato";
+  status: "in_attesa_pagamento" | "pagato" | "ritiro_parziale" | "consegnato" | "annullato";
   created_at: string;
   paid_at: string | null;
   claim_expires_at: string | null;

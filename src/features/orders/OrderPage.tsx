@@ -24,6 +24,7 @@ import type { OrderLine, OrderMenuItem, OrderingCatalog, SubmittedOrder } from "
 const STATUS_LABEL: Record<PublicOrderStatus, string> = {
   in_attesa_pagamento: "Da pagare",
   pagato: "In preparazione",
+  ritiro_parziale: "Ritiro parziale",
   consegnato: "Ritirato",
   annullato: "Annullato",
 };
@@ -31,6 +32,7 @@ const STATUS_LABEL: Record<PublicOrderStatus, string> = {
 function statusMessage(status: PublicOrderStatus) {
   switch (status) {
     case "pagato": return "Pagamento registrato. Il tuo ordine è in preparazione.";
+    case "ritiro_parziale": return "Hai ritirato una parte dell’ordine. Conserva il QR per le altre postazioni.";
     case "consegnato": return "Ordine consegnato. Grazie!";
     case "annullato": return "Questo ordine è stato annullato.";
     default: return "Ordine inviato. Ora raggiungi la cassa per pagare.";
@@ -40,24 +42,24 @@ function statusMessage(status: PublicOrderStatus) {
 function statusClass(status: PublicOrderStatus) {
   if (status === "consegnato") return "text-[var(--state-success)]";
   if (status === "annullato") return "text-[var(--state-error)]";
-  if (status === "pagato") return "text-[var(--state-warning)]";
+  if (status === "pagato" || status === "ritiro_parziale") return "text-[var(--state-warning)]";
   return "text-[var(--accent-primary)]";
 }
 
-export function OrderPage() {
+export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [orderHistory, setOrderHistory] = useState<StoredOrder[]>(readOrderHistory);
   const [catalog, setCatalog] = useState<OrderingCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [showIntro, setShowIntro] = useState(() => readOrderHistory().length === 0);
-  const [alias, setAlias] = useState("");
+  const [showIntro, setShowIntro] = useState(() => !startFresh && readOrderHistory().length === 0);
+  const [alias, setAlias] = useState(() => startFresh ? readOrderHistory()[0]?.alias ?? "" : "");
   const [notes, setNotes] = useState("");
   const [cart, setCart] = useState<Record<string, OrderLine>>({});
   const [cartExpanded, setCartExpanded] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submittedOrder, setSubmittedOrder] = useState<StoredOrder | null>(() => readOrderHistory()[0] ?? null);
+  const [submittedOrder, setSubmittedOrder] = useState<StoredOrder | null>(() => startFresh ? null : readOrderHistory()[0] ?? null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [finalTab, setFinalTab] = useState<"qr" | "summary">("qr");
   const [showCopyPrompt, setShowCopyPrompt] = useState(false);
@@ -80,26 +82,28 @@ export function OrderPage() {
       const { data, error } = await supabase.rpc("get_public_order_statuses", {
         p_qr_tokens: batch.map((order) => order.qr_token),
       });
-      return error ? [] : data as Array<{ order_id?: unknown; status?: unknown }>;
+      return error ? [] : data as Array<{ order_id?: unknown; status?: unknown; progress?: unknown }>;
     }));
     const statuses = new Map<string, PublicOrderStatus>();
+    const progress = new Map<string, StoredOrder["progress"]>();
     results.flat().forEach((result) => {
       if (typeof result.order_id === "string" && isPublicOrderStatus(result.status)) {
         statuses.set(result.order_id, result.status);
+        if (Array.isArray(result.progress)) progress.set(result.order_id, result.progress as StoredOrder["progress"]);
       }
     });
     if (statuses.size === 0) return;
     setOrderHistory((current) => {
       const next = current.map((order) => {
         const status = statuses.get(order.order_id);
-        return status ? { ...order, status } : order;
+        return status ? { ...order, status, progress: progress.get(order.order_id) } : order;
       });
       saveOrderHistory(next);
       historyRef.current = next;
       return next;
     });
     setSubmittedOrder((current) => current
-      ? { ...current, status: statuses.get(current.order_id) ?? current.status }
+      ? { ...current, status: statuses.get(current.order_id) ?? current.status, progress: progress.get(current.order_id) ?? current.progress }
       : null);
   }, []);
 
@@ -129,10 +133,10 @@ export function OrderPage() {
   }
 
   useEffect(() => {
-    void loadCatalog(true);
+    void loadCatalog(!startFresh);
   // Il catalogo iniziale e lo storico si caricano una sola volta all'apertura.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [startFresh]);
 
   useEffect(() => {
     const refresh = () => {
@@ -177,6 +181,7 @@ export function OrderPage() {
         [item.id]: {
           id: item.id,
           category: item.category,
+          subcategory: item.subcategory,
           name: item.name,
           price: Number(item.price),
           qty: (existing?.qty ?? 0) + 1,
@@ -202,7 +207,7 @@ export function OrderPage() {
   function requestSubmit() {
     setSubmitError(null);
     if (!/^[\p{L}\p{N}][\p{L}\p{N} _-]{1,31}$/u.test(alias.trim())) {
-      setSubmitError("Inserisci un alias di 2–32 caratteri usando lettere, numeri, spazi, trattino o underscore.");
+      setSubmitError("Inserisci un nome dell’ordine di 2–32 caratteri usando lettere, numeri, spazi, trattino o underscore.");
       setCartExpanded(true);
       return;
     }
@@ -315,11 +320,25 @@ export function OrderPage() {
           <p className="mt-2 text-xs text-[var(--text-secondary)]">
             {submittedOrder.status === "in_attesa_pagamento"
               ? "Mostra QR, numero e alias alla cassa."
-              : submittedOrder.status === "pagato"
-                ? "Mostra lo stesso QR in cucina quando ritiri l’ordine."
+              : submittedOrder.status === "pagato" || submittedOrder.status === "ritiro_parziale"
+                ? "Mostra lo stesso QR in ogni postazione in cui devi ritirare."
                 : "Il QR e il riepilogo restano disponibili per tutta la durata dell’evento."}
           </p>
         </section>
+
+        {submittedOrder.progress && submittedOrder.progress.length > 0 && (
+          <Card className="mt-5">
+            <h2 className="font-semibold">Ritiro per postazione</h2>
+            <div className="mt-3 flex flex-col gap-2">
+              {submittedOrder.progress.map((item) => (
+                <div key={item.station} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="capitalize">{item.station}</span>
+                  <strong className={item.delivered >= item.quantity ? "text-[var(--state-success)]" : ""}>{item.delivered}/{item.quantity}</strong>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         <Card className="mt-5">
           <div className="flex items-center justify-between gap-3">
@@ -449,13 +468,13 @@ export function OrderPage() {
         )}
       </div>
       <h1 className="mt-5 text-3xl">Ordina qui</h1>
-      <label className="mt-5 block">
-        <span className="mb-1 block text-sm font-semibold">Alias dell’ordine</span>
+      <label className="mt-5 block rounded-[var(--radius-md)] border-2 border-[var(--accent-primary)] bg-white/5 p-4">
+        <span className="mb-2 block text-lg font-semibold">Inserisci qui il nome del tuo ordine</span>
         <input
           value={alias}
           onChange={(event) => setAlias(event.target.value)}
           maxLength={32}
-          placeholder="Es. Girasole"
+          placeholder="Es. Tavolo Girasole"
           autoComplete="off"
           className="field w-full py-3 text-base"
         />
@@ -576,7 +595,7 @@ export function OrderPage() {
         title="Come funziona"
         actions={<Button variant="primary" onClick={() => setShowIntro(false)}>OK, ho capito</Button>}
       >
-        <p>Prepara qui il tuo ordine e invialo. Il pagamento avviene esclusivamente in cassa, in contanti o con carta. L’ordine parte verso la cucina solo dopo il pagamento.</p>
+        <p>Prepara qui il tuo ordine e invialo. Il pagamento avviene esclusivamente in cassa, in contanti o con carta. Dopo il pagamento potrai ritirare le voci nelle postazioni indicate usando sempre lo stesso QR.</p>
       </Modal>
 
       <Modal

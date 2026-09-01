@@ -25,6 +25,7 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
         [item.id]: {
           id: item.id,
           category: item.category,
+          subcategory: item.subcategory,
           name: item.name,
           price: Number(item.price),
           qty: (existing?.qty ?? 0) + 1,

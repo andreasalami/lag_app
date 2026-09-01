@@ -24,7 +24,7 @@ describe("eventReportToCsv", () => {
         created_at: "2026-08-12T11:00:00.000Z",
         paid_at: "2026-08-12T11:05:00.000Z",
         status: "consegnato",
-        items: [{ id: "p1", name: "Panino", category: "cibo", price: 5, qty: 1, allergens: [1] }],
+        items: [{ id: "p1", name: "Panino", category: "cibo", subcategory: "secondi", price: 5, qty: 1, allergens: [1] }],
         total: 5,
       }],
     };

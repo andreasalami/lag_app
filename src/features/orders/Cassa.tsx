@@ -9,10 +9,11 @@ import { downloadCsv, parseQrPayload, priceFormatter, type EventReport } from ".
 import { OrderEditor } from "./OrderEditor";
 import { QrScanner } from "./QrScanner";
 import type { OrderLine, OrderMenuItem, StaffOrder } from "./types";
+import { CASH_STATIONS, cashStationLabel, isCashStation, type CashStation } from "./workflow";
 
 type PendingOrder = Pick<StaffOrder,
   "id" | "event_id" | "display_number" | "alias" | "total" | "created_at" | "status" | "claim_expires_at"
->;
+> & { claimed_station: CashStation | null };
 
 type EventState = {
   id: string;
@@ -27,10 +28,6 @@ type EventState = {
 };
 
 type Tab = "ordini" | "manuale" | "evento";
-
-function linesToCart(lines: OrderLine[]) {
-  return Object.fromEntries(lines.map((line) => [line.id, { ...line, price: Number(line.price), allergens: line.allergens ?? [] }]));
-}
 
 function toLocalDateTime(iso: string) {
   const date = new Date(iso);
@@ -54,9 +51,10 @@ export function Cassa() {
   const [aliasSearch, setAliasSearch] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<StaffOrder | null>(null);
-  const [activeAlias, setActiveAlias] = useState("");
-  const [activeNotes, setActiveNotes] = useState("");
-  const [activeCart, setActiveCart] = useState<Record<string, OrderLine>>({});
+  const [cashStation, setCashStation] = useState<CashStation | null>(() => {
+    const saved = localStorage.getItem("lag:cash-station");
+    return isCashStation(saved) ? saved : null;
+  });
   const [actionBusy, setActionBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [counterAlias, setCounterAlias] = useState("");
@@ -70,12 +68,12 @@ export function Cassa() {
   const [closeEventModal, setCloseEventModal] = useState(false);
   const [closeEventText, setCloseEventText] = useState("");
   const [, setClockTick] = useState(0);
-  const claimTokenRef = useRef(crypto.randomUUID());
+  const deviceIdRef = useRef(localStorage.getItem("lag:cash-device-id") ?? crypto.randomUUID());
   const activeOrderRef = useRef<StaffOrder | null>(null);
 
   const { rows: menuItems, loading: menuLoading, refetch: refetchMenu } = useSupabaseRows<OrderMenuItem>({
     table: "menu_items",
-    select: "id, category, name, price, available_portions, stock_capacity, allergens",
+    select: "id, category, subcategory, name, price, available_portions, stock_capacity, allergens",
     orderBy: [{ column: "category" }, { column: "name" }],
     fallback: [],
   });
@@ -84,11 +82,7 @@ export function Cassa() {
 
   const refetchOrders = useCallback(async () => {
     if (!authorized) return;
-    const { data, error } = await supabase
-      .from("orders")
-      .select("id, event_id, display_number, alias, total, created_at, status, claim_expires_at")
-      .eq("status", "in_attesa_pagamento")
-      .order("display_number", { ascending: true });
+    const { data, error } = await supabase.rpc("get_cashier_pending_orders");
     if (error) setMessage("Elenco ordini non disponibile. Riprova.");
     else setPendingOrders((data ?? []) as PendingOrder[]);
     setOrdersLoading(false);
@@ -108,6 +102,10 @@ export function Cassa() {
     setEventCloses(toLocalDateTime(next.closes_at));
     setEventLimit(next.max_pending_orders);
   }, [authorized]);
+
+  useEffect(() => {
+    localStorage.setItem("lag:cash-device-id", deviceIdRef.current);
+  }, []);
 
   useEffect(() => {
     if (!authorized) return;
@@ -139,13 +137,26 @@ export function Cassa() {
   useEffect(() => {
     return () => {
       if (activeOrderRef.current) {
-        void supabase.rpc("release_order_claim", {
+        void supabase.rpc("release_order_for_station", {
           p_order_id: activeOrderRef.current.id,
-          p_claim_token: claimTokenRef.current,
+          p_station: cashStation,
+          p_device_id: deviceIdRef.current,
         });
       }
     };
-  }, []);
+  }, [cashStation]);
+
+  useEffect(() => {
+    if (!activeOrder || !cashStation) return;
+    const timer = window.setInterval(() => {
+      void supabase.rpc("claim_order_for_station", {
+        p_order_id: activeOrder.id,
+        p_station: cashStation,
+        p_device_id: deviceIdRef.current,
+      });
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [activeOrder, cashStation]);
 
   const filteredOrders = useMemo(() => pendingOrders.filter((order) => {
     const numberMatches = !numberSearch.trim() || String(order.display_number).includes(numberSearch.trim());
@@ -153,26 +164,19 @@ export function Cassa() {
     return numberMatches && aliasMatches;
   }), [aliasSearch, numberSearch, pendingOrders]);
 
-  const activeDirty = activeOrder ? (
-    activeAlias !== (activeOrder.alias ?? "")
-    || activeNotes !== (activeOrder.notes ?? "")
-    || JSON.stringify(Object.values(activeCart)) !== JSON.stringify(activeOrder.items.map((line) => ({ ...line, price: Number(line.price), allergens: line.allergens ?? [] })))
-  ) : false;
-
   function setClaimedOrder(order: StaffOrder) {
     setActiveOrder(order);
-    setActiveAlias(order.alias ?? "");
-    setActiveNotes(order.notes ?? "");
-    setActiveCart(linesToCart(order.items));
     setScannerOpen(false);
   }
 
   async function claimOrder(id: string) {
+    if (!cashStation) return;
     setActionBusy(true);
     setMessage(null);
-    const { data, error } = await supabase.rpc("claim_order", {
+    const { data, error } = await supabase.rpc("claim_order_for_station", {
       p_order_id: id,
-      p_claim_token: claimTokenRef.current,
+      p_station: cashStation,
+      p_device_id: deviceIdRef.current,
     });
     setActionBusy(false);
     if (error || !data) {
@@ -193,9 +197,11 @@ export function Cassa() {
       return;
     }
     setActionBusy(true);
-    const { data, error } = await supabase.rpc("claim_order_by_qr", {
+    if (!cashStation) return;
+    const { data, error } = await supabase.rpc("claim_order_by_qr_for_station", {
       p_qr_token: token,
-      p_claim_token: claimTokenRef.current,
+      p_station: cashStation,
+      p_device_id: deviceIdRef.current,
     });
     setActionBusy(false);
     setScannerOpen(false);
@@ -206,78 +212,47 @@ export function Cassa() {
       return;
     }
     setClaimedOrder(data as StaffOrder);
-  }, []);
+  }, [cashStation]);
 
   async function releaseActiveOrder() {
     if (!activeOrder) return;
     setActionBusy(true);
-    await supabase.rpc("release_order_claim", {
+    await supabase.rpc("release_order_for_station", {
       p_order_id: activeOrder.id,
-      p_claim_token: claimTokenRef.current,
+      p_station: cashStation,
+      p_device_id: deviceIdRef.current,
     });
     setActionBusy(false);
     setActiveOrder(null);
     void refetchOrders();
   }
 
-  async function saveActiveOrder() {
-    if (!activeOrder) return null;
-    const lines = Object.values(activeCart);
-    if (lines.length === 0) {
-      setMessage("L’ordine deve contenere almeno una voce oppure essere annullato.");
-      return null;
-    }
-    setActionBusy(true);
-    const { data, error } = await supabase.rpc("update_claimed_order", {
-      p_order_id: activeOrder.id,
-      p_claim_token: claimTokenRef.current,
-      p_alias: activeAlias.trim(),
-      p_notes: activeNotes.trim(),
-      p_items: lines.map((line) => ({ id: line.id, qty: line.qty })),
-    });
-    setActionBusy(false);
-    if (error || !data) {
-      setMessage(error?.message.includes("stock_unavailable:")
-        ? `Scorte insufficienti: ${error.message.split("stock_unavailable:")[1]}`
-        : "Modifiche non salvate. Riprova.");
-      return null;
-    }
-    const updated = data as StaffOrder;
-    setClaimedOrder(updated);
-    void refetchMenu();
-    return updated;
-  }
-
   async function payActiveOrder() {
-    if (!activeOrder) return;
-    let orderToPay = activeOrder;
-    if (activeDirty) {
-      const saved = await saveActiveOrder();
-      if (!saved) return;
-      orderToPay = saved;
-    }
+    if (!activeOrder || !cashStation) return;
     setActionBusy(true);
-    const { error } = await supabase.rpc("pay_claimed_order", {
-      p_order_id: orderToPay.id,
-      p_claim_token: claimTokenRef.current,
+    const { error } = await supabase.rpc("pay_order_for_station", {
+      p_order_id: activeOrder.id,
+      p_station: cashStation,
+      p_device_id: deviceIdRef.current,
     });
     setActionBusy(false);
     if (error) {
       setMessage("Pagamento non confermato nell’app. Riprova prima di chiudere l’ordine.");
       return;
     }
-    setMessage(`Ordine #${orderToPay.display_number} pagato e inviato.`);
+    setMessage(`Ordine #${activeOrder.display_number} pagato e inviato alle postazioni.`);
     setActiveOrder(null);
     void refetchOrders();
   }
 
   async function cancelActiveOrder() {
-    if (!activeOrder) return;
+    if (!activeOrder || !cashStation) return;
     if (!window.confirm(`Annullare definitivamente l’ordine #${activeOrder.display_number}? Le scorte verranno ripristinate.`)) return;
     setActionBusy(true);
-    const { error } = await supabase.rpc("cancel_claimed_order", {
+    const { error } = await supabase.rpc("cancel_order_for_station", {
       p_order_id: activeOrder.id,
-      p_claim_token: claimTokenRef.current,
+      p_station: cashStation,
+      p_device_id: deviceIdRef.current,
     });
     setActionBusy(false);
     if (error) setMessage("Ordine non annullato. Riprova.");
@@ -390,35 +365,42 @@ export function Cassa() {
     );
   }
 
+  if (!cashStation) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-8">
+        <h1 className="text-3xl">Scegli la cassa</h1>
+        <p className="mt-2 text-sm text-[var(--text-secondary)]">Puoi collegare uno o due dispositivi alla stessa cassa. La scelta resta memorizzata su questo dispositivo.</p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {CASH_STATIONS.map((station) => (
+            <button key={station.key} type="button" onClick={() => { localStorage.setItem("lag:cash-station", station.key); setCashStation(station.key); }} className="surface-solid rounded-[var(--radius-md)] p-4 text-left font-semibold">
+              {station.label}
+            </button>
+          ))}
+        </div>
+      </main>
+    );
+  }
+
   if (activeOrder) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs text-[var(--state-warning)]">Ordine preso in carico da questa cassa</p>
+            <p className="text-xs text-[var(--state-warning)]">{cashStationLabel(cashStation)} · ordine in sola lettura</p>
             <h1 className="text-3xl">#{activeOrder.display_number} · {activeOrder.alias}</h1>
           </div>
           <Button variant="ghost" onClick={() => void releaseActiveOrder()} disabled={actionBusy}>Chiudi senza pagare</Button>
         </div>
-        <p className="mt-3 rounded-[var(--radius-sm)] border border-[var(--state-warning)] p-3 text-sm text-[var(--state-warning)]">
-          Batti tutte le singole voci sul registratore. Usa la modifica solo per eccezioni concordate col cliente.
-        </p>
-        <div className="mt-5">
-          <OrderEditor
-            menuItems={menuItems}
-            cart={activeCart}
-            setCart={setActiveCart}
-            alias={activeAlias}
-            setAlias={setActiveAlias}
-            notes={activeNotes}
-            setNotes={setActiveNotes}
-          />
-        </div>
+        <p className="mt-3 rounded-[var(--radius-sm)] border border-[var(--state-warning)] p-3 text-sm text-[var(--state-warning)]">Prepara lo scontrino sul registratore. Questo ordine non può essere modificato dalla cassa.</p>
+        {activeOrder.notes && <div className="mt-4 rounded-[var(--radius-sm)] border-2 border-[var(--state-warning)] p-3"><strong>NOTE:</strong> {activeOrder.notes}</div>}
+        <Card className="mt-5 flex flex-col gap-2">
+          {activeOrder.items.map((line) => <div key={line.id} className="flex justify-between gap-3"><strong>{line.qty}× {line.name}</strong><span className="font-mono">{priceFormatter.format(Number(line.price) * line.qty)}</span></div>)}
+          <div className="mt-2 flex justify-between border-t border-[var(--surface-border)] pt-3 text-lg font-semibold"><span>Totale</span><span className="font-mono">{priceFormatter.format(Number(activeOrder.total))}</span></div>
+        </Card>
         {message && <p className="mt-3 text-sm text-[var(--state-error)]">{message}</p>}
         <div className="mt-5 flex flex-wrap justify-between gap-3">
           <Button variant="ghost" onClick={() => void cancelActiveOrder()} disabled={actionBusy}>Annulla ordine</Button>
           <div className="flex flex-wrap gap-2">
-            {activeDirty && <Button variant="ghost" onClick={() => void saveActiveOrder()} disabled={actionBusy}>Salva modifiche</Button>}
             <Button variant="primary" onClick={() => void payActiveOrder()} disabled={actionBusy}>
               {actionBusy ? "Attendi…" : "Pagato e invia"}
             </Button>
@@ -432,10 +414,10 @@ export function Cassa() {
     <main className="mx-auto max-w-4xl px-4 py-8">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl">Cassa</h1>
+          <h1 className="text-3xl">{cashStationLabel(cashStation)}</h1>
           <p className="text-sm text-[var(--text-secondary)]">Preordini, ordine eccezionale ed evento.</p>
         </div>
-        <a href={`${import.meta.env.BASE_URL}#staff`} className="text-xs text-[var(--text-secondary)] hover:underline">Area staff</a>
+        <div className="flex flex-col items-end gap-1"><a href={`${import.meta.env.BASE_URL}#staff`} className="text-xs text-[var(--text-secondary)] hover:underline">Area staff</a><button type="button" onClick={() => setCashStation(null)} className="text-xs text-[var(--text-secondary)] hover:underline">Cambia cassa</button></div>
       </div>
 
       <div className="mt-5 grid grid-cols-3 rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1">
@@ -477,23 +459,18 @@ export function Cassa() {
           {ordersLoading ? <p className="mt-4 text-sm text-[var(--text-secondary)]">Carico…</p> : (
             <div className="mt-3 flex flex-col gap-2">
               {filteredOrders.map((order) => {
-                const claimed = order.claim_expires_at !== null && new Date(order.claim_expires_at).getTime() > Date.now();
+                const claimed = order.claimed_station !== null && order.claim_expires_at !== null && new Date(order.claim_expires_at).getTime() > Date.now();
+                const ours = order.claimed_station === cashStation;
                 return (
-                  <button
-                    key={order.id}
-                    type="button"
-                    onClick={() => void claimOrder(order.id)}
-                    disabled={claimed || actionBusy}
-                    className="surface-solid flex items-center justify-between gap-3 rounded-[var(--radius-md)] p-3 text-left disabled:cursor-not-allowed disabled:opacity-45"
-                  >
+                  <div key={order.id} className="surface-solid flex items-center justify-between gap-3 rounded-[var(--radius-md)] p-3 text-left">
                     <span>
                       <strong>#{order.display_number} · {order.alias}</strong>
                       <span className="mt-1 block text-xs text-[var(--text-secondary)]">
-                        {claimed ? "Preso in carico da un’altra cassa" : orderAge(order.created_at)}
+                        {claimed ? `In gestione a ${cashStationLabel(order.claimed_station!)}` : orderAge(order.created_at)}
                       </span>
                     </span>
-                    <span className="font-mono text-[var(--accent-primary)]">{priceFormatter.format(Number(order.total))}</span>
-                  </button>
+                    <div className="flex items-center gap-2"><span className="font-mono text-[var(--accent-primary)]">{priceFormatter.format(Number(order.total))}</span>{(!claimed || ours) ? <Button variant="ghost" onClick={() => void claimOrder(order.id)} disabled={actionBusy}>Apri</Button> : <Button variant="ghost" onClick={async () => { await supabase.rpc("force_release_order", { p_order_id: order.id }); void refetchOrders(); }} disabled={actionBusy}>Sblocca</Button>}</div>
+                  </div>
                 );
               })}
               {filteredOrders.length === 0 && <p className="text-sm text-[var(--text-secondary)]">Nessun ordine corrispondente.</p>}
@@ -506,7 +483,7 @@ export function Cassa() {
         <section className="mt-6">
           <h2 className="text-xl">Ordine eccezionale dalla cassa</h2>
           <p className="mb-4 mt-1 text-sm text-[var(--text-secondary)]">
-            Solo per chi non dispone di smartphone. L’ordine viene creato già pagato e inviato direttamente in cucina.
+            Solo per emergenze. L’ordine viene creato già pagato e inviato direttamente alle postazioni competenti.
           </p>
           {menuLoading ? <p className="text-sm text-[var(--text-secondary)]">Carico il menu…</p> : (
             <OrderEditor
