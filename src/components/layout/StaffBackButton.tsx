@@ -10,7 +10,7 @@ export function StaffBackButton() {
   }
 
   return (
-    <Button type="button" variant="staff-secondary" onClick={goBack} className="min-h-10 px-4 py-2">
+    <Button type="button" variant="back" onClick={goBack} className="min-h-10 px-4 py-2">
       ← Indietro
     </Button>
   );

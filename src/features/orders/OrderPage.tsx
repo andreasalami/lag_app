@@ -308,7 +308,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   if (submittedOrder) {
     return (
       <main className="mx-auto min-h-full max-w-xl px-4 py-8">
-        <a href={`${import.meta.env.BASE_URL}#menu`} className="text-xs text-[var(--text-secondary)] hover:underline">← Indietro</a>
+        <Button href={`${import.meta.env.BASE_URL}#menu`} variant="back" className="min-h-10 px-4 py-2">← Indietro</Button>
         <section className="mt-5 text-center">
           <p className={`text-sm ${orderStatusClassName(submittedOrder.status)}`}>{statusMessage(submittedOrder.status)}</p>
           <h1 className="mt-2 text-4xl">#{submittedOrder.display_number}</h1>
@@ -460,7 +460,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   return (
     <main className="mx-auto min-h-full max-w-3xl px-4 pb-40 pt-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <a href={`${import.meta.env.BASE_URL}#menu`} className="text-xs text-[var(--text-secondary)] hover:underline">← Torna al menu del sito</a>
+        <Button href={`${import.meta.env.BASE_URL}#menu`} variant="back" className="min-h-10 px-4 py-2">← Torna al menu del sito</Button>
         {orderHistory.length > 0 && (
           <Button variant="ghost" onClick={() => viewOrder(orderHistory[0])}>
             I miei ordini ({orderHistory.length})

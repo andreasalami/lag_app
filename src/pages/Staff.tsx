@@ -94,7 +94,7 @@ export function Staff() {
             {error && <p className="text-xs text-[var(--state-error)]">{error}</p>}
           </form>
         </StaffPanel>
-        <Button variant="staff-secondary" href={`${basePath}/`} className="mt-4 w-full">Torna al sito</Button>
+        <Button variant="back" href={`${basePath}/`} className="mt-4 w-full">← Torna al sito</Button>
       </section>
     );
   }
@@ -129,7 +129,7 @@ export function Staff() {
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Button variant="staff-secondary" onClick={signOut}>Esci</Button>
-            <Button variant="staff-secondary" href={`${basePath}/`}>Torna al sito</Button>
+            <Button variant="back" href={`${basePath}/`}>← Torna al sito</Button>
           </div>
         </StaffPanel>
       </section>
@@ -166,7 +166,7 @@ export function Staff() {
 
       <div className="mt-6 flex flex-wrap justify-center gap-2">
         <Button variant="staff-secondary" onClick={signOut}>Esci</Button>
-        <Button variant="staff-secondary" href={`${basePath}/`}>Torna al sito</Button>
+        <Button variant="back" href={`${basePath}/`}>← Torna al sito</Button>
       </div>
     </section>
   );
