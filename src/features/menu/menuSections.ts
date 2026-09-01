@@ -18,6 +18,10 @@ export const MENU_SECTIONS: Record<MenuCategory, { key: MenuSection; label: stri
   ],
 };
 
+export function isMenuSectionForCategory(category: MenuCategory, section: MenuSection) {
+  return MENU_SECTIONS[category].some((candidate) => candidate.key === section);
+}
+
 function normalizedName(name: string) {
   return name
     .normalize("NFD")
@@ -30,9 +34,9 @@ function includesOneOf(name: string, keywords: string[]) {
 }
 
 /**
- * Il database storico distingue soltanto cibo e bevande. Questa
- * classificazione rende disponibili le nuove sottosezioni senza richiedere
- * una migrazione immediata e continua a funzionare con i prodotti esistenti.
+ * Classificazione usata per assegnare una sezione iniziale ai prodotti
+ * storici durante la migrazione. Dopo la migrazione la scelta dello staff
+ * viene salvata esplicitamente nel campo `subcategory`.
  */
 export function menuSectionFor(category: MenuCategory, itemName: string): MenuSection {
   const name = normalizedName(itemName);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { menuSectionFor } from "./menuSections";
+import { isMenuSectionForCategory, menuSectionFor } from "./menuSections";
 
 describe("menuSectionFor", () => {
   it("divide i piatti nelle sezioni della cucina", () => {
@@ -14,5 +14,12 @@ describe("menuSectionFor", () => {
     expect(menuSectionFor("bevande", "Vino bianco")).toBe("vini");
     expect(menuSectionFor("bevande", "Spritz")).toBe("drinks");
     expect(menuSectionFor("bevande", "Cola")).toBe("bevande");
+  });
+
+  it("impedisce combinazioni tra reparto e sezione non valide", () => {
+    expect(isMenuSectionForCategory("cibo", "primi")).toBe(true);
+    expect(isMenuSectionForCategory("cibo", "birre")).toBe(false);
+    expect(isMenuSectionForCategory("bevande", "drinks")).toBe(true);
+    expect(isMenuSectionForCategory("bevande", "dolci")).toBe(false);
   });
 });

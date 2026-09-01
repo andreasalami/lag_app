@@ -7,13 +7,19 @@ import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
 import { ALLERGENS, priceFormatter } from "../orders/orderUtils";
 import { OrderEntryButton } from "../orders/OrderEntryButton";
-import { MENU_SECTIONS, menuSectionFor, type MenuCategory } from "./menuSections";
+import {
+  MENU_SECTIONS,
+  isMenuSectionForCategory,
+  type MenuCategory,
+  type MenuSection,
+} from "./menuSections";
 
 type Category = MenuCategory;
 
 type MenuItem = {
   id: string;
   category: Category;
+  subcategory: MenuSection;
   name: string;
   price: number;
   available_portions: number | null;
@@ -29,10 +35,10 @@ const CATEGORY_DESCRIPTION: Record<Category, string> = {
 };
 
 const FALLBACK_ITEMS: MenuItem[] = [
-  { id: "f1", category: "cibo", name: "Panino salamella — esempio", price: 5, available_portions: null, stock_capacity: null, allergens: [1] },
-  { id: "f2", category: "cibo", name: "Patatine fritte — esempio", price: 3, available_portions: null, stock_capacity: null, allergens: [] },
-  { id: "f3", category: "bevande", name: "Birra media — esempio", price: 4, available_portions: null, stock_capacity: null, allergens: [1] },
-  { id: "f4", category: "bevande", name: "Acqua — esempio", price: 1.5, available_portions: null, stock_capacity: null, allergens: [] },
+  { id: "f1", category: "cibo", subcategory: "secondi", name: "Panino salamella — esempio", price: 5, available_portions: null, stock_capacity: null, allergens: [1] },
+  { id: "f2", category: "cibo", subcategory: "contorni", name: "Patatine fritte — esempio", price: 3, available_portions: null, stock_capacity: null, allergens: [] },
+  { id: "f3", category: "bevande", subcategory: "birre", name: "Birra media — esempio", price: 4, available_portions: null, stock_capacity: null, allergens: [1] },
+  { id: "f4", category: "bevande", subcategory: "bevande", name: "Acqua — esempio", price: 1.5, available_portions: null, stock_capacity: null, allergens: [] },
 ];
 
 // I prodotti aggiunti in locale (non ancora salvati) hanno un id
@@ -63,7 +69,7 @@ export function Menu({ management = false }: { management?: boolean }) {
   const canEdit = management && canManage;
   const { rows: items, setRows: setItems, loading, error: loadError, refetch } = useSupabaseRows<MenuItem>({
     table: "menu_items",
-    select: "id, category, name, price, available_portions, stock_capacity, allergens",
+    select: "id, category, subcategory, name, price, available_portions, stock_capacity, allergens",
     orderBy: [
       { column: "category" },
       { column: "name" },
@@ -89,12 +95,13 @@ export function Menu({ management = false }: { management?: boolean }) {
 
   const isDirty = deletedIds.length > 0 || JSON.stringify(items) !== JSON.stringify(savedItems);
 
-  function addItem(category: Category) {
+  function addItem(category: Category, subcategory: MenuSection) {
     setItems((prev) => [
       ...prev,
       {
         id: `${NEW_ID_PREFIX}${crypto.randomUUID()}`,
         category,
+        subcategory,
         name: "Nuovo prodotto",
         price: 0,
         available_portions: null,
@@ -102,6 +109,12 @@ export function Menu({ management = false }: { management?: boolean }) {
         allergens: [],
       },
     ]);
+  }
+
+  function moveItem(id: string, value: string) {
+    const [category, subcategory] = value.split(":") as [Category, MenuSection];
+    if (!CATEGORIES.includes(category) || !isMenuSectionForCategory(category, subcategory)) return;
+    setItems((prev) => prev.map((item) => item.id === id ? { ...item, category, subcategory } : item));
   }
 
   function deleteItem(id: string) {
@@ -120,6 +133,7 @@ export function Menu({ management = false }: { management?: boolean }) {
       || !Number.isFinite(item.price)
       || item.price < 0
       || item.price > 9999.99
+      || !isMenuSectionForCategory(item.category, item.subcategory)
       || item.allergens.some((allergen) => !Number.isInteger(allergen) || allergen < 1 || allergen > 14)
       || new Set(item.allergens).size !== item.allergens.length
       || (item.available_portions !== null
@@ -133,8 +147,9 @@ export function Menu({ management = false }: { management?: boolean }) {
 
     const created = items
       .filter((i) => isNewId(i.id))
-      .map(({ category, name, price, available_portions, allergens }) => ({
+      .map(({ category, subcategory, name, price, available_portions, allergens }) => ({
         category,
+        subcategory,
         name,
         price,
         available_portions,
@@ -198,7 +213,7 @@ export function Menu({ management = false }: { management?: boolean }) {
             <div className="px-4 py-2 sm:px-6">
               {MENU_SECTIONS[category].map((section) => {
                 const sectionItems = items.filter((item) =>
-                  item.category === category && menuSectionFor(category, item.name) === section.key
+                  item.category === category && item.subcategory === section.key
                 );
 
                 return (
@@ -245,6 +260,24 @@ export function Menu({ management = false }: { management?: boolean }) {
                                 Elimina
                               </button>
                             </div>
+                            <label className="mt-2 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                              Sezione
+                              <select
+                                value={`${item.category}:${item.subcategory}`}
+                                onChange={(event) => moveItem(item.id, event.target.value)}
+                                className="field min-w-0 flex-1 text-xs sm:max-w-56"
+                              >
+                                {CATEGORIES.map((destinationCategory) => (
+                                  <optgroup key={destinationCategory} label={CATEGORY_LABEL[destinationCategory]}>
+                                    {MENU_SECTIONS[destinationCategory].map((destinationSection) => (
+                                      <option key={destinationSection.key} value={`${destinationCategory}:${destinationSection.key}`}>
+                                        {destinationSection.label}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                ))}
+                              </select>
+                            </label>
                             <div className="mt-2 flex flex-wrap gap-1.5" aria-label={`Allergeni di ${item.name}`}>
                               {ALLERGENS.map((allergen, index) => {
                                 const number = index + 1;
@@ -284,15 +317,18 @@ export function Menu({ management = false }: { management?: boolean }) {
                         ))}
                       </div>
                     )}
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => addItem(category, section.key)}
+                        className="mt-3 text-xs text-[var(--accent-primary)] hover:underline"
+                      >
+                        + Aggiungi in {section.label}
+                      </button>
+                    )}
                   </div>
                 );
               })}
-
-              {canEdit && (
-                <button onClick={() => addItem(category)} className="mb-4 mt-2 text-xs text-[var(--accent-primary)] hover:underline">
-                  + Aggiungi prodotto in {CATEGORY_LABEL[category]}
-                </button>
-              )}
 
               {category === "bevande" && (
                 <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--accent-primary)]/40 bg-[rgba(242,128,46,0.08)] px-4 py-3 text-sm font-semibold text-[var(--accent-primary)]">

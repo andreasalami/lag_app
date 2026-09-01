@@ -294,6 +294,7 @@ grant execute on function public.bulk_upsert_program_slots(jsonb, jsonb, uuid[])
 create table if not exists public.menu_items (
   id uuid primary key default gen_random_uuid(),
   category text not null check (category in ('cibo', 'bevande')),
+  subcategory text not null,
   name text not null,
   price numeric(6,2) not null default 0,
   available_portions integer check (available_portions is null or available_portions >= 0),
@@ -304,6 +305,24 @@ create table if not exists public.menu_items (
 
 alter table public.menu_items add column if not exists stock_capacity integer;
 alter table public.menu_items add column if not exists allergens smallint[] not null default '{}'::smallint[];
+alter table public.menu_items add column if not exists subcategory text;
+update public.menu_items
+set subcategory = case
+  when category = 'cibo' and lower(name) ~ '(dolce|torta|gelato|dessert|crostata|biscotto|tiramis)' then 'dolci'
+  when category = 'cibo' and lower(name) ~ '(patatin|contorno|insalata|verdure|polenta|fritto misto)' then 'contorni'
+  when category = 'cibo' and lower(name) ~ '(pasta|risotto|lasagn|gnocc|raviol|tortell|primo)' then 'primi'
+  when category = 'cibo' then 'secondi'
+  when category = 'bevande' and lower(name) ~ '(birra|lager|ipa|pils|weiss|bionda|rossa)' then 'birre'
+  when category = 'bevande' and lower(name) ~ '(vino|prosecco|spumante|rosso|bianco|rosé|rose)' then 'vini'
+  when category = 'bevande' and lower(name) ~ '(spritz|cocktail|drink|gin|vodka|rum|amaro|grappa|mojito|negroni)' then 'drinks'
+  else 'bevande'
+end
+where subcategory is null
+  or not (
+    (category = 'cibo' and subcategory in ('primi', 'secondi', 'contorni', 'dolci'))
+    or (category = 'bevande' and subcategory in ('birre', 'vini', 'drinks', 'bevande'))
+  );
+alter table public.menu_items alter column subcategory set not null;
 update public.menu_items
 set stock_capacity = available_portions
 where stock_capacity is null and available_portions is not null;
@@ -329,6 +348,12 @@ begin
   if not exists (select 1 from pg_constraint where conrelid = 'public.menu_items'::regclass and conname = 'menu_items_allergens_valid') then
     alter table public.menu_items add constraint menu_items_allergens_valid
       check (allergens <@ array[1,2,3,4,5,6,7,8,9,10,11,12,13,14]::smallint[]) not valid;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.menu_items'::regclass and conname = 'menu_items_subcategory_valid') then
+    alter table public.menu_items add constraint menu_items_subcategory_valid check (
+      (category = 'cibo' and subcategory in ('primi', 'secondi', 'contorni', 'dolci'))
+      or (category = 'bevande' and subcategory in ('birre', 'vini', 'drinks', 'bevande'))
+    ) not valid;
   end if;
 end
 $$;
@@ -370,8 +395,8 @@ begin
   end if;
 
   if jsonb_array_length(coalesce(p_created, '[]'::jsonb)) > 0 then
-    insert into public.menu_items (category, name, price, available_portions, stock_capacity, allergens)
-    select elem->>'category', btrim(elem->>'name'), (elem->>'price')::numeric,
+    insert into public.menu_items (category, subcategory, name, price, available_portions, stock_capacity, allergens)
+    select elem->>'category', elem->>'subcategory', btrim(elem->>'name'), (elem->>'price')::numeric,
       (elem->>'available_portions')::integer, (elem->>'available_portions')::integer,
       coalesce((select array_agg(value::smallint order by value::smallint)
         from jsonb_array_elements_text(coalesce(elem->'allergens', '[]'::jsonb))), '{}'::smallint[])
@@ -401,7 +426,7 @@ begin
     end if;
 
     update public.menu_items menu
-    set category = elem->>'category', name = btrim(elem->>'name'),
+    set category = elem->>'category', subcategory = elem->>'subcategory', name = btrim(elem->>'name'),
       price = (elem->>'price')::numeric,
       stock_capacity = case
         when (elem->>'available_portions')::integer
