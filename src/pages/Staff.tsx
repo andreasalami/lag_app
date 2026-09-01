@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../features/auth/AuthContext";
 import { isSupabaseConfigured } from "../lib/supabaseClient";
+import { Button } from "../components/ui/Button";
+import { StaffPageHeading, StaffPanel } from "../components/ui/StaffPanel";
 
 /*
   Hub staff: un login unico e generico (qualsiasi ruolo: staff,
@@ -60,40 +62,38 @@ export function Staff() {
 
   if (!session) {
     return (
-      <section className="mx-auto max-w-sm px-4 py-16">
-        <h1 className="mb-6 text-center font-display text-2xl">Accesso staff</h1>
+      <section className="mx-auto max-w-md px-4 py-12">
+        <StaffPageHeading eyebrow="Area riservata" title="Accesso staff" description="Accedi con l’account assegnato alla tua funzione." />
         {!isSupabaseConfigured && (
           <p className="mb-4 text-center text-xs text-[var(--state-error)]">
             Accesso non disponibile: Supabase non è configurato nella build pubblicata.
           </p>
         )}
-        <form onSubmit={handleSubmit} className="surface-solid flex flex-col gap-3 rounded-[var(--radius-md)] p-4">
-          <input
-            type="email"
-            required
-            autoFocus
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="field"
-          />
-          <input
-            type="password"
-            required
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="field"
-          />
-          <button
-            type="submit"
-            disabled={submitting || !isSupabaseConfigured}
-            className="signature-glow glass-elevated glass-elevated--strong rounded-[var(--radius-pill)] px-4 py-2 text-sm font-semibold disabled:opacity-50"
-          >
-            {submitting ? "..." : "Accedi"}
-          </button>
-          {error && <p className="text-xs text-[var(--state-error)]">{error}</p>}
-        </form>
+        <StaffPanel eyebrow="Autenticazione" title="Entra nella gestione" description="I permessi vengono applicati automaticamente in base al tuo ruolo.">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <input
+              type="email"
+              required
+              autoFocus
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="field"
+            />
+            <input
+              type="password"
+              required
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="field"
+            />
+            <Button type="submit" disabled={submitting || !isSupabaseConfigured} className="w-full">
+              {submitting ? "..." : "Accedi"}
+            </Button>
+            {error && <p className="text-xs text-[var(--state-error)]">{error}</p>}
+          </form>
+        </StaffPanel>
         <a href={`${basePath}/`} className="mt-4 block text-center text-xs text-[var(--text-secondary)] hover:underline">
           ← Torna al sito
         </a>
@@ -103,12 +103,12 @@ export function Staff() {
 
   if (profileError) {
     return (
-      <section className="mx-auto max-w-sm px-4 py-16 text-center">
-        <h1 className="mb-3 font-display text-2xl">Profilo non disponibile</h1>
-        <p className="text-sm text-[var(--state-error)]">{profileError}</p>
-        <button type="button" onClick={signOut} className="mt-6 text-xs text-[var(--text-secondary)] hover:underline">
-          Esci
-        </button>
+      <section className="mx-auto max-w-md px-4 py-12">
+        <StaffPageHeading title="Profilo non disponibile" description="Non è stato possibile caricare i permessi dell’account." />
+        <StaffPanel eyebrow="Accesso interrotto" title="Controlla il profilo">
+          <p className="text-sm text-[var(--state-error)]">{profileError}</p>
+          <Button variant="ghost" className="mt-5" onClick={signOut}>Esci</Button>
+        </StaffPanel>
       </section>
     );
   }
@@ -123,60 +123,53 @@ export function Staff() {
 
   if (role === "pending") {
     return (
-      <section className="mx-auto max-w-sm px-4 py-16 text-center">
-        <h1 className="mb-3 font-display text-2xl">Account in attesa</h1>
-        <p className="text-sm text-[var(--text-secondary)]">
-          Il tuo account non ha ancora un ruolo assegnato. Contatta l'amministratore per abilitare l'accesso.
-        </p>
-        <button
-          type="button"
-          onClick={signOut}
-          className="mt-6 text-xs text-[var(--text-secondary)] hover:underline"
-        >
-          Esci
-        </button>
-        <a href={`${basePath}/`} className="mt-3 block text-xs text-[var(--text-secondary)] hover:underline">
-          ← Torna al sito
-        </a>
+      <section className="mx-auto max-w-md px-4 py-12">
+        <StaffPageHeading title="Account in attesa" description="Il profilo esiste, ma deve ancora essere abilitato." />
+        <StaffPanel eyebrow="Permessi staff" title="Ruolo non assegnato">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Contatta l’amministratore per ricevere il ruolo necessario.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button variant="ghost" onClick={signOut}>Esci</Button>
+            <Button variant="ghost" href={`${basePath}/`}>Torna al sito</Button>
+          </div>
+        </StaffPanel>
       </section>
     );
   }
 
   return (
-    <section className="mx-auto max-w-sm px-4 py-16">
-      <h1 className="mb-1 text-center font-display text-2xl">Gestione</h1>
-      <p className="mb-6 text-center text-xs text-[var(--text-secondary)]">{session.user.email}</p>
+    <section className="mx-auto max-w-3xl px-4 py-10">
+      <StaffPageHeading eyebrow="Area riservata" title="Gestione" description={`Accesso attivo · ${session.user.email ?? "account staff"}`} />
 
       <div className="flex flex-col gap-6">
-        {(role === "staff" || role === "cucina" || role === "admin") && <div className="flex flex-col gap-2">
-          <h2 className="font-display text-sm text-[var(--text-secondary)]">Sezioni del sito</h2>
-          {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
-            <a key={d.label} href={`${basePath}${d.path}`} className="field text-center font-semibold">
-              {d.label}
-            </a>
-          ))}
-        </div>}
+        {(role === "staff" || role === "cucina" || role === "admin") && <StaffPanel eyebrow="Contenuti pubblici" title="Sezioni del sito" description="Aggiorna ciò che viene mostrato nella Home.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
+              <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--surface-border)] p-4 text-left font-semibold transition-colors hover:border-[var(--accent-primary)] hover:bg-white/5">
+                {d.label}
+                <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Apri la pagina di gestione →</span>
+              </a>
+            ))}
+          </div>
+        </StaffPanel>}
 
-        {(role === "cassa" || role === "cucina" || role === "bar" || role === "admin") && <div className="flex flex-col gap-2">
-          <h2 className="font-display text-sm text-[var(--text-secondary)]">Operatività</h2>
-          {OPERATIONS.filter((d) => role === "admin" || d.label.toLowerCase() === role).map((d) => (
-            <a key={d.label} href={`${basePath}${d.path}`} className="field text-center font-semibold">
-              {d.label}
-            </a>
-          ))}
-        </div>}
+        {(role === "cassa" || role === "cucina" || role === "bar" || role === "admin") && <StaffPanel eyebrow="Evento live" title="Operatività" description="Apri la postazione assegnata durante il servizio.">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {OPERATIONS.filter((d) => role === "admin" || d.label.toLowerCase() === role).map((d) => (
+              <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--surface-border)] p-4 text-left font-semibold transition-colors hover:border-[var(--accent-primary)] hover:bg-white/5">
+                {d.label}
+                <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Avvia postazione →</span>
+              </a>
+            ))}
+          </div>
+        </StaffPanel>}
       </div>
 
-      <button
-        type="button"
-        onClick={signOut}
-        className="mt-6 block w-full text-center text-xs text-[var(--text-secondary)] hover:underline"
-      >
-        Esci
-      </button>
-      <a href={`${basePath}/`} className="mt-2 block text-center text-xs text-[var(--text-secondary)] hover:underline">
-        ← Torna al sito
-      </a>
+      <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <Button variant="ghost" onClick={signOut}>Esci</Button>
+        <Button variant="ghost" href={`${basePath}/`}>Torna al sito</Button>
+      </div>
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
 import { Modal } from "../../components/ui/Modal";
+import { StaffPageHeading, StaffPanel } from "../../components/ui/StaffPanel";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
 import { useAuth } from "../auth/AuthContext";
@@ -369,35 +369,32 @@ export function Cassa() {
   if (!cashStation) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <h1 className="text-3xl">Scegli la cassa</h1>
-        <p className="mt-2 text-sm text-[var(--text-secondary)]">Puoi collegare uno o due dispositivi alla stessa cassa. La scelta resta memorizzata su questo dispositivo.</p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {CASH_STATIONS.map((station) => (
-            <button key={station.key} type="button" onClick={() => { localStorage.setItem("lag:cash-station", station.key); setCashStation(station.key); }} className="surface-solid rounded-[var(--radius-md)] p-4 text-left font-semibold">
-              {station.label}
-            </button>
-          ))}
-        </div>
+        <StaffPageHeading title="Cassa" description="Configura questo dispositivo prima di iniziare il turno." />
+        <StaffPanel eyebrow="Configurazione dispositivo" title="Scegli la cassa" description="Uno o due dispositivi possono lavorare sulla stessa cassa.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {CASH_STATIONS.map((station) => (
+              <button key={station.key} type="button" onClick={() => { localStorage.setItem("lag:cash-station", station.key); setCashStation(station.key); }} className="rounded-[var(--radius-md)] border border-[var(--surface-border)] p-4 text-left transition-colors hover:border-[var(--accent-primary)] hover:bg-white/5">
+                <strong className="font-display text-lg text-[var(--accent-primary)]">{station.label}</strong>
+                <span className="mt-1 block text-xs text-[var(--text-secondary)]">Memorizza questa postazione sul dispositivo</span>
+              </button>
+            ))}
+          </div>
+        </StaffPanel>
       </main>
     );
   }
 
   if (activeOrder) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs text-[var(--state-warning)]">{cashStationLabel(cashStation)} · ordine in sola lettura</p>
-            <h1 className="text-3xl">#{activeOrder.display_number} · {activeOrder.alias}</h1>
+      <main className="mx-auto max-w-3xl px-4 py-8">
+        <StaffPageHeading title="Gestione ordine" description={`${cashStationLabel(cashStation)} · ordine in sola lettura`} action={<Button variant="ghost" onClick={() => void releaseActiveOrder()} disabled={actionBusy}>Chiudi senza pagare</Button>} />
+        <StaffPanel eyebrow={`Ordine #${activeOrder.display_number}`} title={activeOrder.alias ?? "Senza nome"} description="Prepara lo scontrino sul registratore. L’ordine non può essere modificato dalla cassa.">
+          {activeOrder.notes && <div className="mb-4 rounded-[var(--radius-sm)] border-2 border-[var(--state-warning)] p-3 text-sm"><strong>NOTE:</strong> {activeOrder.notes}</div>}
+          <div className="flex flex-col gap-3">
+            {activeOrder.items.map((line) => <div key={line.id} className="flex justify-between gap-3 border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0"><strong>{line.qty}× {line.name}</strong><span className="font-mono">{priceFormatter.format(Number(line.price) * line.qty)}</span></div>)}
+            <div className="flex justify-between border-t border-[var(--surface-border)] pt-4 text-lg font-semibold"><span>Totale</span><span className="font-mono text-[var(--accent-primary)]">{priceFormatter.format(Number(activeOrder.total))}</span></div>
           </div>
-          <Button variant="ghost" onClick={() => void releaseActiveOrder()} disabled={actionBusy}>Chiudi senza pagare</Button>
-        </div>
-        <p className="mt-3 rounded-[var(--radius-sm)] border border-[var(--state-warning)] p-3 text-sm text-[var(--state-warning)]">Prepara lo scontrino sul registratore. Questo ordine non può essere modificato dalla cassa.</p>
-        {activeOrder.notes && <div className="mt-4 rounded-[var(--radius-sm)] border-2 border-[var(--state-warning)] p-3"><strong>NOTE:</strong> {activeOrder.notes}</div>}
-        <Card className="mt-5 flex flex-col gap-2">
-          {activeOrder.items.map((line) => <div key={line.id} className="flex justify-between gap-3"><strong>{line.qty}× {line.name}</strong><span className="font-mono">{priceFormatter.format(Number(line.price) * line.qty)}</span></div>)}
-          <div className="mt-2 flex justify-between border-t border-[var(--surface-border)] pt-3 text-lg font-semibold"><span>Totale</span><span className="font-mono">{priceFormatter.format(Number(activeOrder.total))}</span></div>
-        </Card>
+        </StaffPanel>
         {message && <p className="mt-3 text-sm text-[var(--state-error)]">{message}</p>}
         <div className="mt-5 flex flex-wrap justify-between gap-3">
           <Button variant="ghost" onClick={() => setCancelOrderModal(true)} disabled={actionBusy}>Annulla ordine</Button>
@@ -426,14 +423,8 @@ export function Cassa() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl">{cashStationLabel(cashStation)}</h1>
-          <p className="text-sm text-[var(--text-secondary)]">Preordini, ordine eccezionale ed evento.</p>
-        </div>
-        <div className="flex flex-col items-end gap-1"><a href={`${import.meta.env.BASE_URL}#staff`} className="text-xs text-[var(--text-secondary)] hover:underline">Area staff</a><button type="button" onClick={() => setCashStation(null)} className="text-xs text-[var(--text-secondary)] hover:underline">Cambia cassa</button></div>
-      </div>
+    <main className="mx-auto max-w-3xl px-4 py-8">
+      <StaffPageHeading title={cashStationLabel(cashStation)} description="Preordini, ordine eccezionale e impostazioni dell’evento." action={<Button variant="ghost" onClick={() => setCashStation(null)}>Cambia cassa</Button>} />
 
       <div className="mt-5 grid grid-cols-3 rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1">
         {(["ordini", "manuale", "evento"] as Tab[]).map((value) => (
@@ -456,7 +447,7 @@ export function Cassa() {
       )}
 
       {tab === "ordini" && (
-        <section className="mt-6">
+        <StaffPanel className="mt-6" eyebrow="Flusso cassa" title="Ordini in attesa" description="Scansiona il QR oppure cerca per numero e nome ordine.">
           <div className="flex flex-wrap items-end gap-3">
             <Button variant="primary" onClick={() => setScannerOpen(true)} disabled={actionBusy}>Scansiona QR</Button>
             <label className="min-w-28 flex-1">
@@ -477,7 +468,7 @@ export function Cassa() {
                 const claimed = order.claimed_station !== null && order.claim_expires_at !== null && new Date(order.claim_expires_at).getTime() > Date.now();
                 const ours = order.claimed_station === cashStation;
                 return (
-                  <div key={order.id} className="surface-solid flex items-center justify-between gap-3 rounded-[var(--radius-md)] p-3 text-left">
+                  <div key={order.id} className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--surface-border)] p-3 text-left">
                     <span>
                       <strong>#{order.display_number} · {order.alias}</strong>
                       <span className="mt-1 block text-xs text-[var(--text-secondary)]">
@@ -491,15 +482,11 @@ export function Cassa() {
               {filteredOrders.length === 0 && <p className="text-sm text-[var(--text-secondary)]">Nessun ordine corrispondente.</p>}
             </div>
           )}
-        </section>
+        </StaffPanel>
       )}
 
       {tab === "manuale" && (
-        <section className="mt-6">
-          <h2 className="text-xl">Ordine eccezionale dalla cassa</h2>
-          <p className="mb-4 mt-1 text-sm text-[var(--text-secondary)]">
-            Solo per emergenze. L’ordine viene creato già pagato e inviato direttamente alle postazioni competenti.
-          </p>
+        <StaffPanel className="mt-6" eyebrow="Procedura di emergenza" title="Ordine manuale" description="L’ordine viene creato già pagato e inviato alle postazioni competenti.">
           {menuLoading ? <p className="text-sm text-[var(--text-secondary)]">Carico il menu…</p> : (
             <OrderEditor
               menuItems={menuItems}
@@ -514,26 +501,18 @@ export function Cassa() {
           <Button variant="primary" className="mt-4 w-full sm:w-auto" onClick={() => void createCounterOrder()} disabled={actionBusy || menuLoading}>
             {actionBusy ? "Invio…" : "Conferma pagamento e invia"}
           </Button>
-        </section>
+        </StaffPanel>
       )}
 
       {tab === "evento" && eventState && (
-        <section className="mt-6">
-          <Card className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl">{eventState.name}</h2>
-                <p className="text-xs text-[var(--text-secondary)]">{eventState.pending_count} ordini in attesa su {eventState.max_pending_orders}</p>
-              </div>
-              {eventState.permanently_closed_at ? (
+        <StaffPanel className="mt-6" eyebrow="Configurazione ordini" title={eventState.name} description={`${eventState.pending_count} ordini in attesa su ${eventState.max_pending_orders}`} action={eventState.permanently_closed_at ? (
                 <span className="text-sm text-[var(--state-error)]">Evento chiuso definitivamente</span>
               ) : (
                 <span className={`text-sm ${eventState.manual_closed ? "text-[var(--state-warning)]" : "text-[var(--state-success)]"}`}>
                   {eventState.manual_closed ? "Ordinazioni sospese" : "Gestione automatica attiva"}
                 </span>
-              )}
-            </div>
-
+              )}>
+          <div className="flex flex-col gap-3">
             <label>
               <span className="mb-1 block text-xs">Nome evento</span>
               <input value={eventName} onChange={(event) => setEventName(event.target.value)} className="field w-full py-2" />
@@ -572,8 +551,8 @@ export function Cassa() {
                 </div>
               </>
             )}
-          </Card>
-        </section>
+          </div>
+        </StaffPanel>
       )}
 
       {scannerOpen && <QrScanner onDetected={handleQrDetected} onClose={() => setScannerOpen(false)} />}

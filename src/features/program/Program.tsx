@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
+import { StaffPanel } from "../../components/ui/StaffPanel";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
@@ -171,7 +171,7 @@ export function Program({ management = false }: { management?: boolean }) {
       </div>
 
       {canEdit && (
-        <Card className="mx-4 mb-6 flex flex-col gap-2 sm:mx-0">
+        <StaffPanel className="mx-4 mb-6 sm:mx-0" eyebrow="Programmazione evento" title="Giorni, palchi e orari" description="Le modifiche restano in bozza finché non premi Salva." contentClassName="flex flex-col gap-3">
           <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
             Giorni dell’evento
             <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="field text-xs">
@@ -238,7 +238,7 @@ export function Program({ management = false }: { management?: boolean }) {
           <button onClick={addSlot} className="mt-1 self-start text-xs text-[var(--accent-primary)] hover:underline">
             + Aggiungi evento
           </button>
-        </Card>
+        </StaffPanel>
       )}
 
       {loadError ? (

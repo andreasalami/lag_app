@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
+import { StaffPanel } from "../../components/ui/StaffPanel";
 import { supabase } from "../../lib/supabaseClient";
 
 const DEFAULT_MESSAGE = "Il prossimo turno del torneo sta per iniziare. Presentati nell’area torneo.";
@@ -55,19 +55,14 @@ export function TournamentBroadcast() {
   }
 
   return (
-    <Card className="mb-5 border border-[var(--accent-primary)]/40">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="font-display text-base">Avviso a tutti</h3>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">
-            {subscriberCount === null ? "Controllo i dispositivi iscritti…" : `${subscriberCount} dispositivi iscritti alle notifiche.`}
-          </p>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">Per una prova completa su iPhone, chiudi la Web App sul telefono e invia qui un messaggio di test.</p>
-        </div>
-        <button type="button" onClick={() => void loadCount()} className="text-xs text-[var(--text-secondary)] hover:underline">
-          Aggiorna conteggio
-        </button>
-      </div>
+    <StaffPanel
+      className="mb-5"
+      eyebrow="Notifiche torneo"
+      title="Avviso a tutti"
+      description={subscriberCount === null ? "Controllo i dispositivi iscritti…" : `${subscriberCount} dispositivi iscritti alle notifiche.`}
+      action={<button type="button" onClick={() => void loadCount()} className="text-xs text-[var(--text-secondary)] hover:underline">Aggiorna conteggio</button>}
+    >
+      <p className="mb-3 text-xs text-[var(--text-secondary)]">Per una prova completa su iPhone, chiudi la Web App sul telefono e invia qui un messaggio di test.</p>
       <textarea
         value={message}
         maxLength={240}
@@ -84,6 +79,6 @@ export function TournamentBroadcast() {
       </div>
       {feedback && <p className="mt-3 text-xs text-[var(--state-success)]">{feedback}</p>}
       {error && <p className="mt-3 text-xs text-[var(--state-error)]">{error}</p>}
-    </Card>
+    </StaffPanel>
   );
 }

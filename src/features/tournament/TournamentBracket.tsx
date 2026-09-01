@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Card } from "../../components/ui/Card";
 import { SaveBanner } from "../../components/ui/SaveBanner";
+import { StaffPanel } from "../../components/ui/StaffPanel";
 import { useAuth } from "../auth/AuthContext";
 import { TournamentBroadcast } from "./TournamentBroadcast";
 import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
@@ -302,46 +302,45 @@ export function TournamentBracket({ management = false }: { management?: boolean
       {canEdit && (
         <>
           <TournamentBroadcast />
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="text-sm text-[var(--text-secondary)]">Squadre:</span>
-            {BRACKET_SIZES.map((s) => (
-              <button
-                key={s}
-                onClick={() => changeSize(s)}
-                className={`rounded-[var(--radius-pill)] border px-3 py-1 text-sm transition-colors ${
-                  size === s
-                    ? "border-[var(--accent-primary)] text-[var(--accent-primary)]"
-                    : "border-[var(--surface-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-            <button
-              onClick={handleCloseClick}
-              className="ml-auto text-xs text-[var(--text-secondary)] underline-offset-2 hover:text-[var(--accent-primary)] hover:underline"
-            >
-              {editingTeams ? "Chiudi" : "Nomi squadre"}
-            </button>
-          </div>
-
-          {editingTeams && (
-            <Card className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {teams.map((t, i) => (
-                <input
-                  key={i}
-                  aria-label={`Nome squadra ${i + 1}`}
-                  value={t}
-                  onChange={(e) => {
-                    const next = [...teams];
-                    next[i] = e.target.value;
-                    setTeams(next);
-                  }}
-                  className="field"
-                />
+          <StaffPanel className="mb-5" eyebrow="Configurazione torneo" title="Squadre e tabellone" description="Scegli la dimensione e aggiorna i nomi delle squadre.">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-[var(--text-secondary)]">Squadre:</span>
+              {BRACKET_SIZES.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => changeSize(s)}
+                  className={`rounded-[var(--radius-pill)] border px-3 py-1 text-sm transition-colors ${
+                    size === s
+                      ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                      : "border-[var(--surface-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  }`}
+                >
+                  {s}
+                </button>
               ))}
-            </Card>
-          )}
+              <button onClick={handleCloseClick} className="ml-auto text-xs text-[var(--text-secondary)] underline-offset-2 hover:text-[var(--accent-primary)] hover:underline">
+                {editingTeams ? "Chiudi nomi" : "Modifica nomi"}
+              </button>
+            </div>
+
+            {editingTeams && (
+              <div className="mt-4 grid grid-cols-2 gap-2 border-t border-[var(--surface-border)] pt-4 sm:grid-cols-4">
+                {teams.map((t, i) => (
+                  <input
+                    key={i}
+                    aria-label={`Nome squadra ${i + 1}`}
+                    value={t}
+                    onChange={(e) => {
+                      const next = [...teams];
+                      next[i] = e.target.value;
+                      setTeams(next);
+                    }}
+                    className="field py-2"
+                  />
+                ))}
+              </div>
+            )}
+          </StaffPanel>
         </>
       )}
 
