@@ -211,6 +211,12 @@ export function Menu({ management = false }: { management?: boolean }) {
             </div>
 
             <div className="px-4 py-2 sm:px-6">
+              {category === "bevande" && (
+                <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--accent-primary)]/40 bg-[rgba(242,128,46,0.08)] px-4 py-3 text-sm font-semibold text-[var(--accent-primary)]">
+                  Acqua Gratis
+                </div>
+              )}
+
               {MENU_SECTIONS[category].map((section) => {
                 const sectionItems = items.filter((item) =>
                   item.category === category && item.subcategory === section.key
@@ -330,11 +336,6 @@ export function Menu({ management = false }: { management?: boolean }) {
                 );
               })}
 
-              {category === "bevande" && (
-                <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--accent-primary)]/40 bg-[rgba(242,128,46,0.08)] px-4 py-3 text-sm font-semibold text-[var(--accent-primary)]">
-                  Acqua Gratis
-                </div>
-              )}
             </div>
           </Card>
         ))

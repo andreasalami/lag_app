@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { StaffPageHeading, StaffPanel } from "../../components/ui/StaffPanel";
 import { supabase } from "../../lib/supabaseClient";
@@ -35,6 +35,16 @@ type RecentDelivery = {
 };
 
 const AREA_STORAGE = { cucina: "lag:kitchen-station", bar: "lag:bar-station" } as const;
+const KITCHEN_ORDER_SOUND_URL = `${import.meta.env.BASE_URL}sounds/line-simple-bell.mp3`;
+let kitchenOrderAudio: HTMLAudioElement | null = null;
+
+function playNewKitchenOrderSound() {
+  kitchenOrderAudio ??= new Audio(KITCHEN_ORDER_SOUND_URL);
+  kitchenOrderAudio.currentTime = 0;
+  void kitchenOrderAudio.play().catch(() => {
+    // Safari e Chrome richiedono un primo gesto dell’utente: il pulsante Suono lo abilita e lo prova.
+  });
+}
 
 export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   const { role, loading: authLoading } = useAuth();
@@ -55,6 +65,8 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("lag:kitchen-sound") === "on");
+  const knownKitchenOrderIds = useRef<Set<string> | null>(null);
 
   const stationLabel = options.find((item) => item.key === station)?.label ?? areaLabel;
 
@@ -76,6 +88,14 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
       return;
     }
     const next = (data ?? []) as FulfillmentOrder[];
+    if (station === "cucina") {
+      const nextIds = new Set(next.map((order) => order.id));
+      if (knownKitchenOrderIds.current && soundEnabled
+        && next.some((order) => !knownKitchenOrderIds.current?.has(order.id))) {
+        playNewKitchenOrderSound();
+      }
+      knownKitchenOrderIds.current = nextIds;
+    }
     setOrders(next);
     setActiveOrder((current) => current ? next.find((order) => order.id === current.id) ?? null : null);
     if (station !== "cucina") {
@@ -84,7 +104,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
     } else {
       setRecent([]);
     }
-  }, [authorized, station]);
+  }, [authorized, soundEnabled, station]);
 
   useEffect(() => {
     void refetch();
@@ -107,9 +127,17 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
 
   function chooseStation(next: FulfillmentStation) {
     localStorage.setItem(AREA_STORAGE[area], next);
+    knownKitchenOrderIds.current = null;
     setStation(next);
     setActiveOrder(null);
     setMessage(null);
+  }
+
+  function toggleKitchenSound() {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    localStorage.setItem("lag:kitchen-sound", next ? "on" : "off");
+    if (next) playNewKitchenOrderSound();
   }
 
   const handleQrDetected = useCallback(async (rawValue: string) => {
@@ -228,7 +256,22 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
     <main className="mx-auto max-w-3xl px-4 py-8">
       <StaffPageHeading title={stationLabel} description={`${areaLabel} · coda ordinata dall’orario di pagamento`} action={<Button variant="staff-secondary" onClick={() => setStation(null)}>Cambia postazione</Button>} />
       {message && <div className="mb-4 rounded-[var(--radius-sm)] border border-[var(--surface-border)] p-3 text-sm">{message}</div>}
-      <StaffPanel eyebrow="Ritiro ordini" title="Coda della postazione" description={loading ? "Aggiornamento in corso…" : `${filtered.length} ordini da gestire`}>
+      <StaffPanel
+        eyebrow="Ritiro ordini"
+        title="Coda della postazione"
+        description={loading ? "Aggiornamento in corso…" : `${filtered.length} ordini da gestire`}
+        action={station === "cucina" ? (
+          <Button
+            type="button"
+            variant={soundEnabled ? "staff-primary" : "staff-secondary"}
+            className="px-4 py-2 text-xs"
+            onClick={toggleKitchenSound}
+            aria-pressed={soundEnabled}
+          >
+            {soundEnabled ? "Suono attivo" : "Attiva suono"}
+          </Button>
+        ) : undefined}
+      >
         <div className="flex flex-wrap items-end gap-3">
           {station !== "cucina" && <Button variant="staff-primary" onClick={() => setScannerOpen(true)} disabled={busy}>Scansiona QR</Button>}
           <label className="min-w-24 flex-1"><span className="mb-1 block text-xs">Numero</span><input type="number" value={numberSearch} onChange={(event) => setNumberSearch(event.target.value)} className="field w-full py-2" /></label>

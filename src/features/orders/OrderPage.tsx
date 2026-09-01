@@ -507,6 +507,11 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         (["cibo", "bevande"] as const).map((category) => (
           <section key={category} className="mt-8">
             <h2 className="text-2xl">{category === "cibo" ? "Cucina" : "Bar"}</h2>
+            {category === "bevande" && (
+              <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--accent-primary)]/40 bg-[rgba(242,128,46,0.08)] px-4 py-3 text-sm font-semibold text-[var(--accent-primary)]">
+                Acqua Gratis
+              </div>
+            )}
             {MENU_SECTIONS[category].map((section) => {
               const sectionItems = catalog.items.filter((item) => item.category === category && item.subcategory === section.key);
               if (sectionItems.length === 0) return null;
