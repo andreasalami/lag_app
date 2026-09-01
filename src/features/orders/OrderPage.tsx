@@ -308,7 +308,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   if (submittedOrder) {
     return (
       <main className="mx-auto min-h-full max-w-xl px-4 py-8">
-        <a href={`${import.meta.env.BASE_URL}#menu`} className="text-xs text-[var(--text-secondary)] hover:underline">← Torna al menu del sito</a>
+        <a href={`${import.meta.env.BASE_URL}#menu`} className="text-xs text-[var(--text-secondary)] hover:underline">← Indietro</a>
         <section className="mt-5 text-center">
           <p className={`text-sm ${orderStatusClassName(submittedOrder.status)}`}>{statusMessage(submittedOrder.status)}</p>
           <h1 className="mt-2 text-4xl">#{submittedOrder.display_number}</h1>
@@ -415,8 +415,8 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
           <Button variant="primary" className="w-full" onClick={() => void startNewOrder()} disabled={startingNewOrder}>
             {startingNewOrder ? "Verifico…" : "Ordina di nuovo"}
           </Button>
-          <Button variant="ghost" className="w-full" href={`${import.meta.env.BASE_URL}#menu`}>
-            Torna al menu del sito
+          <Button variant="ghost" className="w-full" href={`${import.meta.env.BASE_URL}#programma`}>
+            Torna al programma
           </Button>
           <Button
             variant="ghost"
