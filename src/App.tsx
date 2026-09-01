@@ -97,7 +97,7 @@ function App() {
         <ProtectedOperationalPage
           allowedRoles={["staff", "admin"]}
           component={ProgramManagement}
-          title="Scaletta"
+          title="Gestione Scaletta"
         />
       ) : internalPage === "gestione-menu" ? (
         <ProtectedOperationalPage

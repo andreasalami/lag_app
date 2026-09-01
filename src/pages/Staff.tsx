@@ -15,7 +15,7 @@ import { StaffPageHeading, StaffPanel } from "../components/ui/StaffPanel";
   navigazione, non un semplice salto d'ancora nella stessa pagina.
 */
 const DESTINATIONS = [
-  { label: "Scaletta", path: "/#gestione-programma", roles: ["staff", "admin"] },
+  { label: "Gestione Scaletta", path: "/#gestione-programma", roles: ["staff", "admin"] },
   { label: "Gestione Menu e Scorte", path: "/#gestione-menu", roles: ["staff", "cucina", "admin"] },
   { label: "Gestione torneo", path: "/#gestione-torneo", roles: ["admin"] },
 ];

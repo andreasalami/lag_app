@@ -157,7 +157,7 @@ export function Program({ management = false }: { management?: boolean }) {
   return (
     <section id="programma" className="mx-auto w-full max-w-3xl py-10 sm:px-4">
       <div className="px-4 sm:px-0">
-        <h2 className="mb-1 text-2xl font-semibold">{management ? "Scaletta" : "Programma"}</h2>
+        <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione Scaletta" : "Programma"}</h2>
         <p className="mb-4 text-sm text-[var(--text-secondary)]">
           {management
             ? "Modifica giorni, palchi e orari pubblicati nella Home."
