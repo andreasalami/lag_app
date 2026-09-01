@@ -5,15 +5,10 @@ import {
   isPushSupported,
   subscribeToPushNotifications,
   syncExistingPushSubscription,
-  type PushSubscriptionSource,
 } from "../../lib/pushNotifications";
 
 type PermissionState = "unsupported" | "default" | "granted" | "denied";
 type MobilePlatform = "ios" | "android";
-
-type NotificationPermissionProps = {
-  context?: PushSubscriptionSource;
-};
 
 function getPermissionState(): PermissionState {
   if (typeof window === "undefined" || !isPushSupported()) return "unsupported";
@@ -33,7 +28,7 @@ function activationErrorMessage(error: unknown) {
   return "Attivazione non riuscita. Controlla la connessione e riprova.";
 }
 
-export function NotificationPermission({ context = "announcements" }: NotificationPermissionProps) {
+export function NotificationPermission() {
   const [state, setState] = useState<PermissionState>("default");
   const [subscribed, setSubscribed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -41,7 +36,6 @@ export function NotificationPermission({ context = "announcements" }: Notificati
   const [requesting, setRequesting] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
   const standalone = typeof window !== "undefined" && isStandaloneWebApp();
-  const isTournament = context === "tournament";
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +49,7 @@ export function NotificationPermission({ context = "announcements" }: Notificati
         return;
       }
       try {
-        const active = await syncExistingPushSubscription(context);
+        const active = await syncExistingPushSubscription();
         if (!cancelled) setSubscribed(active);
       } catch {
         if (!cancelled) setSubscribed(false);
@@ -69,7 +63,7 @@ export function NotificationPermission({ context = "announcements" }: Notificati
       cancelled = true;
       window.removeEventListener("lag:push-subscription-changed", handleChange);
     };
-  }, [context]);
+  }, []);
 
   function openInstructions() {
     setActivationError(null);
@@ -91,16 +85,14 @@ export function NotificationPermission({ context = "announcements" }: Notificati
       setState(permission as PermissionState);
       if (permission !== "granted") return;
 
-      const registration = await subscribeToPushNotifications(context);
+      const registration = await subscribeToPushNotifications();
       setSubscribed(true);
       setOpen(false);
       try {
         await registration.showNotification("L'Agro ai Giovani", {
-          body: isTournament
-            ? "Notifiche del torneo attive su questo dispositivo."
-            : "Notifiche degli aggiornamenti attive su questo dispositivo.",
+          body: "Notifiche del torneo attive su questo dispositivo.",
           icon: `${import.meta.env.BASE_URL}apple-touch-icon.png`,
-          data: { url: `${window.location.origin}${import.meta.env.BASE_URL}#${isTournament ? "tornei" : "annunci"}` },
+          data: { url: `${window.location.origin}${import.meta.env.BASE_URL}#tornei` },
         });
       } catch {
         // L'iscrizione e' gia attiva: la notifica di conferma non deve annullare il flusso.
@@ -114,7 +106,7 @@ export function NotificationPermission({ context = "announcements" }: Notificati
 
   const buttonLabel = state === "granted"
     ? "Completa attivazione"
-    : isTournament ? "Attiva notifiche del torneo" : "Attiva notifiche";
+    : "Attiva notifiche del torneo";
 
   return (
     <>

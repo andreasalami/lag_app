@@ -1,8 +1,10 @@
-import { lazy, Suspense, useEffect, useState, type LazyExoticComponent } from "react";
+import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { Home } from "./pages/Home";
 import { Staff } from "./pages/Staff";
 import { OrderPage } from "./features/orders/OrderPage";
 import { AuthProvider, useAuth, type Role } from "./features/auth/AuthContext";
+import { TournamentBoard } from "./pages/TournamentBoard";
+import { TournamentManagement } from "./pages/TournamentManagement";
 
 const FeaturePreview = lazy(() => import("./pages/FeaturePreview").then((module) => ({ default: module.FeaturePreview })));
 const Cassa = lazy(() => import("./features/orders/Cassa").then((module) => ({ default: module.Cassa })));
@@ -14,7 +16,7 @@ function ProtectedOperationalPage({
   title,
 }: {
   allowedRoles: Role[];
-  component: LazyExoticComponent<() => JSX.Element>;
+  component: ComponentType;
   title: string;
 }) {
   const { session, role, loading, profileError } = useAuth();
@@ -61,8 +63,8 @@ function App() {
 
   const previewEnabled = import.meta.env.VITE_FEATURE_PREVIEW === "true";
   const internalPages = previewEnabled
-    ? ["staff", "cassa", "cucina", "ordina", "anteprima"]
-    : ["staff", "cassa", "cucina", "ordina"];
+    ? ["staff", "cassa", "cucina", "ordina", "tabellone", "gestione-torneo", "anteprima"]
+    : ["staff", "cassa", "cucina", "ordina", "tabellone", "gestione-torneo"];
   const internalPage = internalPages.includes(hashPath) ? hashPath : path.slice(1);
 
   return (
@@ -75,6 +77,14 @@ function App() {
         <ProtectedOperationalPage allowedRoles={["cucina", "admin"]} component={Cucina} title="Cucina" />
       ) : internalPage === "ordina" ? (
         <OrderPage />
+      ) : internalPage === "tabellone" ? (
+        <TournamentBoard />
+      ) : internalPage === "gestione-torneo" ? (
+        <ProtectedOperationalPage
+          allowedRoles={["tournament_manager", "admin"]}
+          component={TournamentManagement}
+          title="Gestione torneo"
+        />
       ) : internalPage === "anteprima" && previewEnabled ? (
         <Suspense fallback={<p className="p-8 text-sm text-[var(--text-secondary)]">Carico l’anteprima…</p>}>
           <FeaturePreview />

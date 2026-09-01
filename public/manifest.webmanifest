@@ -2,7 +2,7 @@
   "id": "/lag_app/",
   "name": "L'Agro ai Giovani",
   "short_name": "LAG",
-  "description": "Festival L'Agro ai Giovani: avvisi, torneo, programma e ordini.",
+  "description": "Festival L'Agro ai Giovani: torneo, programma, menu e ordini.",
   "start_url": "/lag_app/#tornei",
   "scope": "/lag_app/",
   "display": "standalone",

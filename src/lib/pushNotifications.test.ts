@@ -57,7 +57,7 @@ describe("subscribeToPushNotifications", () => {
     mockPushBrowser(subscription);
     rpc.mockResolvedValue({ error: { message: "database_unavailable" } });
 
-    await expect(subscribeToPushNotifications("tournament")).rejects.toThrow("database_unavailable");
+    await expect(subscribeToPushNotifications()).rejects.toThrow("database_unavailable");
     expect(subscription.unsubscribe).not.toHaveBeenCalled();
   });
 
@@ -66,7 +66,7 @@ describe("subscribeToPushNotifications", () => {
     mockPushBrowser(null, subscription);
     rpc.mockResolvedValue({ error: { message: "database_unavailable" } });
 
-    await expect(subscribeToPushNotifications("announcements")).rejects.toThrow("database_unavailable");
+    await expect(subscribeToPushNotifications()).rejects.toThrow("database_unavailable");
     expect(subscription.unsubscribe).toHaveBeenCalledOnce();
   });
 });

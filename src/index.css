@@ -26,6 +26,7 @@ body {
   color: var(--text-primary);
   font-family: "Manrope", sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
 }
 
 h1, h2, h3 {

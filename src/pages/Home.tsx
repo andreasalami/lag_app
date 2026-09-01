@@ -6,8 +6,7 @@ import { EventbriteCheckoutButton } from "../features/tickets/EventbriteCheckout
 import { Program } from "../features/program/Program";
 import { Menu } from "../features/menu/Menu";
 import { InstagramLink } from "../features/social/InstagramLink";
-import { Announcements } from "../features/announcements/Announcements";
-import { TournamentBracket } from "../features/tournament/TournamentBracket";
+import { TournamentPreview } from "../features/tournament/TournamentPreview";
 import { Button } from "../components/ui/Button";
 
 export function Home() {
@@ -51,9 +50,14 @@ export function Home() {
       <Program />
       <Menu />
       <InstagramLink />
-      <Announcements />
+      <TournamentPreview />
 
-      <TournamentBracket />
+      <section className="mx-auto max-w-3xl px-4 pb-4 pt-2 text-center sm:hidden">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Solo per lo staff</p>
+        <Button href={`${import.meta.env.BASE_URL}#staff`} variant="ghost" className="mt-3">
+          Login staff
+        </Button>
+      </section>
 
       <TabBar />
     </div>

@@ -14,9 +14,8 @@ import { isSupabaseConfigured } from "../lib/supabaseClient";
 */
 const DESTINATIONS = [
   { label: "Programma", path: "/#programma", roles: ["staff", "admin"] },
-  { label: "Annunci", path: "/#annunci", roles: ["staff", "admin"] },
   { label: "Menu", path: "/#menu", roles: ["staff", "admin"] },
-  { label: "Torneo", path: "/#tornei", roles: ["admin"] },
+  { label: "Gestione torneo", path: "/#gestione-torneo", roles: ["admin"] },
 ];
 
 const OPERATIONS = [
@@ -37,7 +36,7 @@ export function Staff() {
   // navigazione (non un salto d'ancora) perché stiamo cambiando pagina.
   useEffect(() => {
     if (session && role === "tournament_manager") {
-      window.location.href = `${import.meta.env.BASE_URL}#tornei`;
+      window.location.href = `${import.meta.env.BASE_URL}#gestione-torneo`;
     }
   }, [session, role]);
 

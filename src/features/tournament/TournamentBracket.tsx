@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
-import { NotificationPermission } from "../announcements/NotificationPermission";
 import { TournamentBroadcast } from "./TournamentBroadcast";
 import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
 import { MatchCard } from "./MatchCard";
@@ -20,15 +19,11 @@ import {
   resolveSlot,
   winnerFromScore,
 } from "./bracketUtils";
-
-type TournamentSnapshot = {
-  size: BracketSize;
-  teams: string[];
-  matches: MatchesMap;
-  overrides: OverridesMap;
-};
-
-const EMPTY_SNAPSHOT: TournamentSnapshot = { size: 8, teams: defaultTeams(8), matches: {}, overrides: {} };
+import {
+  EMPTY_TOURNAMENT_SNAPSHOT,
+  parseTournamentSnapshot,
+  type TournamentSnapshot,
+} from "./tournamentState";
 
 // Bozza di lavoro di chi gestisce il torneo: sempre e solo in questo
 // browser, mai su Supabase finché non premi "Pubblica". Sopravvive a
@@ -44,23 +39,10 @@ const DRAFT_KEY = "lag-tournament-draft";
 // una riga sola ogni 30s a testa, sospesa quando il tab non è visibile.
 const POLL_INTERVAL_MS = 30_000;
 
-function parseSnapshot(value: unknown): TournamentSnapshot | null {
-  if (!value || typeof value !== "object") return null;
-  const candidate = value as Partial<TournamentSnapshot>;
-  if (!BRACKET_SIZES.includes(candidate.size as BracketSize)) return null;
-  if (!Array.isArray(candidate.teams) || candidate.teams.length !== candidate.size
-    || candidate.teams.some((team) => typeof team !== "string" || team.length > 100)) return null;
-  if (!candidate.matches || typeof candidate.matches !== "object" || Array.isArray(candidate.matches)) return null;
-  if (!candidate.overrides || typeof candidate.overrides !== "object" || Array.isArray(candidate.overrides)) return null;
-  return candidate as TournamentSnapshot;
-}
-
 /*
   Torneo a tabellone — a eliminazione diretta, dimensione scelta tra
   8/16/32/64 squadre. Ruolo separato da quello staff (vedi AuthContext
-  + supabase/schema.sql): chi gestisce il torneo NON può pubblicare
-  annunci, e viceversa — due permessi distinti sullo stesso account
-  Supabase Auth, decisi dalla colonna "role" in profiles.
+  + supabase/schema.sql), deciso dalla colonna "role" in profiles.
 
   RIPESCAGGIO: non è un bottone dedicato con una regola fissa (tipo
   "sempre il miglior perdente") — è la matita (✎) su QUALSIASI slot,
@@ -83,9 +65,9 @@ function parseSnapshot(value: unknown): TournamentSnapshot | null {
   pubblicato, non da quello che avevi scritto e non ancora mandato.
   Da qui l'avviso beforeunload quando ci sono modifiche in sospeso.
 */
-export function TournamentBracket() {
+export function TournamentBracket({ management = false }: { management?: boolean }) {
   const { role } = useAuth();
-  const canEdit = role === "tournament_manager" || role === "admin";
+  const canEdit = management && (role === "tournament_manager" || role === "admin");
   const matchHeight = 116;
   const matchGap = 32;
 
@@ -112,11 +94,11 @@ export function TournamentBracket() {
 
     async function load() {
       if (!isSupabaseConfigured) {
-        setSavedSnapshot(EMPTY_SNAPSHOT);
-        setSize(EMPTY_SNAPSHOT.size);
-        setTeams(EMPTY_SNAPSHOT.teams);
-        setMatches(EMPTY_SNAPSHOT.matches);
-        setOverrides(EMPTY_SNAPSHOT.overrides);
+        setSavedSnapshot(EMPTY_TOURNAMENT_SNAPSHOT);
+        setSize(EMPTY_TOURNAMENT_SNAPSHOT.size);
+        setTeams(EMPTY_TOURNAMENT_SNAPSHOT.teams);
+        setMatches(EMPTY_TOURNAMENT_SNAPSHOT.matches);
+        setOverrides(EMPTY_TOURNAMENT_SNAPSHOT.overrides);
         setHydratedMode(canEdit);
         return;
       }
@@ -124,7 +106,7 @@ export function TournamentBracket() {
       const { data, error } = await supabase.from("tournament_state").select("size, teams, matches, overrides").eq("id", "main").maybeSingle();
       if (cancelled) return;
 
-      const published = parseSnapshot(data) ?? EMPTY_SNAPSHOT;
+      const published = parseTournamentSnapshot(data) ?? EMPTY_TOURNAMENT_SNAPSHOT;
       setLoadError(error ? "Tabellone non disponibile. Riprova più tardi." : null);
       setSavedSnapshot(published);
       if (!error) setLastSyncedAt(new Date());
@@ -134,7 +116,7 @@ export function TournamentBracket() {
         try {
           const draftRaw = localStorage.getItem(DRAFT_KEY);
           if (draftRaw) {
-            starting = parseSnapshot(JSON.parse(draftRaw)) ?? published;
+            starting = parseTournamentSnapshot(JSON.parse(draftRaw)) ?? published;
           }
         } catch {
           // Storage disabilitato o bozza corrotta: riparti dal pubblicato.
@@ -164,7 +146,7 @@ export function TournamentBracket() {
     async function refreshPublished() {
       if (document.visibilityState !== "visible") return;
       const { data, error } = await supabase.from("tournament_state").select("size, teams, matches, overrides").eq("id", "main").maybeSingle();
-      const snapshot = parseSnapshot(data);
+      const snapshot = parseTournamentSnapshot(data);
       if (error || !snapshot) return;
       setSize(snapshot.size);
       setTeams(snapshot.teams);
@@ -274,13 +256,16 @@ export function TournamentBracket() {
       const current = prev[key] ?? { winner: null, scoreA: null, scoreB: null };
       const scoreA = side === "A" ? value : current.scoreA;
       const scoreB = side === "B" ? value : current.scoreB;
+      const winner = winnerFromScore(scoreA, scoreB);
+      const scoreChanged = scoreA !== current.scoreA || scoreB !== current.scoreB;
       return {
         ...prev,
         [key]: {
           ...current,
-          winner: winnerFromScore(scoreA, scoreB),
+          winner,
           scoreA,
           scoreB,
+          completedAt: winner ? (scoreChanged ? new Date().toISOString() : current.completedAt ?? null) : null,
         },
       };
     });
@@ -297,19 +282,19 @@ export function TournamentBracket() {
   }
 
   return (
-    <section id="tornei" className="mx-auto max-w-3xl px-4 py-10">
-      <h2 className="mb-1 text-2xl font-semibold">Torneo a tabellone</h2>
+    <section className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
+      <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione torneo" : "Tabellone completo"}</h2>
       <p className="mb-4 text-sm text-[var(--text-secondary)]">
-        Eliminazione diretta — dimensione configurabile, con ripescaggio manuale.
+        {management
+          ? "Aggiorna squadre e risultati, poi salva per pubblicare le modifiche."
+          : "Tutti i turni del torneo a eliminazione diretta."}
       </p>
-
-      {!canEdit && <NotificationPermission context="tournament" />}
 
       {loadError && <p className="mb-4 text-sm text-[var(--state-error)]">{loadError}</p>}
 
       {!canEdit && (
         <p className="mb-4 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-3 text-xs text-[var(--text-secondary)]">
-          Tabellone in sola lettura — accedi come "Gestione tornei" per modificarlo.
+          Tabellone in sola lettura.
           {lastSyncedAt && ` Aggiornato alle ${lastSyncedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}.`}
         </p>
       )}

@@ -50,18 +50,35 @@ npx supabase functions deploy send-push-broadcast
 ```
 
 Non usare `--no-verify-jwt`: il gateway e la funzione verificano entrambi
-l'account del mittente. `tournament_manager` e `admin` possono inviare avvisi
-del torneo; `staff` e `admin` inviano automaticamente la notifica quando
-pubblicano un annuncio.
+l'account del mittente. Solo `tournament_manager` e `admin` possono inviare
+avvisi del torneo.
+
+## Comportamento attuale
+
+Concedere il permesso registra il telefono, ma non programma notifiche
+automatiche. Al momento un avviso parte soltanto quando un gestore apre
+**Gestione torneo** e preme **Invia avviso a tutti**. Il salvataggio di un
+risultato o la fine di un turno non inviano ancora notifiche: quel flusso sarà
+definito separatamente.
 
 ## 5. Collaudo
 
-1. Aprire l'app su un telefono e attivare le notifiche.
-2. Verificare nel pannello Torneo che il conteggio sia almeno 1.
-3. Inviare un avviso di prova dal gestore del torneo.
-4. Verificare ricezione e apertura diretta della sezione Torneo.
-5. Pubblicare un annuncio di prova e verificare l'apertura di Annunci.
+1. Su iPhone con iOS 16.4 o successivo, aggiungere il sito alla schermata Home
+   da Safari e aprirlo dalla nuova icona.
+2. Nella Home, aprire il Torneo e attivare le notifiche. Deve comparire subito
+   la notifica locale di conferma.
+3. Accedere come gestore e verificare che il conteggio dei dispositivi sia
+   almeno 1.
+4. Inviare un avviso di prova da **Gestione torneo** e verificare che il
+   risultato riporti almeno un invio riuscito.
+5. Mettere la web app in background e verificare ricezione e apertura diretta
+   del riepilogo Torneo.
 
-Su iOS la web app deve essere aggiunta alla schermata Home prima di concedere
-il permesso. In caso di errore 404/410 dal servizio Push, la Edge Function
-elimina automaticamente la sottoscrizione non più valida.
+Se il permesso risulta concesso ma la conferma locale non compare, controllare
+**Impostazioni → Notifiche → LAG**. Se la conferma compare ma il broadcast no,
+controllare nell'ordine: conteggio iscritti, esito `inviati/non riusciti` del
+pannello, deploy della Edge Function e corrispondenza esatta fra la chiave VAPID
+pubblica della build e quella configurata nella funzione.
+
+In caso di errore 404/410 dal servizio Push, la Edge Function elimina
+automaticamente la sottoscrizione non più valida.

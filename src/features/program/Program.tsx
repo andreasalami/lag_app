@@ -153,14 +153,16 @@ export function Program() {
   }
 
   return (
-    <section id="programma" className="mx-auto max-w-3xl px-4 py-10">
-      <h2 className="mb-1 text-2xl font-semibold">Programma</h2>
-      <p className="mb-4 text-sm text-[var(--text-secondary)]">
-        Due palchi in contemporanea — l’orario può continuare dopo mezzanotte.
-      </p>
+    <section id="programma" className="mx-auto w-full max-w-3xl py-10 sm:px-4">
+      <div className="px-4 sm:px-0">
+        <h2 className="mb-1 text-2xl font-semibold">Programma</h2>
+        <p className="mb-4 text-sm text-[var(--text-secondary)]">
+          Due palchi in contemporanea — l’orario può continuare dopo mezzanotte.
+        </p>
+      </div>
 
       {canEdit && (
-        <Card className="mb-6 flex flex-col gap-2">
+        <Card className="mx-4 mb-6 flex flex-col gap-2 sm:mx-0">
           <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
             Giorni dell’evento
             <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="field text-xs">
@@ -231,9 +233,9 @@ export function Program() {
       )}
 
       {loadError ? (
-        <p className="text-sm text-[var(--state-error)]">Programma non disponibile. Ricarica la pagina.</p>
+        <p className="px-4 text-sm text-[var(--state-error)] sm:px-0">Programma non disponibile. Ricarica la pagina.</p>
       ) : loading ? (
-        <p className="text-sm text-[var(--text-secondary)]">Carico il programma...</p>
+        <p className="px-4 text-sm text-[var(--text-secondary)] sm:px-0">Carico il programma...</p>
       ) : (
         <ProgramGrid slots={slots} stages={STAGES} days={displayDays} />
       )}

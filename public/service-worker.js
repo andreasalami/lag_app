@@ -15,8 +15,7 @@ self.addEventListener("push", (event) => {
 
   const title = typeof payload.title === "string" ? payload.title : "L'Agro ai Giovani";
   const body = typeof payload.body === "string" ? payload.body : "Nuovo aggiornamento disponibile.";
-  const section = payload.section === "annunci" ? "annunci" : "tornei";
-  const tag = typeof payload.tag === "string" ? payload.tag : `lag-${section}`;
+  const tag = typeof payload.tag === "string" ? payload.tag : "lag-tournament";
 
   event.waitUntil(self.registration.showNotification(title, {
     body,
@@ -24,7 +23,7 @@ self.addEventListener("push", (event) => {
     badge: DEFAULT_BADGE,
     tag,
     renotify: true,
-    data: { url: new URL(`#${section}`, APP_SCOPE).href },
+    data: { url: new URL("#tornei", APP_SCOPE).href },
   }));
 });
 

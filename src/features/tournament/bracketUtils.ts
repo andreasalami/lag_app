@@ -5,6 +5,7 @@ export interface MatchState {
   winner: Side | null;
   scoreA: number | null;
   scoreB: number | null;
+  completedAt?: string | null;
 }
 
 export type MatchesMap = Record<string, MatchState>; // key: `${round}-${index}`

@@ -16,11 +16,10 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 /*
-  Un solo login "tecnico" (Supabase Auth), due permessi diversi decisi
+  Un solo login "tecnico" (Supabase Auth), permessi diversi decisi
   dal RUOLO salvato nella tabella profiles (vedi supabase/schema.sql):
-  - staff: può pubblicare annunci
-  - tournament_manager: potrà gestire solo il torneo (quando costruiamo
-    quella parte), NON gli annunci
+  - staff: gestisce programma e menu
+  - tournament_manager: gestisce esclusivamente il torneo
 
   Il ruolo si legge dopo il login, non è nel token — così per cambiare
   i permessi di qualcuno basta aggiornare una riga nel database, senza

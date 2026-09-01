@@ -2,7 +2,7 @@
 
 App self-service per l'evento "L'Agro ai Giovani" (festival benefico a Cascina
 Marasco, Cremona — ricavato devoluto ad Agropolis ONLUS). L'app è pensata
-mobile-first: il pubblico consulta il programma, il menu, gli annunci, i
+mobile-first: il pubblico consulta il programma, il menu, gli ordini, i
 biglietti e il torneo; lo staff gestisce i contenuti dal telefono o da desktop.
 
 Produzione:
@@ -23,30 +23,28 @@ Produzione:
 | Programma | Griglia calendario, 2 palchi in contemporanea | staff |
 | Menu | Prodotti, prezzi, scorte e allergeni 1–14 | staff / cucina |
 | Instagram | Embed ufficiali dei post dell'evento | — |
-| Annunci | Lista con notifiche browser (solo permesso, non push vere) | staff |
-| Torneo | Tabellone a eliminazione diretta (8/16/32/64 squadre), ripescaggio | tournament_manager |
+| Torneo | Riepilogo con turno e ultimi 5 risultati, più tabellone completo separato | tournament_manager |
 | Ordini | Preordine pubblico, QR, cassa, coda cucina e report anonimo | cassa / cucina |
 
 ## Ruoli e accesso
 
-L'accesso avviene esclusivamente dal pulsante **Staff** nella barra superiore.
-La Home è pubblica e non contiene più login o logout inline. Dopo il login,
-l'area Staff mostra i collegamenti in questo ordine:
+Su desktop l'accesso avviene dal pulsante **Staff** nella barra superiore; su
+mobile il pulsante **Login staff** si trova in fondo alla Home, dopo il torneo.
+Il menu mobile in alto mostra il Programma e il riepilogo degli ordini salvati
+sul dispositivo. Dopo il login, l'area Staff mostra i collegamenti in questo ordine:
 
 1. Programma
-2. Annunci
-3. Menu
-4. Torneo
-5. Cassa
-6. Cucina
+2. Menu
+3. Gestione torneo (admin)
+4. Cassa
+5. Cucina
 
-Le prime quattro voci seguono l'ordine delle sezioni pubbliche della Home;
-Cassa e Cucina sono raccolte in fondo come strumenti operativi.
+Le sezioni editoriali precedono Cassa e Cucina, raccolte in fondo come strumenti operativi.
 
 | Ruolo | Permessi |
 |---|---|
 | `admin` | Accesso a tutte le sezioni e a tutte le operazioni |
-| `staff` | Modifica programma, menu e annunci |
+| `staff` | Modifica programma e menu |
 | `tournament_manager` | Modifica esclusivamente il torneo |
 | `cassa` | Gestisce preordini, ordini eccezionali, apertura evento e report |
 | `cucina` | Gestisce menu/scorte e consegna gli ordini alimentari |
@@ -154,6 +152,8 @@ La suite locale automatizzata e i relativi vincoli di sicurezza sono descritti
 in [docs/STRESS_TEST.md](docs/STRESS_TEST.md).
 La configurazione completa delle notifiche broadcast è descritta in
 [docs/PUSH_NOTIFICATIONS.md](docs/PUSH_NOTIFICATIONS.md).
+Il collaudo di questo aggiornamento mobile è tracciato in
+[docs/MOBILE_UX_TOURNAMENT_TEST_PLAN.md](docs/MOBILE_UX_TOURNAMENT_TEST_PLAN.md).
 
 ### Variabili opzionali
 
@@ -203,7 +203,7 @@ gli step di build e deploy risultino verdi.
 
 ## Backend e sicurezza
 
-- Le tabelle pubbliche (`announcements`, `program_slots`, `menu_items`) sono
+- Le tabelle pubbliche (`program_slots`, `menu_items`, `tournament_state`) sono
    leggibili senza login, ma scrivibili solo dai ruoli autorizzati.
 - Gli ordini non sono leggibili pubblicamente: le RPC pubbliche restituiscono
   esclusivamente il risultato dell'ordine appena creato.
@@ -237,6 +237,6 @@ gli step di build e deploy risultino verdi.
 - Le modifiche non ancora pubblicate al torneo restano una bozza nel browser;
   dopo il salvataggio il tabellone è condiviso tramite Supabase e aggiornato
   per il pubblico con polling mentre la pagina è visibile.
-- Il layout del calendario e del tabellone può usare uno scroll orizzontale
-   interno su schermi molto stretti; la pagina principale e i moduli di
-   modifica restano contenuti nella larghezza del viewport.
+- Il calendario della Home resta contenuto nella larghezza del viewport anche
+  su mobile. Solo il tabellone completo, nella pagina dedicata, usa uno scroll
+  orizzontale interno per mantenere leggibili tutti i turni.

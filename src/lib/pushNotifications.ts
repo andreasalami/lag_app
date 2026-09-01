@@ -6,8 +6,6 @@ function getVapidPublicKey() {
   return import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY?.trim();
 }
 
-export type PushSubscriptionSource = "announcements" | "tournament";
-
 export function isPushSupported() {
   return typeof window !== "undefined"
     && "Notification" in window
@@ -34,7 +32,7 @@ export async function getExistingPushSubscription() {
   return registration.pushManager.getSubscription();
 }
 
-async function saveSubscription(subscription: PushSubscription, source: PushSubscriptionSource) {
+async function saveSubscription(subscription: PushSubscription) {
   const serialized = subscription.toJSON();
   const p256dh = serialized.keys?.p256dh;
   const auth = serialized.keys?.auth;
@@ -44,20 +42,20 @@ async function saveSubscription(subscription: PushSubscription, source: PushSubs
     p_endpoint: serialized.endpoint,
     p_p256dh: p256dh,
     p_auth: auth,
-    p_source: source,
+    p_source: "tournament",
     p_user_agent: navigator.userAgent.slice(0, 500),
   });
   if (error) throw new Error(error.message);
 }
 
-export async function syncExistingPushSubscription(source: PushSubscriptionSource) {
+export async function syncExistingPushSubscription() {
   const subscription = await getExistingPushSubscription();
   if (!subscription) return false;
-  await saveSubscription(subscription, source);
+  await saveSubscription(subscription);
   return true;
 }
 
-export async function subscribeToPushNotifications(source: PushSubscriptionSource) {
+export async function subscribeToPushNotifications() {
   if (!isPushSupported()) throw new Error("push_unsupported");
   const vapidPublicKey = getVapidPublicKey();
   if (!vapidPublicKey) throw new Error("push_not_configured");
@@ -74,7 +72,7 @@ export async function subscribeToPushNotifications(source: PushSubscriptionSourc
   }
 
   try {
-    await saveSubscription(subscription, source);
+    await saveSubscription(subscription);
     window.dispatchEvent(new Event("lag:push-subscription-changed"));
   } catch (error) {
     if (createdSubscription) await subscription.unsubscribe().catch(() => false);

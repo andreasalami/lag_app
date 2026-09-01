@@ -1435,7 +1435,7 @@ create table if not exists public.push_subscriptions (
   endpoint text not null,
   p256dh text not null,
   auth text not null,
-  source text not null default 'announcements',
+  source text not null default 'tournament',
   user_agent text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
