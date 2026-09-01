@@ -26,19 +26,22 @@ import { InstagramEmbed } from "./InstagramEmbed";
   smontate per davvero — l'iframe non resta a consumare risorse quando
   non è a portata di swipe.
 
-  Nota onesta: la card ha un'altezza fissa con overflow nascosto,
-  quindi per i post con didascalia lunga il piè di pagina dell'embed
-  ("Visualizza su Instagram") può risultare tagliato — la foto in alto
-  resta sempre visibile per intero. È il compromesso di forzare
-  qualsiasi imbed (dimensione variabile, fuori dal nostro controllo)
-  dentro una carta di dimensione fissa.
+  La carta mostra soltanto il viewport quadrato del contenuto: header,
+  didascalia e CTA dell'embed restano fuori dalla maschera. È il
+  compromesso necessario per uniformare embed di dimensione variabile,
+  il cui DOM interno è fuori dal nostro controllo.
 */
 const CURATED_POSTS: string[] = [
   "https://www.instagram.com/p/DZNBnbrjPns/",
   "https://www.instagram.com/p/DZKQ_OgDKUd/",
-  "https://www.instagram.com/p/DYuNjU5jDtV/",
   "https://www.instagram.com/p/DWrDeL8DPET/",
   "https://www.instagram.com/p/DWi1z2cjMOa/",
+  "https://www.instagram.com/p/DY9S5ZNMktl/",
+  "https://www.instagram.com/p/DYUemPXjB46/",
+  "https://www.instagram.com/p/DWrDeL8DPET/",
+  "https://www.instagram.com/p/C6x-hghIBZN/",
+  "https://www.instagram.com/p/C6vs2QWIpYb/",
+  "https://www.instagram.com/p/CicrKc7Ih-U/?img_index=1",
 ];
 
 const VISIBLE_DEPTH = 3;
@@ -138,7 +141,7 @@ export function InstagramPosts() {
 
   return (
     <div className="mt-6">
-      <div className="relative isolate mx-auto aspect-[4/5] w-full max-w-[300px]">
+      <div className="relative isolate mx-auto aspect-square w-full max-w-[300px]">
         {Array.from({ length: depthCount }, (_, d) => depthCount - 1 - d).map((depth) => {
           const idx = (current + depth) % total;
           const isTop = depth === 0;
@@ -155,7 +158,13 @@ export function InstagramPosts() {
                 opacity: isTop ? 1 : 0.85 - depth * 0.2,
               }}
             >
-              <InstagramEmbed url={CURATED_POSTS[idx]} />
+              {/* L'header bianco con profilo e CTA appartiene all'iframe
+                  cross-origin di Instagram e non è stilizzabile. Lo spostiamo
+                  sotto il bordo superiore della carta: il viewport quadrato
+                  mostra così soltanto il contenuto visuale del post. */}
+              <div className="-translate-y-[54px]">
+                <InstagramEmbed url={CURATED_POSTS[idx]} />
+              </div>
               {isTop && (
                 <div
                   className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
