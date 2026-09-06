@@ -64,10 +64,12 @@
   font-weight: 600;
 }
 .pickup-quick[aria-pressed="true"] {
-  border-color: var(--accent-primary);
-  background: var(--accent-primary);
-  color: var(--text-on-accent);
+  border-color: var(--order-accent-border);
+  background: var(--order-accent-surface);
+  color: #ffc08f;
 }
+.pickup-main-stepper { justify-content: space-between; width: 100%; }
+.pickup-main-stepper .order-stepper-button { min-width: 56px; min-height: 64px; font-size: 28px; }
 .order-stepper {
   display: flex;
   align-items: center;

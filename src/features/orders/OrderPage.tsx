@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Modal } from "../../components/ui/Modal";
@@ -25,7 +25,7 @@ import { clearPendingOrder, readPendingOrder, savePendingOrder, type PendingOrde
 import { getOrCreateRecoveryToken, readRecoveryToken, recoveryOrderQr, saveRecoveryToken, validRecoveryToken } from "./orderRecovery";
 import { TurnstileChallenge } from "../../components/ui/TurnstileChallenge";
 import { RecoveryCard } from "./RecoveryCard";
-import { PreparationChoice, kitchenMessage } from "./PreparationChoice";
+import { PreparationChoice, PreparationStatus } from "./PreparationChoice";
 import type { PreparationMode, KitchenState } from "./types";
 import { MENU_SECTIONS } from "../menu/menuSections";
 
@@ -57,6 +57,20 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [notes, setNotes] = useState("");
   const [cart, setCart] = useState<Record<string, OrderLine>>({});
   const [cartExpanded, setCartExpanded] = useState(false);
+  const [cartElement, setCartElement] = useState<HTMLElement | null>(null);
+  const [cartHeight, setCartHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    if (!cartElement) {
+      setCartHeight(0);
+      return;
+    }
+    const measure = () => setCartHeight(cartElement.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(cartElement);
+    return () => observer.disconnect();
+  }, [cartElement]);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [preparationMode, setPreparationMode] = useState<PreparationMode>("immediate");
   const submitBusy = useRef(false);
@@ -434,7 +448,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         <section className="mt-5 text-center">
           <p className={`text-sm ${orderStatusClassName(submittedOrder.status)}`}>{submittedOrder.event_closed_at ? "Evento concluso. Questo ordine resta nello storico; il QR non è più utilizzabile per il ritiro." : submittedOrder.status==='pagato' && (submittedOrder.kitchen_state==='dormant' || submittedOrder.kitchen_state==='waiting') ? 'Pagamento registrato.' : statusMessage(submittedOrder.status)}</p>
           <h1 className="mt-2 text-4xl">#{submittedOrder.display_number}</h1>
-          {!submittedOrder.event_closed_at && (submittedOrder.status==='pagato' || submittedOrder.status==='ritiro_parziale') && kitchenMessage(submittedOrder.kitchen_state) && <p className="my-3 rounded-2xl border border-[var(--surface-border)] p-3 text-sm">{kitchenMessage(submittedOrder.kitchen_state)} Le bevande restano ritirabili separatamente.</p>}
+          {!submittedOrder.event_closed_at && (submittedOrder.status==='pagato' || submittedOrder.status==='ritiro_parziale') && <PreparationStatus state={submittedOrder.kitchen_state}/>}
           {submittedOrder.status==='in_attesa_pagamento' && submittedOrder.preparation_mode==='deferred' && <p className="mt-2 text-sm">Hai scelto di preparare il cibo più tardi. Paga entro 60 minuti per mantenere le quantità riservate.</p>}
           <p className="mt-1 text-xl font-semibold">{submittedOrder.alias}</p>
           <p className="mt-2 text-xs text-[var(--text-secondary)]">
@@ -583,7 +597,10 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   }
 
   return (
-    <main className="mx-auto min-h-full max-w-3xl px-4 pb-40 pt-8">
+    <main
+      className="mx-auto min-h-full max-w-3xl px-4 pt-8"
+      style={{ paddingBottom: `calc(${cartHeight + 32}px + env(safe-area-inset-bottom, 0px))` }}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button href={`${import.meta.env.BASE_URL}#menu`} variant="back" className="min-h-10 px-4 py-2">← Torna al menu del sito</Button>
         {orderHistory.length > 0 && (
@@ -678,7 +695,11 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       </details>
 
       {lines.length > 0 && (
-        <section className="glass-elevated fixed inset-x-3 bottom-3 z-50 mx-auto max-w-xl rounded-[var(--radius-lg)] p-3">
+        <section
+          ref={setCartElement}
+          className="glass-elevated fixed inset-x-3 z-50 mx-auto max-w-xl rounded-[var(--radius-lg)] p-3"
+          style={{ bottom: "calc(12px + env(safe-area-inset-bottom, 0px))" }}
+        >
           <button
             type="button"
             onClick={() => setCartExpanded((value) => !value)}
@@ -689,7 +710,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
             <span className="font-mono text-[var(--accent-primary)]">{priceFormatter.format(total)} {cartExpanded ? "⌄" : "⌃"}</span>
           </button>
           {cartExpanded && (
-            <div className="mt-3 max-h-[60vh] overflow-y-auto border-t border-[var(--surface-border)] pt-3">
+            <div className="mt-3 max-h-[50dvh] overflow-y-auto overscroll-contain border-t border-[var(--surface-border)] pt-3">
               <div className="flex flex-col gap-2">
                 {lines.map((line) => (
                   <div key={line.id} className="flex items-center justify-between gap-3 text-sm">

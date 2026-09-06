@@ -22,6 +22,10 @@ export function PickupSelection({ items, selection, onChange, onConfirm, busy = 
   const selected = selectedPickupCount(selection);
   const valid = isPickupSelectionValid(items, selection);
   const totalRemaining = items.reduce((total, item) => total + remainingToPickUp(item), 0);
+  const selectedItems = items.filter(item => (selection[item.id] ?? 0) > 0);
+  const confirmation = selectedItems.length === 1
+    ? `Consegna ${selected} × ${selectedItems[0].name}`
+    : `Consegna ${selected} articoli`;
 
   function setQuantity(id: string, value: number) {
     onChange({ ...selection, [id]: value });
@@ -47,17 +51,20 @@ export function PickupSelection({ items, selection, onChange, onConfirm, busy = 
                 </div>
                 <span className="order-badge">{remaining} rimasti</span>
               </div>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex gap-2">
+              <div className="mt-4 flex flex-col gap-3">
+                <div className="order-stepper pickup-main-stepper">
+                  <button type="button" disabled={busy || quantity <= 0} aria-label={`Riduci ritiro ${item.name}`} onClick={() => setQuantity(item.id, Math.max(0, quantity - 1))} className="order-stepper-button">−</button>
+                  <div className="flex flex-col items-center py-2">
+                    <output aria-live="polite" aria-label={`${item.name}: quantità da consegnare`} className="font-mono text-3xl font-semibold">{quantity}</output>
+                    <span className="text-xs text-[var(--text-secondary)]">da consegnare ora</span>
+                  </div>
+                  <button type="button" disabled={busy || quantity >= remaining} aria-label={`Aumenta ritiro ${item.name}`} onClick={() => setQuantity(item.id, quantity + 1)} className="order-stepper-button">+</button>
+                </div>
+                <div className="flex justify-center gap-2">
                   {[1, 2].map((amount) => (
                     <button key={amount} type="button" aria-label={`${item.name}: consegna ${amount}`} aria-pressed={quantity === amount} disabled={busy || remaining < amount} onClick={() => setQuantity(item.id, amount)} className="pickup-quick">{amount}</button>
                   ))}
                   <button type="button" aria-label={`${item.name}: consegna tutti i ${remaining} rimasti`} aria-pressed={remaining > 0 && quantity === remaining} onClick={() => setQuantity(item.id, remaining)} className="pickup-quick">Tutti</button>
-                </div>
-                <div className="order-stepper">
-                  <button type="button" disabled={busy || quantity <= 0} aria-label={`Riduci ritiro ${item.name}`} onClick={() => setQuantity(item.id, Math.max(0, quantity - 1))} className="order-stepper-button">−</button>
-                  <output aria-label={`${item.name}: quantità da consegnare`} className="min-w-8 text-center font-mono text-xl font-semibold">{quantity}</output>
-                  <button type="button" disabled={busy || quantity >= remaining} aria-label={`Aumenta ritiro ${item.name}`} onClick={() => setQuantity(item.id, quantity + 1)} className="order-stepper-button">+</button>
                 </div>
               </div>
               <p className="mt-3 text-xs text-[var(--text-secondary)]">{quantity > 0 ? <>Dopo questo ritiro: <strong className="text-[var(--text-primary)]">{Math.max(0, remaining - quantity)} da ritirare</strong></> : "Nessuno da consegnare adesso"}</p>
@@ -75,7 +82,7 @@ export function PickupSelection({ items, selection, onChange, onConfirm, busy = 
           <p aria-live="polite" className="text-sm text-[var(--text-secondary)]">{selected === 0 ? "Scegli le quantità da consegnare." : `${selected} ${selected === 1 ? "articolo selezionato" : "articoli selezionati"}`}</p>
           {selected > 0 && <button type="button" disabled={busy} className="order-quiet-action" onClick={() => onChange({})}>Azzera</button>}
         </div>
-        <Button type="button" variant="staff-primary" className="pickup-confirm min-h-14 w-full text-base" onClick={onConfirm} disabled={busy || selected === 0 || !valid}>{busy ? "Registro il ritiro…" : selected > 0 ? `Consegna ${selected} ${selected === 1 ? "articolo" : "articoli"}` : "Conferma ritiro"}</Button>
+        <Button type="button" variant="staff-primary" className="pickup-confirm min-h-14 w-full whitespace-normal text-base" onClick={onConfirm} disabled={busy || selected === 0 || !valid}>{busy ? "Registro il ritiro…" : selected > 0 ? confirmation : "Conferma ritiro"}</Button>
         <p className="mt-3 text-center text-xs leading-relaxed text-[var(--text-secondary)]">Gli altri prodotti restano disponibili sullo stesso QR.</p>
       </div>
     </div>

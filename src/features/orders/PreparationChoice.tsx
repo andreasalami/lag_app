@@ -25,3 +25,16 @@ export function kitchenMessage(state:KitchenState|undefined) {
   if(state==='done')return 'Il cibo è stato ritirato.';
   return null;
 }
+
+export function PreparationStatus({ state }: { state: KitchenState | undefined }) {
+  const message = kitchenMessage(state);
+  if (!message) return null;
+  const title = state === 'dormant' ? 'Cibo per più tardi'
+    : state === 'waiting' ? 'In attesa di un posto in cucina'
+    : state === 'active' ? 'Preparazione avviata' : 'Cibo ritirato';
+  return <section role="status" className="my-4 rounded-2xl border border-[var(--accent-primary)]/40 bg-[rgba(242,128,46,0.08)] p-4 text-left">
+    <h2 className="text-lg">{title}</h2>
+    <p className="mt-2 text-sm text-[var(--text-secondary)]">{message}</p>
+    <p className="mt-3 text-xs text-[var(--text-secondary)]">Se hai ordinato bevande, puoi ritirarle separatamente con lo stesso QR.</p>
+  </section>;
+}

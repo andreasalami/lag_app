@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PreparationChoice, kitchenMessage } from "../features/orders/PreparationChoice";
+import { PreparationChoice, PreparationStatus } from "../features/orders/PreparationChoice";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import type { PreparationMode, KitchenState } from "../features/orders/types";
@@ -21,7 +21,7 @@ export function PreparationPreview() {
         {full && mode==='immediate' && <p role="status" className="mb-3 text-sm text-[var(--state-warning)]">Cucina al completo · 100 / 100. La cassa attende un posto oppure concorda la preparazione successiva.</p>}
         <Button className="w-full" disabled={full && mode==='immediate'} onClick={()=>{setPaid(true);setState(mode==='deferred'?'dormant':'active');}}>Conferma pagamento di esempio</Button></> : <>
         <p className="mt-4 text-sm text-[var(--state-success)]">Pagamento registrato · Bevande ritirabili</p>
-        <p className="mt-3 rounded-xl bg-white/5 p-3 text-sm">{kitchenMessage(state)}</p>
+        <PreparationStatus state={state}/>
         {state==='dormant' && <Button className="mt-4 w-full" onClick={()=>setScanned(true)}>{scanned?'QR letto · Ordine #42':'Simula scansione QR in cucina'}</Button>}
         {scanned && state==='dormant' && <Button className="mt-2 w-full" onClick={()=>setState(full?'waiting':'active')}>Avvia preparazione del cibo</Button>}
       </>}
