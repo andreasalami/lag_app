@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
@@ -14,6 +14,7 @@ import {
 const POLL_INTERVAL_MS = 30_000;
 
 export function TournamentPreview() {
+  const sectionRef = useRef<HTMLElement>(null);
   const { role } = useAuth();
   const canManage = role === "tournament_manager" || role === "admin";
   const [snapshot, setSnapshot] = useState<TournamentSnapshot>(EMPTY_TOURNAMENT_SNAPSHOT);
@@ -22,15 +23,26 @@ export function TournamentPreview() {
 
   useEffect(() => {
     let cancelled = false;
+    let visible = false;
+    let busy = false;
+    let revision: number | null = null;
 
     async function load() {
-      if (!isSupabaseConfigured || document.visibilityState !== "visible") {
+      if (busy || !visible || !isSupabaseConfigured || document.visibilityState !== "visible") {
         if (!cancelled) setLoading(false);
         return;
       }
+      busy = true;
+      try {
+      if (revision !== null) {
+        const probe = await supabase.from("tournament_state").select("revision").eq("id", "main").maybeSingle();
+        if (cancelled) return;
+        if (probe.error) { setLoadError("Aggiornamenti del torneo non disponibili. Riprova più tardi."); return; }
+        if (probe.data?.revision === revision) { setLoadError(null); return; }
+      }
       const { data, error } = await supabase
         .from("tournament_state")
-        .select("size, teams, matches, overrides")
+        .select("size, teams, matches, overrides, revision")
         .eq("id", "main")
         .maybeSingle();
       if (cancelled) return;
@@ -38,18 +50,22 @@ export function TournamentPreview() {
       if (error || !parsed) {
         setLoadError("Aggiornamenti del torneo non disponibili. Riprova più tardi.");
       } else {
+        revision = data?.revision ?? null;
         setSnapshot(parsed);
         setLoadError(null);
       }
       setLoading(false);
+      } finally { busy = false; }
     }
 
-    void load();
+    const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; if (visible) void load(); }, { rootMargin: "200px" });
+    if (sectionRef.current) observer.observe(sectionRef.current);
     const interval = window.setInterval(() => void load(), POLL_INTERVAL_MS);
     const handleVisibility = () => void load();
     document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       cancelled = true;
+      observer.disconnect();
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
@@ -59,7 +75,7 @@ export function TournamentPreview() {
   const results = useMemo(() => latestTournamentResults(snapshot), [snapshot]);
 
   return (
-    <section id="tornei" className="mx-auto w-full max-w-3xl px-4 py-10">
+    <section ref={sectionRef} id="tornei" className="mx-auto w-full max-w-3xl px-4 py-10">
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent-primary)]">Live tournament</p>

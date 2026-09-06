@@ -2,3 +2,9 @@ project_id = "lag-app"
 
 [functions.send-push-broadcast]
 verify_jwt = true
+
+[functions.submit-order]
+verify_jwt = false
+
+[functions.register-push]
+verify_jwt = false

@@ -42,3 +42,12 @@ describe("orderingReasonMessage", () => {
     expect(orderingReasonMessage("capacity_reached")).toContain("Riprova tra qualche minuto");
   });
 });
+
+describe("CSV formula safety", () => {
+  it.each(["=1+1", "+1+1", "-1+1", "@SUM(A1)", "\t=1+1", "  =1+1"])("neutralizza %s", (name) => {
+    const report: EventReport = {event_name:name,closed_at:"2026-09-05T12:00:00Z",summary:{},products:[{name,category:"cibo",quantity:1,revenue:5}],orders:[]};
+    const csv=eventReportToCsv(report);
+    expect(csv).toContain("REPORT EVENTO;'"+name);
+    expect(csv).toContain("'"+name+";cibo;1;5.00");
+  });
+});

@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 
 type ModalProps = {
   open: boolean;
@@ -10,40 +10,42 @@ type ModalProps = {
 };
 
 export function Modal({ open, title, children, actions, dismissible = false, onClose }: ModalProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
-    if (!open) return;
+    if (!open || !dialogRef.current) return;
+    const dialog = dialogRef.current;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (dismissible && event.key === "Escape") onClose?.();
-    };
-    window.addEventListener("keydown", onKeyDown);
+    // Native modal dialogs make the background inert and contain keyboard focus.
+    dialog.showModal();
     return () => {
+      dialog.close();
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [dismissible, onClose, open]);
+  }, [open]);
 
   if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 py-8"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (dismissible && event.target === event.currentTarget) onClose?.();
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={titleId}
+      className="glass-elevated glass-elevated--strong fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-[var(--radius-lg)] border-0 p-5 text-[var(--text-primary)] backdrop:bg-black/70"
+      onCancel={(event) => {
+        event.preventDefault();
+        if (dismissible) onClose?.();
+      }}
+      onClick={(event) => {
+        if (!dismissible || event.target !== event.currentTarget) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose?.();
       }}
     >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-        className="glass-elevated glass-elevated--strong w-full max-w-md rounded-[var(--radius-lg)] p-5"
-      >
-        <h2 id="modal-title" className="text-xl font-semibold">{title}</h2>
-        <div className="mt-3 text-sm text-[var(--text-secondary)]">{children}</div>
-        <div className="mt-5 flex flex-wrap justify-end gap-2">{actions}</div>
-      </section>
-    </div>
+      <h2 id={titleId} className="text-xl font-semibold">{title}</h2>
+      <div className="mt-3 text-sm text-[var(--text-secondary)]">{children}</div>
+      <div className="mt-5 flex flex-wrap justify-end gap-2">{actions}</div>
+    </dialog>
   );
 }

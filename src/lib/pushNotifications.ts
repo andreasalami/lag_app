@@ -32,31 +32,35 @@ export async function getExistingPushSubscription() {
   return registration.pushManager.getSubscription();
 }
 
-async function saveSubscription(subscription: PushSubscription) {
+async function saveSubscription(subscription: PushSubscription, turnstileToken: string) {
   const serialized = subscription.toJSON();
   const p256dh = serialized.keys?.p256dh;
   const auth = serialized.keys?.auth;
   if (!serialized.endpoint || !p256dh || !auth) throw new Error("invalid_push_subscription");
 
-  const { error } = await supabase.rpc("upsert_push_subscription", {
+  const { error } = await supabase.functions.invoke("register-push", { body: { turnstileToken, subscription: {
     p_endpoint: serialized.endpoint,
     p_p256dh: p256dh,
     p_auth: auth,
     p_source: "tournament",
-    p_user_agent: navigator.userAgent.slice(0, 500),
-  });
+  } } });
   if (error) throw new Error(error.message);
 }
 
 export async function syncExistingPushSubscription() {
   const subscription = await getExistingPushSubscription();
   if (!subscription) return false;
-  await saveSubscription(subscription);
-  return true;
+  const serialized = subscription.toJSON();
+  const { data, error } = await supabase.rpc("has_push_subscription", {
+    p_endpoint: serialized.endpoint, p_auth: serialized.keys?.auth,
+  });
+  if (error) throw new Error(error.message);
+  return data === true;
 }
 
-export async function subscribeToPushNotifications() {
+export async function subscribeToPushNotifications(turnstileToken: string) {
   if (!isPushSupported()) throw new Error("push_unsupported");
+  if (!turnstileToken) throw new Error("challenge_required");
   const vapidPublicKey = getVapidPublicKey();
   if (!vapidPublicKey) throw new Error("push_not_configured");
 
@@ -72,7 +76,7 @@ export async function subscribeToPushNotifications() {
   }
 
   try {
-    await saveSubscription(subscription);
+    await saveSubscription(subscription, turnstileToken);
     window.dispatchEvent(new Event("lag:push-subscription-changed"));
   } catch (error) {
     if (createdSubscription) await subscription.unsubscribe().catch(() => false);

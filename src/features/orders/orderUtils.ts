@@ -53,8 +53,10 @@ export function cartTotal(lines: OrderLine[]) {
 }
 
 function csvCell(value: unknown) {
-  const text = String(value ?? "");
-  return /[";,\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  const raw = String(value ?? "");
+  // Quoting CSV syntax alone does not prevent spreadsheet formula evaluation.
+  const text = /^[\s\uFEFF]*[=+@-]/.test(raw) ? `'${raw}` : raw;
+  return /[";,\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 export type EventReport = {
@@ -119,27 +121,38 @@ export async function downloadOrderPdf(order: SubmittedOrder, qrDataUrl: string)
   pdf.setFontSize(10);
   pdf.text("Documento non fiscale - pagamento esclusivamente in cassa", 15, 25);
   pdf.setFontSize(14);
-  pdf.text(`Ordine #${order.display_number} - ${order.alias}`, 15, 36);
+  pdf.text(pdf.splitTextToSize(`Ordine #${order.display_number} - ${order.alias}`, 125), 15, 36);
   pdf.addImage(qrDataUrl, "PNG", 150, 14, 42, 42);
 
-  let y = 50;
+  let y = 65;
+  const ensureSpace = (height: number) => {
+    if (y + height > 280) { pdf.addPage(); y = 20; }
+  };
   pdf.setFontSize(11);
   for (const line of order.items) {
-    pdf.text(`${line.qty}x ${line.name}`, 15, y);
+    const label = pdf.splitTextToSize(`${line.qty}x ${line.name}`, 130) as string[];
+    ensureSpace(label.length * 6 + 4);
+    pdf.text(label, 15, y);
     pdf.text(priceFormatter.format(Number(line.price) * line.qty), 190, y, { align: "right" });
-    y += 7;
+    y += label.length * 6 + 4;
   }
+  ensureSpace(20);
   pdf.line(15, y, 195, y);
   y += 8;
   pdf.setFontSize(13);
   pdf.text("Totale", 15, y);
   pdf.text(priceFormatter.format(Number(order.total)), 190, y, { align: "right" });
   if (order.notes) {
+    ensureSpace(25);
     y += 12;
     pdf.setFontSize(11);
     pdf.text("Note:", 15, y);
     y += 6;
-    pdf.text(pdf.splitTextToSize(order.notes, 175), 15, y);
+    for (const line of pdf.splitTextToSize(order.notes, 175) as string[]) {
+      ensureSpace(6);
+      pdf.text(line, 15, y);
+      y += 6;
+    }
   }
   pdf.save(`ordine-${order.display_number}.pdf`);
 }

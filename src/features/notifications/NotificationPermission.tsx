@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/Button";
+import { TurnstileChallenge } from "../../components/ui/TurnstileChallenge";
 import { Modal } from "../../components/ui/Modal";
 import {
   isPushSupported,
@@ -33,6 +34,8 @@ export function NotificationPermission() {
   const [subscribed, setSubscribed] = useState(false);
   const [open, setOpen] = useState(false);
   const [platform, setPlatform] = useState<MobilePlatform | null>(null);
+  const [challengeToken, setChallengeToken] = useState("");
+  const [challengeAttempt, setChallengeAttempt] = useState(0);
   const [requesting, setRequesting] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
   const [testFeedback, setTestFeedback] = useState<string | null>(null);
@@ -73,6 +76,7 @@ export function NotificationPermission() {
   }
 
   async function activateNotifications() {
+    if (requesting || !challengeToken) return;
     if (!isPushSupported()) {
       setState("unsupported");
       setActivationError("Questo browser non supporta le notifiche Web Push.");
@@ -86,7 +90,7 @@ export function NotificationPermission() {
       setState(permission as PermissionState);
       if (permission !== "granted") return;
 
-      const registration = await subscribeToPushNotifications();
+      const registration = await subscribeToPushNotifications(challengeToken);
       setSubscribed(true);
       setOpen(false);
       try {
@@ -102,6 +106,8 @@ export function NotificationPermission() {
       setActivationError(activationErrorMessage(error));
     } finally {
       setRequesting(false);
+      setChallengeToken("");
+      setChallengeAttempt(value => value + 1);
     }
   }
 
@@ -158,12 +164,12 @@ export function NotificationPermission() {
           <>
             <Button variant="ghost" onClick={() => setOpen(false)}>Chiudi</Button>
             {platform === "android" && state !== "denied" && (
-              <Button onClick={() => void activateNotifications()} disabled={requesting || state === "unsupported"}>
+              <Button onClick={() => void activateNotifications()} disabled={requesting || !challengeToken || state === "unsupported"}>
                 {requesting ? "Attendo…" : "Continua e attiva"}
               </Button>
             )}
             {platform === "ios" && standalone && state !== "denied" && (
-              <Button onClick={() => void activateNotifications()} disabled={requesting || state === "unsupported"}>
+              <Button onClick={() => void activateNotifications()} disabled={requesting || !challengeToken || state === "unsupported"}>
                 {requesting ? "Attendo…" : "Attiva notifiche"}
               </Button>
             )}
@@ -246,6 +252,7 @@ export function NotificationPermission() {
           </div>
         )}
 
+        {(platform === "android" || (platform === "ios" && standalone)) && <TurnstileChallenge key={challengeAttempt} action="push" onToken={setChallengeToken}/>}
         {activationError && <p className="mt-3 text-xs text-[var(--state-error)]">{activationError}</p>}
       </Modal>
     </>

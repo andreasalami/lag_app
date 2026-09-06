@@ -1,4 +1,6 @@
 export type OrderCategory = "cibo" | "bevande";
+export type PreparationMode = "immediate" | "deferred";
+export type KitchenState = "none" | "reserved" | "dormant" | "waiting" | "active" | "done";
 
 export type OrderMenuItem = {
   id: string;
@@ -22,6 +24,8 @@ export type OrderLine = {
 };
 
 export type SubmittedOrder = {
+  preparation_mode?: PreparationMode;
+  kitchen_state?: KitchenState;
   event_id: string;
   event_name: string;
   order_id: string;
@@ -40,11 +44,16 @@ export type OrderingStatus = {
   event_name: string | null;
   opens_at: string | null;
   closes_at: string | null;
+  reservation_minutes?: number;
+  max_item_quantity?: number;
+  max_order_quantity?: number;
 };
 
 export type OrderingCatalog = OrderingStatus & { items: OrderMenuItem[] };
 
 export type StaffOrder = {
+  preparation_mode?: PreparationMode;
+  kitchen_state?: KitchenState;
   id: string;
   event_id: string;
   display_number: number;

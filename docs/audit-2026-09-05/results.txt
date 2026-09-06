@@ -1,0 +1,12 @@
+SCHEMA_FIRST_APPLY: OK
+SCHEMA_SECOND_APPLY: policy "Le postazioni leggono gli ordini in preparazione" for table "orders" already exists
+ANON_RESERVATION: [{"available_portions":4001}]
+CANCELLED_PII: [{"status":"annullato","alias":"Audit cliente","notes":"nota audit"}]
+LEGACY_DELIVERY: [{"status":"consegnato","quantity":1,"delivered_quantity":0}]
+DELIVERED_PII: [{"status":"consegnato","alias":"Audit cliente","notes":"nota audit"}]
+BAR_CAN_READ_FOOD_DELIVERED: 1
+ARBITRARY_PUSH_ENDPOINT_ACCEPTED: true
+ANON_ORDER_ROWS_VISIBLE: denied: 42501
+LEGACY_PAYMENT_WITH_STATION_CLAIM: [{"status":"pagato","fulfillment_rows":0}]
+REPEATED_CLOSE_HAS_ORDERS: false
+UNDO_AFTER_CLOSE: [{"status":"pagato","event_closed":true}]

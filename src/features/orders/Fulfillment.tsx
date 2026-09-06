@@ -6,6 +6,10 @@ import { useAuth } from "../auth/AuthContext";
 import { parseQrPayload } from "./orderUtils";
 import { QrScanner } from "./QrScanner";
 import { BAR_STATIONS, KITCHEN_STATIONS, type FulfillmentStation } from "./workflow";
+import { PickupSelection } from "./PickupSelection";
+import { kitchenMessage } from "./PreparationChoice";
+import type { KitchenState } from "./types";
+import { isPickupSelectionValid, selectedPickupCount } from "./pickupQuantities";
 
 type FulfillmentItem = {
   id: string;
@@ -17,6 +21,7 @@ type FulfillmentItem = {
 };
 
 type FulfillmentOrder = {
+  kitchen_state?: KitchenState;
   id: string;
   display_number: number;
   alias: string | null;
@@ -64,21 +69,22 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   const [message, setMessage] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("lag:kitchen-sound") === "on");
   const knownKitchenOrderIds = useRef<Set<string> | null>(null);
+  const queueRequestId = useRef(0);
 
   const stationLabel = options.find((item) => item.key === station)?.label ?? areaLabel;
 
   const selectOrder = useCallback((order: FulfillmentOrder) => {
     setActiveOrder(order);
-    setQuantities(Object.fromEntries(order.items.map((item) => [
-      item.id,
-      Math.max(0, item.quantity - item.delivered_quantity),
-    ])));
+    setQuantities({});
+    setMessage(null);
   }, []);
 
   const refetch = useCallback(async () => {
     if (!authorized || !station) return;
+    const requestId = ++queueRequestId.current;
     setLoading(true);
     const { data, error } = await supabase.rpc("get_fulfillment_queue", { p_station: station });
+    if (requestId !== queueRequestId.current) return;
     setLoading(false);
     if (error) {
       setMessage("Coda non disponibile. Controlla la connessione e riprova.");
@@ -94,9 +100,10 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
       knownKitchenOrderIds.current = nextIds;
     }
     setOrders(next);
-    setActiveOrder((current) => current ? next.find((order) => order.id === current.id) ?? null : null);
+    setActiveOrder((current) => current ? next.find((order) => order.id === current.id) ?? (current.kitchen_state==='dormant' || current.kitchen_state==='waiting' ? current : null) : null);
     if (station !== "cucina") {
       const result = await supabase.rpc("get_recent_fulfillment_deliveries", { p_station: station });
+      if (requestId !== queueRequestId.current) return;
       if (!result.error) setRecent((result.data ?? []) as RecentDelivery[]);
     } else {
       setRecent([]);
@@ -110,9 +117,13 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "order_fulfillment_items" }, () => void refetch())
       .subscribe();
-    const timer = window.setInterval(() => void refetch(), 15_000);
+    const refreshVisible=()=>{if(document.visibilityState==='visible')void refetch();};
+    const timer = window.setInterval(refreshVisible, 15_000);
+    document.addEventListener('visibilitychange',refreshVisible);
     return () => {
+      queueRequestId.current += 1;
       window.clearInterval(timer);
+      document.removeEventListener('visibilitychange',refreshVisible);
       void supabase.removeChannel(channel);
     };
   }, [area, authorized, refetch, station]);
@@ -158,7 +169,11 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   }, [selectOrder, station]);
 
   async function confirmDelivery() {
-    if (!activeOrder || !station || station === "cucina") return;
+    if (busy || !activeOrder || !station || station === "cucina") return;
+    if (!isPickupSelectionValid(activeOrder.items, quantities)) {
+      setMessage("Le quantità disponibili sono cambiate. Controlla cosa resta da ritirare.");
+      return;
+    }
     const items = activeOrder.items.flatMap((item) => (
       (quantities[item.id] ?? 0) > 0 ? [{ id: item.id, qty: quantities[item.id] }] : []
     ));
@@ -167,6 +182,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
       return;
     }
     setBusy(true);
+    setMessage(null);
     const { error } = await supabase.rpc("deliver_fulfillment_items", {
       p_order_id: activeOrder.id,
       p_station: station,
@@ -178,9 +194,32 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
       await refetch();
       return;
     }
-    setMessage(`Consegna dell’ordine #${activeOrder.display_number} registrata.`);
+    const count = selectedPickupCount(quantities);
+    setMessage(`Ordine #${activeOrder.display_number}: ${count} ${count === 1 ? "articolo consegnato" : "articoli consegnati"}. Il QR resta valido per i prodotti ancora da ritirare.`);
     setActiveOrder(null);
     await refetch();
+  }
+
+  async function activateFood() {
+    if(busy || !activeOrder || !station)return;
+    setBusy(true);
+    try {
+      const {data,error}=await supabase.rpc('activate_kitchen_order',{p_order_id:activeOrder.id,p_station:station});
+      if(error || !data){setMessage(error?.message.includes('event_closed') ? 'Evento chiuso: non è possibile attivare la preparazione.' : 'Attivazione non confermata. Riprova: una doppia richiesta non duplica la preparazione.');return;}
+      setActiveOrder(current=>current ? {...current,kitchen_state:data.kitchen_state} : null);
+      setMessage(data.kitchen_state==='waiting' ? 'Ordine attivato: entrerà in cucina appena si libera un posto.' : 'Preparazione avviata.');
+      await refetch();
+    } finally {setBusy(false);}
+  }
+
+  async function openOrderNumber() {
+    if(busy || !station || !/^[1-9][0-9]*$/.test(numberSearch.trim()))return;
+    setBusy(true);
+    try {
+      const {data,error}=await supabase.rpc('get_fulfillment_order_by_number',{p_display_number:Number(numberSearch),p_station:station});
+      if(error || !data){setMessage('Ordine non trovato in questa postazione. Verifica numero ed evento.');return;}
+      selectOrder(data as FulfillmentOrder);
+    } finally {setBusy(false);}
   }
 
   async function undoDelivery(id: string) {
@@ -218,12 +257,15 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
 
   if (activeOrder) {
     const overview = station === "cucina";
+    const foodDormant=area==='cucina' && (activeOrder.kitchen_state==='dormant' || activeOrder.kitchen_state==='waiting');
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <StaffPageHeading title="Gestione ritiro" description={`${areaLabel} · ${stationLabel}`} action={<Button variant="staff-secondary" onClick={() => setActiveOrder(null)}>Torna alla coda</Button>} />
-        <StaffPanel eyebrow={`Ordine #${activeOrder.display_number}`} title={activeOrder.alias ?? "Senza nome"} description={overview ? "Vista generale di preparazione" : "Seleziona le quantità effettivamente consegnate"}>
+        <StaffPageHeading title="Ritiro ordine" description={`${areaLabel} · ${stationLabel}`} action={<Button variant="staff-secondary" disabled={busy} onClick={() => setActiveOrder(null)}>Torna alla coda</Button>} />
+        {message && <p role="alert" className="mb-4 rounded-xl border border-[var(--state-error)]/50 p-3 text-sm">{message}</p>}
+        <StaffPanel eyebrow={`Ordine #${activeOrder.display_number}`} title={activeOrder.alias ?? "Senza nome"} description={overview ? "Vista generale di preparazione" : "Puoi consegnare anche solo una parte dell’ordine."}>
           {activeOrder.notes && <div className="mb-4 rounded-[var(--radius-sm)] border-2 border-[var(--state-warning)] p-3 text-sm"><strong>NOTE:</strong> {activeOrder.notes}</div>}
-          <div className="flex flex-col gap-3">
+          {foodDormant && <div className="mb-4 rounded-2xl border border-[var(--accent-primary)] p-4"><p className="text-sm">{kitchenMessage(activeOrder.kitchen_state)}</p>{activeOrder.kitchen_state==='dormant' && <Button variant="staff-primary" className="mt-3 w-full" disabled={busy} onClick={()=>void activateFood()}>Avvia preparazione del cibo</Button>}</div>}
+          {overview || foodDormant ? <div className="flex flex-col gap-3">
             {activeOrder.items.map((item) => {
               const remaining = item.quantity - item.delivered_quantity;
               return (
@@ -232,18 +274,13 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
                     <strong>{item.name}</strong>
                     <span className="block text-xs text-[var(--text-secondary)]">Da ritirare: {remaining} su {item.quantity}</span>
                   </div>
-                  {!overview && (
-                    <input aria-label={`Quantità ${item.name}`} type="number" min={0} max={remaining} value={quantities[item.id] ?? 0} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: Math.max(0, Math.min(remaining, Number(event.target.value))) }))} className="field w-20 py-2 text-center" />
-                  )}
                 </div>
               );
             })}
-          </div>
+          </div> : <PickupSelection items={activeOrder.items} selection={quantities} onChange={setQuantities} onConfirm={() => void confirmDelivery()} busy={busy} />}
           {overview ? (
             <p className="mt-4 border-t border-[var(--surface-border)] pt-4 text-sm text-[var(--text-secondary)]">La consegna viene registrata dalle singole postazioni.</p>
-          ) : (
-            <Button variant="staff-primary" className="mt-5 w-full" onClick={() => void confirmDelivery()} disabled={busy}>{busy ? "Registro…" : "Conferma consegna selezionata"}</Button>
-          )}
+          ) : null}
         </StaffPanel>
       </main>
     );
@@ -251,7 +288,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <StaffPageHeading title={stationLabel} description={`${areaLabel} · coda ordinata dall’orario di pagamento`} action={<Button variant="staff-secondary" onClick={() => setStation(null)}>Cambia postazione</Button>} />
+      <StaffPageHeading title={stationLabel} description={`${areaLabel} · cibo ordinato dall’attivazione, bevande dal pagamento`} action={<Button variant="staff-secondary" onClick={() => setStation(null)}>Cambia postazione</Button>} />
       {message && <div className="mb-4 rounded-[var(--radius-sm)] border border-[var(--surface-border)] p-3 text-sm">{message}</div>}
       <StaffPanel
         eyebrow="Ritiro ordini"
@@ -270,7 +307,8 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
         ) : undefined}
       >
         <div className="flex flex-wrap items-end gap-3">
-          {station !== "cucina" && <Button variant="staff-primary" onClick={() => setScannerOpen(true)} disabled={busy}>Scansiona QR</Button>}
+          <Button variant="staff-primary" onClick={() => setScannerOpen(true)} disabled={busy}>Scansiona QR</Button>
+          <Button variant="staff-secondary" onClick={()=>void openOrderNumber()} disabled={busy || !/^[1-9][0-9]*$/.test(numberSearch.trim())}>Apri numero</Button>
           <label className="min-w-24 flex-1"><span className="mb-1 block text-xs">Numero</span><input type="number" value={numberSearch} onChange={(event) => setNumberSearch(event.target.value)} className="field w-full py-2" /></label>
           <label className="min-w-36 flex-[2]"><span className="mb-1 block text-xs">Nome ordine</span><input value={aliasSearch} onChange={(event) => setAliasSearch(event.target.value)} className="field w-full py-2" /></label>
         </div>

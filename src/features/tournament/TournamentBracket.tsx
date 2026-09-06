@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
 import { SaveBanner } from "../../components/ui/SaveBanner";
@@ -70,7 +70,10 @@ const POLL_INTERVAL_MS = 30_000;
   Da qui l'avviso beforeunload quando ci sono modifiche in sospeso.
 */
 export function TournamentBracket({ management = false }: { management?: boolean }) {
-  const { role } = useAuth();
+  const { role, session } = useAuth();
+  const draftKey = `${DRAFT_KEY}:${session?.user.id ?? "local"}`;
+  const [revision, setRevision] = useState<number | null>(null);
+  const loadedDraftKey = useRef<string | null>(null);
   const canEdit = management && (role === "tournament_manager" || role === "admin");
   const matchHeight = 116;
   const matchGap = 32;
@@ -100,6 +103,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
   // guarda, invece, niente bozza: solo l'ultimo pubblicato.
   useEffect(() => {
     let cancelled = false;
+    loadedDraftKey.current = null;
 
     async function load() {
       if (!isSupabaseConfigured) {
@@ -112,8 +116,9 @@ export function TournamentBracket({ management = false }: { management?: boolean
         return;
       }
 
-      const { data, error } = await supabase.from("tournament_state").select("size, teams, matches, overrides").eq("id", "main").maybeSingle();
+      const { data, error } = await supabase.from("tournament_state").select("size, teams, matches, overrides, revision").eq("id", "main").maybeSingle();
       if (cancelled) return;
+      if (error) { setLoadError("Tabellone non disponibile. Ricarica prima di modificare il torneo."); return; }
 
       const published = parseTournamentSnapshot(data) ?? EMPTY_TOURNAMENT_SNAPSHOT;
       setLoadError(error ? "Tabellone non disponibile. Riprova più tardi." : null);
@@ -121,20 +126,29 @@ export function TournamentBracket({ management = false }: { management?: boolean
       if (!error) setLastSyncedAt(new Date());
 
       let starting = published;
+      let baseRevision: number | null = typeof data?.revision === "number" ? data.revision : null;
       if (canEdit) {
         try {
-          const draftRaw = localStorage.getItem(DRAFT_KEY);
+          const draftRaw = localStorage.getItem(draftKey) ?? localStorage.getItem(DRAFT_KEY);
           if (draftRaw) {
-            starting = parseTournamentSnapshot(JSON.parse(draftRaw)) ?? published;
+            const draft = JSON.parse(draftRaw);
+            const parsed = parseTournamentSnapshot(draft);
+            if (parsed) {
+              starting = parsed;
+              baseRevision = typeof draft.revision === "number" ? draft.revision : null;
+              if(baseRevision !== data?.revision) setPublishError("La bozza parte da una versione precedente. La pubblicazione è protetta: confronta la bozza con il tabellone aggiornato prima di sostituirla.");
+            }
           }
         } catch {
           // Storage disabilitato o bozza corrotta: riparti dal pubblicato.
         }
       }
+      setRevision(baseRevision);
       setSize(starting.size);
       setTeams(starting.teams);
       setMatches(starting.matches);
       setOverrides(starting.overrides);
+      loadedDraftKey.current = draftKey;
       setHydratedMode(canEdit);
 
       if (canEdit) {
@@ -155,7 +169,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canEdit]);
+  }, [canEdit, draftKey]);
 
   // Polling SOLO per chi guarda: ricontrolla l'ultimo pubblicato ogni
   // POLL_INTERVAL_MS. Chi edita non fa polling — scriverebbe sopra il
@@ -164,22 +178,32 @@ export function TournamentBracket({ management = false }: { management?: boolean
   useEffect(() => {
     if (canEdit || !isSupabaseConfigured) return;
 
+    let cancelled = false;
+    let busy = false;
+    let seenRevision: number | null = null;
     async function refreshPublished() {
-      if (document.visibilityState !== "visible") return;
-      const { data, error } = await supabase.from("tournament_state").select("size, teams, matches, overrides").eq("id", "main").maybeSingle();
+      if (busy || document.visibilityState !== "visible") return;
+      busy = true;
+      try {
+      const probe = await supabase.from("tournament_state").select("revision").eq("id", "main").maybeSingle();
+      if (cancelled || probe.error || (seenRevision !== null && probe.data?.revision === seenRevision)) return;
+      const { data, error } = await supabase.from("tournament_state").select("size, teams, matches, overrides, revision").eq("id", "main").maybeSingle();
       const snapshot = parseTournamentSnapshot(data);
-      if (error || !snapshot) return;
+      if (cancelled || error || !snapshot) return;
+      seenRevision = data?.revision ?? null;
       setSize(snapshot.size);
       setTeams(snapshot.teams);
       setMatches(snapshot.matches);
       setOverrides(snapshot.overrides);
       setLastSyncedAt(new Date());
+      } finally { busy = false; }
     }
 
     const interval = window.setInterval(() => void refreshPublished(), POLL_INTERVAL_MS);
     const handleVisibility = () => void refreshPublished();
     document.addEventListener("visibilitychange", handleVisibility);
     return () => {
+      cancelled = true;
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
@@ -190,13 +214,13 @@ export function TournamentBracket({ management = false }: { management?: boolean
   // buona con lo stato-zero di partenza del render prima ancora di
   // averla letta.
   useEffect(() => {
-    if (!canEdit || hydratedMode !== canEdit) return;
+    if (!canEdit || hydratedMode !== canEdit || loadedDraftKey.current !== draftKey) return;
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ size, teams, matches, overrides }));
+      localStorage.setItem(draftKey, JSON.stringify({ size, teams, matches, overrides, revision }));
     } catch {
       setPublishError("Bozza locale non disponibile: salva prima di chiudere la pagina.");
     }
-  }, [canEdit, hydratedMode, size, teams, matches, overrides]);
+  }, [canEdit, hydratedMode, size, teams, matches, overrides, revision, draftKey]);
 
   const isDirty =
     canEdit &&
@@ -219,20 +243,36 @@ export function TournamentBracket({ management = false }: { management?: boolean
   async function handlePublish(): Promise<boolean> {
     setPublishing(true);
     setPublishError(null);
-    const { error } = await supabase
-      .from("tournament_state")
-      .upsert({ id: "main", size, teams, matches, overrides, updated_at: new Date().toISOString() }, { onConflict: "id" });
+    const { data: nextRevision, error } = await supabase.rpc("publish_tournament", {
+      p_expected_revision: revision, p_size: size, p_teams: teams, p_matches: matches, p_overrides: overrides,
+    });
 
     if (error) {
       console.error("[Torneo] Errore pubblicazione:", error.message);
-      setPublishError("Pubblicazione non riuscita. Riprova.");
+      setPublishError(/tournament_conflict|revision_required/.test(error.message)
+        ? "Un’altra postazione ha aggiornato il torneo. La tua bozza è conservata: carica la versione aggiornata prima di riprendere le modifiche."
+        : "Pubblicazione non riuscita. Riprova.");
       setPublishing(false);
       return false;
     }
+    setRevision(Number(nextRevision));
     setSavedSnapshot({ size, teams, matches, overrides });
     setLastSyncedAt(new Date());
     setPublishing(false);
     return true;
+  }
+
+  async function loadLatestPublished() {
+    setPublishing(true);
+    try {
+      localStorage.setItem(`${draftKey}:before-reload`, JSON.stringify({size,teams,matches,overrides,revision}));
+      const {data,error} = await supabase.from("tournament_state").select("size,teams,matches,overrides,revision").eq("id","main").single();
+      const latest = parseTournamentSnapshot(data);
+      if(error || !latest) throw new Error("load_failed");
+      setSize(latest.size); setTeams(latest.teams); setMatches(latest.matches); setOverrides(latest.overrides);
+      setRevision(data.revision); setSavedSnapshot(latest); setPublishError(null);
+    } catch {setPublishError("Impossibile conservare la bozza o caricare il tabellone. Le modifiche attuali sono ancora aperte.");}
+    finally {setPublishing(false);}
   }
 
   // Chiudere il pannello nomi squadre con modifiche in sospeso è
@@ -489,6 +529,17 @@ export function TournamentBracket({ management = false }: { management?: boolean
           l'etichetta del bottone è "Salva" ovunque nell'app per coerenza,
           il messaggio resta specifico del Torneo perché qui "salvare"
           vuol dire pubblicare — chi guarda vede il tabellone solo dopo. */}
+      {canEdit && publishError && <div role="alert" className="my-4 rounded-xl border border-[var(--state-warning)] p-4 text-sm">
+        <p>{publishError}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button variant="staff-secondary" disabled={publishing} onClick={() => {
+            const url = URL.createObjectURL(new Blob([JSON.stringify({size,teams,matches,overrides,revision},null,2)],{type:"application/json"}));
+            const link=document.createElement("a"); link.href=url; link.download="bozza-torneo.json"; link.click();
+            window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+          }}>Scarica la mia bozza</Button>
+          <Button variant="staff-secondary" disabled={publishing} onClick={() => void loadLatestPublished()}>Carica versione aggiornata</Button>
+        </div>
+      </div>}
       {canEdit && isDirty && (
         <SaveBanner
           message="Ci sono modifiche al Torneo non ancora salvate — chi guarda vede ancora l'ultimo turno pubblicato."

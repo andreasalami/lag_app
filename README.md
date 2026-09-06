@@ -88,7 +88,9 @@ degli ordini.
 La sezione Evento della cassa gestisce:
 
 - nome, apertura e chiusura del singolo weekend;
-- limite configurabile degli ordini contemporaneamente in attesa (default 150);
+- limite configurabile degli ordini contemporaneamente in attesa di pagamento (default 100); questo conteggio non include gli ordini già pagati in cucina;
+- preparazione del cibo immediata al pagamento oppure differita, attivabile dallo staff tramite QR o numero ordine, con scorte già riservate;
+- capienza cucina di 100 ordini fra attivi e posti temporaneamente riservati dalle casse; bevande indipendenti e ritiri parziali;
 - sospensione e riapertura anticipata delle ordinazioni;
 - chiusura definitiva protetta dalla digitazione di `CHIUDI EVENTO`;
 - download del CSV finale senza alias e note;

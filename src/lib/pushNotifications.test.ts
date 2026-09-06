@@ -4,7 +4,7 @@ import { subscribeToPushNotifications, urlBase64ToUint8Array } from "./pushNotif
 const rpc = vi.hoisted(() => vi.fn());
 
 vi.mock("./supabaseClient", () => ({
-  supabase: { rpc },
+  supabase: { rpc, functions: { invoke: rpc } },
 }));
 
 function mockPushBrowser(existingSubscription: PushSubscription | null, newSubscription?: PushSubscription) {
@@ -57,7 +57,7 @@ describe("subscribeToPushNotifications", () => {
     mockPushBrowser(subscription);
     rpc.mockResolvedValue({ error: { message: "database_unavailable" } });
 
-    await expect(subscribeToPushNotifications()).rejects.toThrow("database_unavailable");
+    await expect(subscribeToPushNotifications("test-proof")).rejects.toThrow("database_unavailable");
     expect(subscription.unsubscribe).not.toHaveBeenCalled();
   });
 
@@ -66,7 +66,7 @@ describe("subscribeToPushNotifications", () => {
     mockPushBrowser(null, subscription);
     rpc.mockResolvedValue({ error: { message: "database_unavailable" } });
 
-    await expect(subscribeToPushNotifications()).rejects.toThrow("database_unavailable");
+    await expect(subscribeToPushNotifications("test-proof")).rejects.toThrow("database_unavailable");
     expect(subscription.unsubscribe).toHaveBeenCalledOnce();
   });
 });

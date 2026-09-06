@@ -75,7 +75,8 @@ function App() {
   const internalPages = previewEnabled
     ? ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo", "anteprima"]
     : ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo"];
-  const internalPage = internalPages.includes(hashPath) ? hashPath : path.slice(1);
+  const hashRoute = hashPath.split("?")[0];
+  const internalPage = internalPages.includes(hashRoute) ? hashRoute : path.slice(1);
 
   return (
     <AuthProvider>
@@ -90,7 +91,7 @@ function App() {
       ) : internalPage === "ordina-nuovo" ? (
         <OrderPage startFresh />
       ) : internalPage === "ordina" ? (
-        <OrderPage />
+        <OrderPage key={hashPath} />
       ) : internalPage === "tabellone" ? (
         <TournamentBoard />
       ) : internalPage === "gestione-programma" ? (

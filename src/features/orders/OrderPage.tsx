@@ -21,6 +21,12 @@ import {
   type StoredOrder,
 } from "./orderHistory";
 import type { OrderLine, OrderMenuItem, OrderingCatalog, SubmittedOrder } from "./types";
+import { clearPendingOrder, readPendingOrder, savePendingOrder, type PendingOrderRequest } from "./pendingOrder";
+import { getOrCreateRecoveryToken, readRecoveryToken, recoveryOrderQr, saveRecoveryToken, validRecoveryToken } from "./orderRecovery";
+import { TurnstileChallenge } from "../../components/ui/TurnstileChallenge";
+import { RecoveryCard } from "./RecoveryCard";
+import { PreparationChoice, kitchenMessage } from "./PreparationChoice";
+import type { PreparationMode, KitchenState } from "./types";
 import { MENU_SECTIONS } from "../menu/menuSections";
 
 const STATUS_LABEL: Record<PublicOrderStatus, string> = {
@@ -52,9 +58,13 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [cart, setCart] = useState<Record<string, OrderLine>>({});
   const [cartExpanded, setCartExpanded] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [preparationMode, setPreparationMode] = useState<PreparationMode>("immediate");
+  const submitBusy = useRef(false);
+  const [challengeToken, setChallengeToken] = useState("");
+  const [challengeAttempt, setChallengeAttempt] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submittedOrder, setSubmittedOrder] = useState<StoredOrder | null>(() => startFresh ? null : readOrderHistory()[0] ?? null);
+  const [submittedOrder, setSubmittedOrder] = useState<StoredOrder | null>(() => startFresh || readPendingOrder() ? null : readOrderHistory()[0] ?? null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [finalTab, setFinalTab] = useState<"qr" | "summary">("qr");
   const [showCopyPrompt, setShowCopyPrompt] = useState(false);
@@ -65,6 +75,11 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [newOrderMessage, setNewOrderMessage] = useState<string | null>(null);
   const requestIdentityRef = useRef({ requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() });
   const historyRef = useRef(orderHistory);
+  const [restoreToken, setRestoreToken] = useState(()=>new URLSearchParams(location.hash.split("?")[1] ?? "").get("recupero"));
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreError, setRestoreError] = useState<string|null>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<PendingOrderRequest | null>(readPendingOrder);
 
   useEffect(() => {
     historyRef.current = orderHistory;
@@ -78,13 +93,15 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       const { data, error } = await supabase.rpc("get_public_order_statuses", {
         p_qr_tokens: batch.map((order) => order.qr_token),
       });
-      return error ? [] : data as Array<{ order_id?: unknown; status?: unknown; progress?: unknown }>;
+      return error ? [] : data as Array<{ order_id?: unknown; status?: unknown; progress?: unknown; kitchen_state?: KitchenState; preparation_mode?: PreparationMode }>;
     }));
     const statuses = new Map<string, PublicOrderStatus>();
     const progress = new Map<string, StoredOrder["progress"]>();
+    const kitchen = new Map<string, {kitchen_state?:KitchenState; preparation_mode?:PreparationMode}>();
     results.flat().forEach((result) => {
       if (typeof result.order_id === "string" && isPublicOrderStatus(result.status)) {
         statuses.set(result.order_id, result.status);
+        kitchen.set(result.order_id,{kitchen_state:result.kitchen_state,preparation_mode:result.preparation_mode});
         if (Array.isArray(result.progress)) progress.set(result.order_id, result.progress as StoredOrder["progress"]);
       }
     });
@@ -92,14 +109,14 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     setOrderHistory((current) => {
       const next = current.map((order) => {
         const status = statuses.get(order.order_id);
-        return status ? { ...order, status, progress: progress.get(order.order_id) } : order;
+        return status ? { ...order, ...kitchen.get(order.order_id), status, progress: progress.get(order.order_id) } : order;
       });
       saveOrderHistory(next);
       historyRef.current = next;
       return next;
     });
     setSubmittedOrder((current) => current
-      ? { ...current, status: statuses.get(current.order_id) ?? current.status, progress: progress.get(current.order_id) ?? current.progress }
+      ? { ...current, ...kitchen.get(current.order_id), status: statuses.get(current.order_id) ?? current.status, progress: progress.get(current.order_id) ?? current.progress }
       : null);
   }, []);
 
@@ -114,14 +131,14 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     }
     const nextCatalog = data as OrderingCatalog;
     setCatalog(nextCatalog);
-    const currentHistory = ordersForEvent(readOrderHistory(), nextCatalog.event_id);
-    saveOrderHistory(currentHistory);
-    historyRef.current = currentHistory;
-    setOrderHistory(currentHistory);
+    const allHistory = readOrderHistory();
+    const currentHistory = ordersForEvent(allHistory, nextCatalog.event_id);
+    historyRef.current = allHistory;
+    setOrderHistory(allHistory);
     if (restoreLatestOrder) {
       const latest = currentHistory[0] ?? null;
-      setSubmittedOrder(latest);
-      setShowIntro(latest === null);
+      setSubmittedOrder(readPendingOrder() ? null : latest);
+      setShowIntro(!readPendingOrder() && latest === null);
     }
     setLoading(false);
     void refreshOrderStatuses(currentHistory);
@@ -129,7 +146,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   }
 
   useEffect(() => {
-    void loadCatalog(!startFresh);
+    if (!restoreToken) void loadCatalog(!startFresh);
   // Il catalogo iniziale e lo storico si caricano una sola volta all'apertura.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startFresh]);
@@ -169,8 +186,15 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
 
   function addItem(item: OrderMenuItem) {
     if (item.available_portions === 0) return;
+    const maxItem = catalog?.max_item_quantity ?? 25;
+    const maxOrder = catalog?.max_order_quantity ?? 60;
+    if ((cart[item.id]?.qty ?? 0) >= maxItem || lines.reduce((sum, line) => sum + line.qty, 0) >= maxOrder) {
+      setSubmitError(`Puoi ordinare al massimo ${maxItem} pezzi per prodotto e ${maxOrder} articoli in totale. Per ordini più grandi rivolgiti alla cassa.`);
+      return;
+    }
     setCart((current) => {
       const existing = current[item.id];
+      if ((existing?.qty ?? 0) >= maxItem || Object.values(current).reduce((sum, line) => sum + line.qty, 0) >= maxOrder) return current;
       if (item.available_portions !== null && (existing?.qty ?? 0) >= item.available_portions) return current;
       return {
         ...current,
@@ -215,48 +239,104 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   }
 
   async function submitOrder() {
+    if (submitBusy.current || !challengeToken) return;
+    submitBusy.current = true;
     setSubmitting(true);
+    try {
     setSubmitError(null);
-    const { requestId, qrToken } = requestIdentityRef.current;
-    const { data, error } = await supabase.rpc("submit_public_order", {
-      p_alias: alias.trim(),
-      p_notes: notes.trim(),
-      p_items: lines.map((line) => ({ id: line.id, qty: line.qty })),
+    const pending: PendingOrderRequest = pendingRequest ?? {
+      ...requestIdentityRef.current, eventId: catalog?.event_id ?? "", alias: alias.trim(), notes: notes.trim(),
+      items: lines, createdAt: new Date().toISOString(), preparationMode: lines.some(line=>line.category==='cibo') ? preparationMode : 'immediate',
+    };
+    const activeCatalog = catalog ?? await loadCatalog();
+    if(!activeCatalog) {setSubmitError("Non riesco a verificare l’evento. Controlla la rete e riprova."); return;}
+    if(pending.eventId !== activeCatalog.event_id) {
+      setSubmitError("Questa richiesta appartiene a un evento precedente. Non verrà inviata al nuovo evento; rivolgiti alla cassa per verificarla."); return;
+    }
+    if (!pendingRequest) {
+      try {
+        pending.recoveryToken = getOrCreateRecoveryToken(pending.eventId);
+        pending.qrToken = await recoveryOrderQr(pending.recoveryToken,pending.requestId);
+      } catch {setSubmitError("Il browser non consente il salvataggio sicuro. Libera spazio o rivolgiti alla cassa: nessun ordine è stato inviato.");return;}
+    }
+    if(!savePendingOrder(pending)) {
+      setSubmitError("Il browser non consente di salvare l’ordine in sicurezza. Libera spazio o rivolgiti alla cassa: nessun nuovo ordine è stato inviato.");
+      return;
+    }
+    setPendingRequest(pending);
+    setSubmitting(true);
+    const { requestId, qrToken } = pending;
+    const { data, error: invocationError } = await supabase.functions.invoke("submit-order", { body: { turnstileToken: challengeToken, order: {
+      p_alias: pending.alias,
+      p_notes: pending.notes,
+      p_items: pending.items.map((line) => ({ id: line.id, qty: line.qty })),
       p_client_request_id: requestId,
       p_qr_token: qrToken,
       p_bot_field: botField,
-    });
+      p_expected_event_id: pending.eventId,
+      p_recovery_token: pending.recoveryToken ?? null,
+      p_preparation_mode: pending.preparationMode ?? "immediate",
+    } } });
+    let error = invocationError;
+    if (invocationError?.context instanceof Response) {
+      try { const details = await invocationError.context.json(); if (typeof details.error === "string") error = new Error(details.error); } catch { /* Keep uncertain outcome. */ }
+    }
     setSubmitting(false);
     setShowConfirmation(false);
     if (error || !data) {
       const message = error?.message ?? "";
-      if (message.includes("stock_unavailable:")) {
+      if (/stock_unavailable|capacity_reached|public_order_quantity_limit|invalid_|notes_too_long|ordering_|event_closed|not_open_yet|no_event/.test(message)) {
+        clearPendingOrder(requestId); setPendingRequest(null);
+      }
+      if (message.includes("public_order_rate_limit")) {
+        setSubmitError("Hai inviato più ordini ravvicinati. Attendi un minuto, poi premi Recupera ordine.");
+      } else if (message.includes("challenge_")) {
+        setSubmitError("Ripeti la verifica di sicurezza e premi Recupera ordine. La richiesta salvata resta la stessa.");
+      } else if (message.includes("stock_unavailable:")) {
         setSubmitError(`Disponibilità cambiata: ${message.split("stock_unavailable:")[1]}. Aggiorna il carrello e riprova.`);
         await loadCatalog();
+      } else if (message.includes("public_order_quantity_limit")) {
+        setSubmitError("L’ordine supera il limite di 25 pezzi per prodotto o 60 articoli totali. Riduci le quantità o rivolgiti alla cassa.");
+      } else if (message.includes("request_already_processed")) {
+        setSubmitError("Questo ordine è già stato elaborato oppure è scaduto. Controlla lo storico o rivolgiti alla cassa.");
       } else if (message.includes("capacity_reached")) {
         setSubmitError(orderingReasonMessage("capacity_reached"));
       } else if (/ordering_|event_closed|not_open_yet/.test(message)) {
         setSubmitError("Le ordinazioni sono state chiuse prima dell’invio. Rivolgiti alla cassa.");
       } else {
-        setSubmitError("Ordine non inviato. Controlla la connessione e riprova.");
+        setSubmitError("Non riesco a verificare l’esito. Premi Recupera ordine: useremo la stessa richiesta, senza creare un duplicato.");
       }
       return;
     }
     const order = data as SubmittedOrder;
     const storedOrder: StoredOrder = {
       ...order,
-      status: "in_attesa_pagamento",
+      alias: order.alias ?? pending.alias,
+      recovery_enabled: Boolean(pending.recoveryToken),
+      status: isPublicOrderStatus((data as {status?:unknown}).status) ? (data as {status:PublicOrderStatus}).status : "in_attesa_pagamento",
       saved_at: new Date().toISOString(),
     };
-    setOrderHistory((current) => {
-      const next = addOrderToHistory(current, storedOrder);
-      saveOrderHistory(next);
-      historyRef.current = next;
-      return next;
-    });
+    const next = addOrderToHistory(historyRef.current, storedOrder);
+    if(saveOrderHistory(next)) {
+      clearPendingOrder(requestId);
+      setPendingRequest(readPendingOrder());
+    } else {
+      setSubmitError("Ordine registrato. Conserva il QR: il browser non è riuscito ad aggiornare lo storico.");
+    }
+    historyRef.current = next;
+    setOrderHistory(next);
     setSubmittedOrder(storedOrder);
     setCart({});
     setShowCopyPrompt(true);
+    } catch {
+      setSubmitError("Connessione interrotta. La richiesta resta salvata: premi Recupera ordine per verificarla senza duplicati.");
+      setShowConfirmation(false);
+    } finally {
+      submitBusy.current = false;
+      setSubmitting(false);
+      setChallengeToken("");
+      setChallengeAttempt(value => value + 1);
+    }
   }
 
   function viewOrder(order: StoredOrder) {
@@ -305,17 +385,61 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     }
   }
 
+  async function restoreHistory() {
+    if(!validRecoveryToken(restoreToken)) {setRestoreError("Codice di recupero non valido.");return;}
+    setRestoreBusy(true);setRestoreError(null);
+    try {
+      const restored:StoredOrder[]=[];let cursor:string|null=null;
+      while(true) {
+        const response=await supabase.rpc("recover_order_history",{p_token:restoreToken,p_before:cursor});
+        if(response.error) throw new Error("restore_failed");
+        const page=response.data as Array<StoredOrder & {created_at:string}>;
+        for(const order of page) restored.push({...order,saved_at:order.created_at,recovery_enabled:true});
+        if(page.length<50)break;
+        cursor=page[page.length-1].order_id;
+      }
+      if(!restored.length){setRestoreError("Non ci sono ordini associati a questo codice.");return;}
+      const merged=[...restored,...historyRef.current.filter(order=>!restored.some(item=>item.order_id===order.order_id))];
+      const saved=saveOrderHistory(merged);
+      for(const order of restored)saveRecoveryToken(order.event_id,restoreToken);
+      historyRef.current=merged;setOrderHistory(merged);setSubmittedOrder(restored[0]);setShowIntro(false);
+      if(!saved)setSubmitError("Ordini recuperati, ma non salvati dal browser. Conserva la scheda di recupero.");
+      setRestoreToken(null);
+      history.replaceState(null,"",`${location.pathname}${location.search}#ordina`);
+      setLoading(false);
+    } catch {setRestoreError("Recupero non riuscito. Controlla la connessione e riprova: il codice resta valido.");}
+    finally{setRestoreBusy(false);}
+  }
+
+  if(restoreToken) return <main className="mx-auto max-w-md px-4 py-8"><h1 className="text-2xl">Ritrova i tuoi ordini</h1><p className="my-4 text-sm text-[var(--text-secondary)]">Il tuo codice permette di recuperare lo storico, senza account.</p>{restoreError && <p role="alert" className="mb-4 text-sm">{restoreError}</p>}<Button className="w-full" disabled={restoreBusy} onClick={()=>void restoreHistory()}>{restoreBusy ? "Recupero gli ordini…" : "Recupera i miei ordini"}</Button></main>;
+  const recoveryToken = submittedOrder ? readRecoveryToken(submittedOrder.event_id) : null;
+  if(showRecovery && submittedOrder && recoveryToken) return <RecoveryCard token={recoveryToken} eventName={submittedOrder.event_name} onBack={()=>setShowRecovery(false)}/>;
+
+  if (pendingRequest && !submittedOrder) {
+    return <main className="mx-auto max-w-xl px-4 py-8">
+      <h1 className="text-2xl">Ritroviamo il tuo ordine</h1>
+      <p className="mt-3 text-sm text-[var(--text-secondary)]">La richiesta è salvata su questo dispositivo. Verifichiamo se è già stata registrata, senza inviarne una nuova.</p>
+      <div className="my-5 space-y-2">{pendingRequest.items.map(line=><p key={line.id}>{line.qty} × {line.name}</p>)}</div>
+      {submitError && <p role="alert" className="mb-4 text-sm text-[var(--state-warning)]">{submitError}</p>}
+      {catalog?.event_id && pendingRequest.eventId !== catalog.event_id && <Button variant="ghost" className="mb-3 w-full" onClick={()=>{clearPendingOrder(pendingRequest.requestId);setPendingRequest(readPendingOrder());setSubmitError(null);}}>Chiudi la richiesta del vecchio evento</Button>}
+      <TurnstileChallenge key={challengeAttempt} onToken={setChallengeToken}/>
+      <Button className="mt-4 w-full" disabled={submitting || !challengeToken} onClick={()=>void submitOrder()}>{submitting ? "Verifico l’ordine…" : "Recupera ordine"}</Button>
+    </main>;
+  }
+
   if (submittedOrder) {
     return (
       <main className="mx-auto min-h-full max-w-xl px-4 py-8">
         <Button href={`${import.meta.env.BASE_URL}#menu`} variant="back" className="min-h-10 px-4 py-2">← Indietro</Button>
         <section className="mt-5 text-center">
-          <p className={`text-sm ${orderStatusClassName(submittedOrder.status)}`}>{statusMessage(submittedOrder.status)}</p>
+          <p className={`text-sm ${orderStatusClassName(submittedOrder.status)}`}>{submittedOrder.event_closed_at ? "Evento concluso. Questo ordine resta nello storico; il QR non è più utilizzabile per il ritiro." : submittedOrder.status==='pagato' && (submittedOrder.kitchen_state==='dormant' || submittedOrder.kitchen_state==='waiting') ? 'Pagamento registrato.' : statusMessage(submittedOrder.status)}</p>
           <h1 className="mt-2 text-4xl">#{submittedOrder.display_number}</h1>
+          {!submittedOrder.event_closed_at && (submittedOrder.status==='pagato' || submittedOrder.status==='ritiro_parziale') && kitchenMessage(submittedOrder.kitchen_state) && <p className="my-3 rounded-2xl border border-[var(--surface-border)] p-3 text-sm">{kitchenMessage(submittedOrder.kitchen_state)} Le bevande restano ritirabili separatamente.</p>}
+          {submittedOrder.status==='in_attesa_pagamento' && submittedOrder.preparation_mode==='deferred' && <p className="mt-2 text-sm">Hai scelto di preparare il cibo più tardi. Paga entro 60 minuti per mantenere le quantità riservate.</p>}
           <p className="mt-1 text-xl font-semibold">{submittedOrder.alias}</p>
           <p className="mt-2 text-xs text-[var(--text-secondary)]">
             {submittedOrder.status === "in_attesa_pagamento"
-              ? "Mostra QR, numero e alias alla cassa."
+              ? "Mostra QR, numero e alias alla cassa. Gli ordini non pagati scadono dopo 60 minuti."
               : submittedOrder.status === "pagato" || submittedOrder.status === "ritiro_parziale"
                 ? "Mostra lo stesso QR in ogni postazione in cui devi ritirare."
                 : "Il QR e il riepilogo restano disponibili per tutta la durata dell’evento."}
@@ -357,17 +481,18 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
                 <span>
                   <strong>#{order.display_number} · {order.alias}</strong>
                   <span className="mt-0.5 block text-xs text-[var(--text-secondary)]">
-                    {order.items.reduce((sum, line) => sum + line.qty, 0)} articoli · {priceFormatter.format(Number(order.total))}
+                    {order.event_name} · {order.items.reduce((sum, line) => sum + line.qty, 0)} articoli · {priceFormatter.format(Number(order.total))}
                   </span>
                 </span>
                 <span className={`shrink-0 text-xs font-semibold ${orderStatusClassName(order.status)}`}>
-                  {STATUS_LABEL[order.status]}
+                  {order.event_closed_at ? "Evento concluso" : STATUS_LABEL[order.status]}
                 </span>
               </button>
             ))}
           </div>
         </Card>
 
+        {submittedOrder.recovery_enabled && recoveryToken && <Button variant="ghost" className="mt-3 w-full" onClick={()=>{setShowRecovery(true);window.scrollTo({top:0});}}>Conserva i miei ordini</Button>}
         <Button variant="ghost" className="mt-3 w-full" onClick={async () => { setRefreshingStatuses(true); await refreshOrderStatuses(); setRefreshingStatuses(false); }} disabled={refreshingStatuses}>
           {refreshingStatuses ? "Aggiorno lo stato…" : "Aggiorna stato ordini"}
         </Button>
@@ -387,7 +512,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
 
         {finalTab === "qr" ? (
           <Card className="mx-auto mt-4 max-w-sm text-center">
-            {qrDataUrl ? <img src={qrDataUrl} alt={`QR dell’ordine ${submittedOrder.display_number}`} className="mx-auto w-full max-w-[300px] rounded-xl bg-white" /> : (
+            {submittedOrder.event_closed_at ? <p className="py-6 text-sm">Evento concluso: puoi consultare il riepilogo dell’ordine.</p> : qrDataUrl ? <img src={qrDataUrl} alt={`QR dell’ordine ${submittedOrder.display_number}`} className="mx-auto w-full max-w-[300px] rounded-xl bg-white" /> : (
               <p className="py-16 text-sm text-[var(--text-secondary)]">Genero il QR…</p>
             )}
           </Card>
@@ -599,7 +724,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         title="Come funziona"
         actions={<Button variant="primary" onClick={() => setShowIntro(false)}>OK, ho capito</Button>}
       >
-        <p>Prepara qui il tuo ordine e invialo. Il pagamento avviene esclusivamente in cassa, in contanti o con carta. Dopo il pagamento potrai ritirare le voci nelle postazioni indicate usando sempre lo stesso QR.</p>
+        <p>Prepara qui il tuo ordine e invialo. Il pagamento avviene esclusivamente in cassa, in contanti o con carta, entro 60 minuti dall’invio. Gli ordini non pagati scadono e liberano le disponibilità. Dopo il pagamento potrai ritirare le voci nelle postazioni indicate usando sempre lo stesso QR.</p>
       </Modal>
 
       <Modal
@@ -610,13 +735,15 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         actions={(
           <>
             <Button variant="ghost" onClick={() => setShowConfirmation(false)} disabled={submitting}>Torna al carrello</Button>
-            <Button variant="primary" onClick={() => void submitOrder()} disabled={submitting}>
+            <Button variant="primary" onClick={() => void submitOrder()} disabled={submitting || !challengeToken}>
               {submitting ? "Invio…" : "Conferma e ordina"}
             </Button>
           </>
         )}
       >
+        <TurnstileChallenge key={challengeAttempt} onToken={setChallengeToken}/>
         <p>Controlla bene prodotti, quantità e note: dopo questo passaggio non potrai più modificare l’ordine.</p>
+        {lines.some(line=>line.category==='cibo') && <PreparationChoice value={preparationMode} onChange={setPreparationMode} disabled={submitting}/>}
         <p className="mt-2 font-semibold text-[var(--text-primary)]">Totale da pagare in cassa: {priceFormatter.format(total)}</p>
       </Modal>
     </main>

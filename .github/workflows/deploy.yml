@@ -32,8 +32,35 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Install isolated PostgreSQL test runtime
+        run: npm install --prefix "$RUNNER_TEMP/lag-security" --no-save --ignore-scripts --no-audit --no-fund @electric-sql/pglite@0.5.8
+
+      - name: Test database migrations and security
+        env:
+          LAG_AUDIT_PGLITE_MODULE: ${{ runner.temp }}/lag-security/node_modules/@electric-sql/pglite/dist/index.js
+        run: |
+          node scripts/security/verify-migrations.mjs
+          node scripts/security/verify-public-orders.mjs
+          node scripts/security/verify-workflow-safety.mjs
+          node scripts/security/verify-push.mjs
+          node scripts/security/verify-recovery.mjs
+          node scripts/security/verify-kitchen-capacity.mjs
+          node docs/anteprime-ordini/verify-partial-pickup.mjs
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+
+      - name: Check and test Edge functions
+        run: |
+          deno check --frozen --config supabase/functions/send-push-broadcast/deno.json supabase/functions/send-push-broadcast/index.ts
+          deno check --frozen --config supabase/functions/register-push/deno.json supabase/functions/register-push/index.ts
+          deno test --frozen --allow-env --config supabase/functions/submit-order/deno.json supabase/functions/submit-order/index.deno.ts
+
       - name: Build
         env:
+          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_WEB_PUSH_PUBLIC_KEY: ${{ vars.VITE_WEB_PUSH_PUBLIC_KEY }}
@@ -43,6 +70,7 @@ jobs:
           test -n "$VITE_SUPABASE_URL" || (echo "Missing VITE_SUPABASE_URL secret" && exit 1)
           test -n "$VITE_SUPABASE_ANON_KEY" || (echo "Missing VITE_SUPABASE_ANON_KEY secret" && exit 1)
           test -n "$VITE_WEB_PUSH_PUBLIC_KEY" || (echo "Missing VITE_WEB_PUSH_PUBLIC_KEY variable" && exit 1)
+          test -n "$VITE_TURNSTILE_SITE_KEY" || (echo "Missing VITE_TURNSTILE_SITE_KEY variable" && exit 1)
           npm run build
 
       - name: Upload artifact

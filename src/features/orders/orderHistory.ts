@@ -8,6 +8,8 @@ export type StoredOrder = SubmittedOrder & {
   status: PublicOrderStatus;
   saved_at: string;
   progress?: FulfillmentProgress[];
+  recovery_enabled?: boolean;
+  event_closed_at?: string | null;
 };
 
 type BrowserStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -46,9 +48,10 @@ function normalizeOrder(value: unknown, fallbackDate: string): StoredOrder | nul
   };
 }
 
-export function readOrderHistory(storage: BrowserStorage = localStorage): StoredOrder[] {
+export function readOrderHistory(storage?: BrowserStorage): StoredOrder[] {
   const fallbackDate = new Date().toISOString();
   try {
+    storage = storage ?? localStorage;
     const rawHistory = storage.getItem(ORDER_HISTORY_KEY);
     if (rawHistory) {
       const parsed = JSON.parse(rawHistory) as unknown;
@@ -69,9 +72,13 @@ export function readOrderHistory(storage: BrowserStorage = localStorage): Stored
   }
 }
 
-export function saveOrderHistory(orders: StoredOrder[], storage: BrowserStorage = localStorage) {
-  storage.setItem(ORDER_HISTORY_KEY, JSON.stringify(orders));
-  storage.removeItem(LEGACY_ORDER_KEY);
+export function saveOrderHistory(orders: StoredOrder[], storage?: BrowserStorage) {
+  try {
+    storage = storage ?? localStorage;
+    storage.setItem(ORDER_HISTORY_KEY, JSON.stringify(orders));
+    storage.removeItem(LEGACY_ORDER_KEY);
+    return true;
+  } catch {return false;}
 }
 
 export function addOrderToHistory(orders: StoredOrder[], order: StoredOrder) {

@@ -567,6 +567,7 @@ grant execute on function public.create_counter_order(text, text, jsonb) to auth
 
 -- I ruoli di evasione leggono gli ordini attivi tramite le RPC filtrate.
 drop policy if exists "La cucina legge solo gli ordini pagati" on public.orders;
+drop policy if exists "Le postazioni leggono gli ordini in preparazione" on public.orders;
 create policy "Le postazioni leggono gli ordini in preparazione"
   on public.orders for select using (
     status in ('pagato', 'ritiro_parziale', 'consegnato')

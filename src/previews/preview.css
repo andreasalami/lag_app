@@ -1,0 +1,42 @@
+.preview-shell { min-height: 100%; background: #091422; }
+.preview-heading { letter-spacing: -.045em; line-height: 1.08; }
+.preview-device { background: #0d1c30; border: 1px solid #25344a; border-radius: 30px; box-shadow: 0 28px 90px #0005; overflow: hidden; }
+.preview-device-body { min-height: 690px; padding: 22px; }
+.preview-label { font-family: "JetBrains Mono", monospace; letter-spacing: .15em; text-transform: uppercase; font-size: 10px; color: #93a4bd; }
+.preview-primary { display: flex; min-height: 52px; width: 100%; align-items: center; justify-content: center; gap: 8px; border: 1px solid #f2802e; border-radius: 14px; background: #f2802e; color: #091422; font-size: 14px; font-weight: 800; padding: 12px 18px; }
+.preview-primary:disabled { opacity: .4; }
+.preview-secondary { min-height: 48px; border: 1px solid #ffffff20; border-radius: 14px; padding: 10px 15px; font-size: 13px; font-weight: 600; }
+.preview-line { border-bottom: 1px solid #ffffff12; }
+.preview-product-icon { display: grid; place-items: center; width: 44px; height: 50px; border-radius: 12px; background: #f2802e12; color: #f2802e; flex-shrink: 0; }
+.preview-recovery { background: #fff; color: #091422; border-radius: 20px; padding: 24px; text-align: center; }
+.preview-shell button, .preview-shell a { -webkit-tap-highlight-color: transparent; }
+.preview-stations { margin: 20px 0 24px; min-width: 0; }
+.preview-stations legend { margin-bottom: 10px; color: #93a4bd; font-size: 11px; font-weight: 500; }
+.preview-station-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--order-border); border-radius: 14px; background: rgba(5, 14, 26, .2); }
+.preview-station-option { position: relative; min-width: 0; cursor: pointer; }
+.preview-station-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.preview-station-option span { display: flex; align-items: center; justify-content: center; min-height: 44px; border: 1px solid transparent; border-radius: 10px; color: #a8b7cb; font-size: 12px; font-weight: 600; }
+.preview-station-option input:checked + span { color: #ffc08f; background: var(--order-accent-surface); border-color: var(--order-accent-border); }
+.preview-station-option input:focus-visible + span { outline: 2px solid #f5a468; outline-offset: 2px; }
+.preview-disclosure { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 12px; border: 1px solid var(--order-border); border-radius: var(--order-radius); color: #b5c3d6; font-size: 12px; font-weight: 600; cursor: pointer; list-style: none; }
+.preview-disclosure::-webkit-details-marker { display: none; }
+.preview-disclosure::after { content: ""; width: 7px; height: 7px; flex-shrink: 0; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translateY(-2px); margin-right: 3px; }
+details[open] > .preview-disclosure { margin-bottom: 10px; }
+details[open] > .preview-disclosure::after { transform: rotate(225deg) translate(-2px, -1px); }
+.preview-secondary { border-color: var(--order-border); background: var(--order-surface); color: #c8d3e3; border-radius: var(--order-radius); }
+.preview-shell .field { border-color: var(--order-border); border-radius: var(--order-radius); background: rgba(5, 14, 26, .2); }
+.preview-shell .field::placeholder { color: #8092ac; }
+.preview-shell nav button { border-color: transparent; }
+.preview-shell nav button[aria-current="page"] { border-color: var(--order-accent-border); background: var(--order-accent-surface); }
+.preview-notice { border: 1px solid #6fa97a44; border-radius: 14px; background: #6fa97a10; padding: 14px; }
+@media (hover: hover) {
+  .preview-station-option:hover span, .preview-secondary:hover, .preview-disclosure:hover { background: var(--order-hover); }
+}
+@media (max-width: 767px) {
+  .preview-device { border-radius: 22px; }
+  .preview-device-body { min-height: 0; padding: 18px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .preview-primary { transition: filter .15s, transform .15s; }
+  .preview-primary:active { transform: scale(.985); }
+}

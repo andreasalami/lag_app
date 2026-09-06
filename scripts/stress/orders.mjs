@@ -1,3 +1,6 @@
+// Retired runner: preserving historical scenarios for migration, not a valid current benchmark.
+throw new Error("Runner obsoleto: usa RPC ritirate. Eseguire scripts/security/verify-*.mjs per le prove locali; collaudo concorrente ancora da aggiornare.");
+
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { createClient } from "@supabase/supabase-js";

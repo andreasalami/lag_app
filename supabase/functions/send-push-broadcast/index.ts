@@ -1,5 +1,6 @@
 // @deno-types="npm:@types/web-push@3.6.4"
 import webpush from "web-push";
+import { validPushEndpoint, validPushKeys } from "../_shared/pushValidation.ts";
 import { createClient } from "@supabase/supabase-js";
 
 type BroadcastKind = "announcement" | "tournament";
@@ -17,8 +18,7 @@ const ALLOWED_ORIGINS = new Set((Deno.env.get("PUSH_ALLOWED_ORIGINS")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean));
-const MAX_SUBSCRIPTIONS_PER_BROADCAST = 5000;
-const SEND_CONCURRENCY = 20;
+const SEND_CONCURRENCY = 5;
 
 function headersFor(request: Request) {
   const origin = request.headers.get("origin");
@@ -84,12 +84,14 @@ Deno.serve(async (request) => {
     .single();
   if (profileError || !profile) return json(request, { error: "not_authorized" }, 403);
 
-  let body: { kind?: unknown; title?: unknown; message?: unknown };
+  let body: { kind?: unknown; title?: unknown; message?: unknown; broadcast_id?: unknown };
   try {
     body = await request.json();
   } catch {
     return json(request, { error: "invalid_payload" }, 400);
   }
+  const broadcastId = typeof body.broadcast_id === "string" ? body.broadcast_id : "";
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(broadcastId)) return json(request,{error:"invalid_broadcast_id"},400);
   const kind = body.kind as BroadcastKind;
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const message = typeof body.message === "string" ? body.message.trim() : "";
@@ -102,28 +104,12 @@ Deno.serve(async (request) => {
     || (kind === "announcement" && profile.role === "staff");
   if (!allowed) return json(request, { error: "not_authorized" }, 403);
 
-  const { count, error: countError } = await serviceClient
-    .from("push_subscriptions")
-    .select("id", { count: "exact", head: true });
-  if (countError) return json(request, { error: "subscriptions_unavailable" }, 500);
-  const subscriberCount = count ?? 0;
-  if (subscriberCount > MAX_SUBSCRIPTIONS_PER_BROADCAST) {
-    return json(request, { error: "too_many_subscriptions", limit: MAX_SUBSCRIPTIONS_PER_BROADCAST }, 409);
-  }
-
-  const subscriptions: PushRow[] = [];
-  const pageSize = 500;
-  for (let start = 0; start < subscriberCount; start += pageSize) {
-    const { data, error } = await serviceClient
-      .from("push_subscriptions")
-      .select("id,endpoint,p256dh,auth")
-      .order("id")
-      .range(start, Math.min(start + pageSize - 1, subscriberCount - 1));
-    if (error) return json(request, { error: "subscriptions_unavailable" }, 500);
-    subscriptions.push(...((data ?? []) as PushRow[]));
-  }
-
-  const broadcastId = crypto.randomUUID();
+  const {data:job,error:jobError} = await serviceClient.rpc("claim_push_broadcast", {
+    p_id:broadcastId,p_sender:authData.user.id,p_kind:kind,p_title:title,p_message:message,
+  });
+  if(jobError || !job) return json(request,{error:jobError?.message ?? "broadcast_unavailable"},409);
+  if(job.completed) return json(request,{...job,broadcast_id:broadcastId,removed:0});
+  const subscriptions = job.batch as PushRow[];
   const payload = JSON.stringify({
     title,
     body: message,
@@ -132,7 +118,10 @@ Deno.serve(async (request) => {
   });
   const deliveryResults = await mapConcurrent(subscriptions, SEND_CONCURRENCY, async (subscription): Promise<DeliveryResult> => {
     try {
-      await webpush.sendNotification({
+      if(!validPushEndpoint(subscription.endpoint) || !validPushKeys(subscription.p256dh,subscription.auth)) {
+        return {id:subscription.id,delivered:false,expired:false};
+      }
+      const details = webpush.generateRequestDetails({
         endpoint: subscription.endpoint,
         keys: { p256dh: subscription.p256dh, auth: subscription.auth },
       }, payload, {
@@ -145,7 +134,12 @@ Deno.serve(async (request) => {
           privateKey: VAPID_PRIVATE_KEY,
         },
       });
-      return { id: subscription.id, delivered: true, expired: false };
+      const response = await fetch(subscription.endpoint, {
+        method: "POST", headers: details.headers, body: details.body as unknown as BodyInit,
+        redirect: "error", signal: AbortSignal.timeout(10_000),
+      });
+      await response.body?.cancel();
+      return {id:subscription.id,delivered:response.ok,expired:response.status===404 || response.status===410};
     } catch (error) {
       const statusCode = statusCodeOf(error);
       return { id: subscription.id, delivered: false, expired: statusCode === 404 || statusCode === 410 };
@@ -156,25 +150,9 @@ Deno.serve(async (request) => {
   for (let start = 0; start < expiredIds.length; start += 100) {
     await serviceClient.from("push_subscriptions").delete().in("id", expiredIds.slice(start, start + 100));
   }
-  const successCount = deliveryResults.filter((result) => result.delivered).length;
-  const failureCount = deliveryResults.length - successCount;
-  const { error: auditError } = await serviceClient.from("push_broadcasts").insert({
-    id: broadcastId,
-    kind,
-    title,
-    message,
-    sent_by: authData.user.id,
-    subscriber_count: subscriberCount,
-    success_count: successCount,
-    failure_count: failureCount,
+  const {data:result,error:finishError} = await serviceClient.rpc("finish_push_batch", {
+    p_id:broadcastId,p_lease:job.lease,p_results:deliveryResults,
   });
-  if (auditError) console.error("push_audit_failed", auditError.message);
-
-  return json(request, {
-    broadcast_id: broadcastId,
-    subscribers: subscriberCount,
-    sent: successCount,
-    failed: failureCount,
-    removed: expiredIds.length,
-  });
+  if(finishError || !result) return json(request,{error:"broadcast_checkpoint_failed",broadcast_id:broadcastId},503);
+  return json(request,{...result,removed:expiredIds.length});
 });
