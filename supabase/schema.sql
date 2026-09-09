@@ -2,6 +2,13 @@
 -- Può essere eseguito su un DB nuovo o su quello esistente.
 -- Non elimina utenti, credenziali o dati applicativi.
 -- Esecuzione: Supabase > Database > SQL Editor > New query > copia-incolla > Run
+--
+-- Stato finale, non storia: ogni funzione compare UNA volta sola, nella sua
+-- versione viva, e l'intero file è una singola transazione (o passa tutto, o
+-- non cambia niente). La storia sta in supabase/migrations/.
+-- `scripts/security/verify-schema-matches-migrations.mjs` fallisce la CI se
+-- questo file e la catena di migration smettono di descrivere lo stesso
+-- database, o se una funzione torna a essere definita due volte.
 
 begin;
 
@@ -52,71 +59,12 @@ insert into public.profiles (id, role)
 select id, 'pending' from auth.users
 on conflict (id) do nothing;
 
--- ============================================================
--- ANNUNCI
--- ============================================================
-create table if not exists public.announcements (
-  id uuid primary key default gen_random_uuid(),
-  title text not null,
-  message text not null,
-  published_at timestamptz not null default now(),
-  created_by uuid default auth.uid() references auth.users(id)
-);
-
-alter table public.announcements
-  alter column created_by set default auth.uid();
-alter table public.announcements enable row level security;
-
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conrelid = 'public.announcements'::regclass and conname = 'announcements_title_valid') then
-    alter table public.announcements add constraint announcements_title_valid
-      check (btrim(title) <> '' and length(title) <= 200) not valid;
-  end if;
-  if not exists (select 1 from pg_constraint where conrelid = 'public.announcements'::regclass and conname = 'announcements_message_valid') then
-    alter table public.announcements add constraint announcements_message_valid
-      check (btrim(message) <> '' and length(message) <= 5000) not valid;
-  end if;
-end
-$$;
-
-drop policy if exists "Chiunque legge gli annunci" on public.announcements;
-drop policy if exists "Solo lo staff pubblica annunci" on public.announcements;
-drop policy if exists "Solo lo staff modifica annunci" on public.announcements;
-drop policy if exists "Solo lo staff elimina annunci" on public.announcements;
-
-create policy "Chiunque legge gli annunci"
-  on public.announcements for select using (true);
-create policy "Solo lo staff pubblica annunci"
-  on public.announcements for insert
-  with check (
-    created_by = auth.uid() and exists (
-      select 1 from public.profiles
-      where id = auth.uid() and role in ('staff', 'admin')
-    )
-  );
-create policy "Solo lo staff modifica annunci"
-  on public.announcements for update
-  using (exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role in ('staff', 'admin')
-  ))
-  with check (exists (
-    select 1 from public.profiles
-    where id = auth.uid()
-      and (role = 'admin' or (role = 'staff' and created_by = auth.uid()))
-  ));
-create policy "Solo lo staff elimina annunci"
-  on public.announcements for delete
-  using (exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role in ('staff', 'admin')
-  ));
-
-create index if not exists announcements_published_at_idx
-  on public.announcements (published_at desc);
-grant select on public.announcements to anon, authenticated;
-grant insert, update, delete on public.announcements to authenticated;
+-- La sezione ANNUNCI viveva qui. Il componente React è stato rimosso e la
+-- feature non tornerà. Policy, indice, constraint e appartenenza alla
+-- publication realtime se ne vanno insieme alla tabella.
+-- ATTENZIONE: su un database esistente questo elimina gli annunci pubblicati.
+-- Vedi supabase/migrations/20260909120000_remove_announcements.sql.
+drop table if exists public.announcements;
 
 -- ============================================================
 -- PROGRAMMA E IMPOSTAZIONI
@@ -609,57 +557,6 @@ drop trigger if exists protect_order_updates on public.orders;
 drop function if exists public.protect_order_updates();
 drop function if exists public.create_order(jsonb);
 
-create or replace function public.normalize_order_items(p_items jsonb)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  normalized jsonb;
-begin
-  if p_items is null or jsonb_typeof(p_items) <> 'array'
-    or jsonb_array_length(p_items) = 0 or jsonb_array_length(p_items) > 100 then
-    raise exception 'invalid_order_items';
-  end if;
-  if exists (
-    select 1 from jsonb_array_elements(p_items) line
-    where jsonb_typeof(line) <> 'object'
-      or coalesce(line->>'id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-      or coalesce(line->>'qty', '') !~ '^[1-9][0-9]*$'
-      or case when coalesce(line->>'qty', '') ~ '^[1-9][0-9]*$'
-        then (line->>'qty')::numeric > 999 else false end
-  ) then
-    raise exception 'invalid_order_items';
-  end if;
-
-  with requested as (
-    select (line->>'id')::uuid id, sum((line->>'qty')::integer)::integer qty
-    from jsonb_array_elements(p_items) line
-    group by (line->>'id')::uuid
-  )
-  select jsonb_agg(jsonb_build_object(
-    'id', menu.id,
-    'name', menu.name,
-    'category', menu.category,
-    'allergens', to_jsonb(menu.allergens),
-    'qty', requested.qty,
-    'price', menu.price
-  ) order by menu.category, menu.name, menu.id)
-  into normalized
-  from requested join public.menu_items menu on menu.id = requested.id;
-
-  if normalized is null or jsonb_array_length(normalized) <> (
-    select count(distinct (line->>'id')) from jsonb_array_elements(p_items) line
-  ) then
-    raise exception 'unknown_menu_item';
-  end if;
-  return normalized;
-end;
-$$;
-
-revoke execute on function public.normalize_order_items(jsonb) from public, anon, authenticated;
-
 create or replace function public.apply_order_stock(p_old_items jsonb, p_new_items jsonb)
 returns void
 language plpgsql
@@ -808,33 +705,6 @@ $$;
 revoke execute on function public.get_ordering_status() from public;
 grant execute on function public.get_ordering_status() to anon, authenticated;
 
-create or replace function public.get_ordering_catalog()
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  status_payload jsonb;
-  catalog jsonb;
-begin
-  status_payload := public.get_ordering_status();
-  if not coalesce((status_payload->>'accepting')::boolean, false) then
-    return status_payload || jsonb_build_object('items', '[]'::jsonb);
-  end if;
-  select coalesce(jsonb_agg(jsonb_build_object(
-    'id', id, 'category', category, 'name', name, 'price', price,
-    'available_portions', available_portions, 'stock_capacity', stock_capacity,
-    'allergens', to_jsonb(allergens)
-  ) order by category, name), '[]'::jsonb)
-  into catalog from public.menu_items;
-  return status_payload || jsonb_build_object('items', catalog);
-end;
-$$;
-
-revoke execute on function public.get_ordering_catalog() from public;
-grant execute on function public.get_ordering_catalog() to anon, authenticated;
-
 alter table public.orders add column if not exists recovery_token_hash text;
 alter table public.orders add column if not exists recovery_request_id uuid;
 create index if not exists orders_recovery_idx on public.orders(recovery_token_hash,created_at,id) where recovery_token_hash is not null;
@@ -845,147 +715,10 @@ returns text language sql immutable set search_path=public as $$
 $$;
 revoke execute on function public.recovery_order_qr(text,uuid) from public,anon,authenticated;
 
-create or replace function public.submit_public_order(
-  p_alias text,
-  p_notes text,
-  p_items jsonb,
-  p_client_request_id uuid,
-  p_qr_token text,
-  p_bot_field text default '',
-  p_expected_event_id uuid default null,
-  p_recovery_token text default null
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  event_row public.order_events%rowtype;
-  existing_order public.orders%rowtype;
-  normalized jsonb;
-  calculated_total numeric;
-  next_number bigint;
-  pending_count integer;
-begin
-  if p_recovery_token is not null and (p_recovery_token !~ '^[A-Za-z0-9_-]{43}$'
-    or p_qr_token is distinct from public.recovery_order_qr(p_recovery_token,p_client_request_id)) then
-    raise exception 'invalid_recovery_token';
-  end if;
-  if coalesce(p_bot_field, '') <> '' then raise exception 'invalid_request'; end if;
-  if p_alias is null or length(btrim(p_alias)) not between 2 and 32
-    or btrim(p_alias) !~ '^[[:alnum:]][[:alnum:] _-]*$' then
-    raise exception 'invalid_alias';
-  end if;
-  if length(coalesce(p_notes, '')) > 300 then raise exception 'notes_too_long'; end if;
-  if p_client_request_id is null then raise exception 'invalid_client_request_id'; end if;
-  if p_qr_token is null or length(p_qr_token) not between 32 and 80 then raise exception 'invalid_qr_token'; end if;
-
-  perform public.expire_unpaid_orders();
-
-  select * into event_row from public.order_events where is_current for no key update;
-  if not found then raise exception 'no_event'; end if;
-  if p_expected_event_id is not null and p_expected_event_id <> event_row.id then raise exception 'event_changed'; end if;
-
-  select * into existing_order from public.orders
-  where event_id = event_row.id and client_request_id = p_client_request_id;
-  if found then
-    if existing_order.qr_token_hash is distinct from encode(extensions.digest(p_qr_token, 'sha256'), 'hex') then
-      raise exception 'request_id_conflict';
-    end if;
-    return jsonb_build_object(
-      'event_id', event_row.id, 'event_name', event_row.name,
-      'order_id', existing_order.id, 'display_number', existing_order.display_number,
-      'status', existing_order.status, 'alias', existing_order.alias, 'notes', existing_order.notes,
-      'items', existing_order.items, 'total', existing_order.total, 'qr_token', p_qr_token
-    );
-  end if;
-
-  if event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
-  if event_row.manual_closed then raise exception 'ordering_paused'; end if;
-  if now() < event_row.opens_at then raise exception 'not_open_yet'; end if;
-  if now() > event_row.closes_at then raise exception 'ordering_closed'; end if;
-  select count(*) into pending_count from public.orders
-    where event_id = event_row.id and status = 'in_attesa_pagamento';
-  if pending_count >= event_row.max_pending_orders then raise exception 'capacity_reached'; end if;
-
-  -- The event lock already serializes creation. Retry lookup above does not consume this limit.
-  if p_recovery_token is not null and (select count(*) from public.orders
-      where recovery_token_hash = encode(extensions.digest(p_recovery_token,'sha256'),'hex')
-        and created_at > now() - interval '1 minute') >= 3 then
-    raise exception 'public_order_rate_limit';
-  end if;
-
-  normalized := public.normalize_order_items(p_items);
-  if exists (select 1 from jsonb_array_elements(normalized) line where (line->>'qty')::integer > 25)
-    or (select sum((line->>'qty')::integer) from jsonb_array_elements(normalized) line) > 60 then
-    raise exception 'public_order_quantity_limit';
-  end if;
-  select sum((line->>'price')::numeric * (line->>'qty')::integer)
-    into calculated_total from jsonb_array_elements(normalized) line;
-  if calculated_total > 99999.99 then raise exception 'order_total_too_high'; end if;
-  perform public.apply_order_stock('[]'::jsonb, normalized);
-  select coalesce(max(display_number), 0) + 1 into next_number
-    from public.orders where event_id = event_row.id;
-
-  insert into public.orders (
-    event_id, display_number, alias, notes, items, total, status,
-    qr_token_hash, client_request_id, recovery_token_hash, recovery_request_id
-  ) values (
-    event_row.id, next_number, btrim(p_alias), nullif(btrim(coalesce(p_notes, '')), ''),
-    normalized, calculated_total::numeric(7,2), 'in_attesa_pagamento',
-    encode(extensions.digest(p_qr_token, 'sha256'), 'hex'), p_client_request_id,
-    case when p_recovery_token is not null then encode(extensions.digest(p_recovery_token,'sha256'),'hex') end,
-    case when p_recovery_token is not null then p_client_request_id end
-  ) returning id into existing_order.id;
-
-  return jsonb_build_object(
-    'event_id', event_row.id, 'event_name', event_row.name,
-    'order_id', existing_order.id, 'display_number', next_number,
-    'status', 'in_attesa_pagamento', 'alias', btrim(p_alias), 'notes', nullif(btrim(coalesce(p_notes, '')), ''),
-    'items', normalized, 'total', calculated_total, 'qr_token', p_qr_token
-  );
-end;
-$$;
-
-revoke execute on function public.submit_public_order(text, text, jsonb, uuid, text, text, uuid, text) from public;
-grant execute on function public.submit_public_order(text, text, jsonb, uuid, text, text, uuid, text) to anon, authenticated;
-
 -- Il token QR è una credenziale ad alta entropia conservata nel browser.
 -- Permette al cliente anonimo di leggere soltanto lo stato del proprio ordine,
 -- senza concedere accesso diretto alla tabella orders o ai dati di altri clienti.
 drop function if exists public.get_public_order_status(text);
-
-create or replace function public.get_public_order_statuses(p_qr_tokens text[])
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare result jsonb;
-begin
-  if p_qr_tokens is null or cardinality(p_qr_tokens) < 1 or cardinality(p_qr_tokens) > 50 then
-    raise exception 'invalid_qr_tokens';
-  end if;
-  if exists (
-    select 1 from unnest(p_qr_tokens) token
-    where token is null or length(token) not between 32 and 80
-  ) then raise exception 'invalid_qr_tokens'; end if;
-  select coalesce(jsonb_agg(jsonb_build_object(
-    'order_id', order_row.id,
-    'status', order_row.status
-  )), '[]'::jsonb) into result
-  from public.orders order_row
-  where order_row.qr_token_hash in (
-    select encode(extensions.digest(token, 'sha256'), 'hex')
-    from unnest(p_qr_tokens) token
-  );
-  return result;
-end;
-$$;
-
-revoke execute on function public.get_public_order_statuses(text[]) from public;
-grant execute on function public.get_public_order_statuses(text[]) to anon, authenticated;
 
 create or replace function public.claim_order(p_order_id uuid, p_claim_token text)
 returns jsonb
@@ -1197,43 +930,6 @@ $$;
 revoke execute on function public.pay_claimed_order(uuid, text) from public;
 grant execute on function public.pay_claimed_order(uuid, text) to authenticated;
 
-create or replace function public.create_counter_order(p_alias text, p_notes text, p_items jsonb)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare event_row public.order_events%rowtype; normalized jsonb; calculated_total numeric;
-  next_number bigint; created_order public.orders%rowtype; has_food boolean;
-begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
-    raise exception 'not_authorized' using errcode = '42501';
-  end if;
-  if p_alias is null or length(btrim(p_alias)) not between 2 and 32 then raise exception 'invalid_alias'; end if;
-  if length(coalesce(p_notes, '')) > 300 then raise exception 'notes_too_long'; end if;
-  select * into event_row from public.order_events where is_current for no key update;
-  if not found or event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
-  normalized := public.normalize_order_items(p_items);
-  perform public.apply_order_stock('[]'::jsonb, normalized);
-  select sum((line->>'price')::numeric * (line->>'qty')::integer),
-    bool_or(line->>'category' = 'cibo')
-  into calculated_total, has_food from jsonb_array_elements(normalized) line;
-  select coalesce(max(display_number), 0) + 1 into next_number from public.orders where event_id = event_row.id;
-  insert into public.orders (
-    event_id, display_number, alias, notes, items, total, status, paid_at, delivered_at, completed_at
-  ) values (
-    event_row.id, next_number, case when has_food then btrim(p_alias) else null end,
-    case when has_food then nullif(btrim(coalesce(p_notes, '')), '') else null end,
-    normalized, calculated_total::numeric(7,2), case when has_food then 'pagato' else 'consegnato' end,
-    now(), case when has_food then null else now() end, case when has_food then null else now() end
-  ) returning * into created_order;
-  return to_jsonb(created_order) - 'qr_token_hash' - 'claimed_token_hash' - 'client_request_id';
-end;
-$$;
-
-revoke execute on function public.create_counter_order(text, text, jsonb) from public;
-grant execute on function public.create_counter_order(text, text, jsonb) to authenticated;
-
 create or replace function public.deliver_order(p_order_id uuid)
 returns void
 language plpgsql
@@ -1357,93 +1053,6 @@ $$;
 revoke execute on function public.set_ordering_paused(boolean) from public;
 grant execute on function public.set_ordering_paused(boolean) to authenticated;
 
-create or replace function public.close_order_event()
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare event_row public.order_events%rowtype; report jsonb;
-begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
-    raise exception 'not_authorized' using errcode = '42501';
-  end if;
-  select * into event_row from public.order_events where is_current for update;
-  if not found then raise exception 'no_event'; end if;
-  if event_row.permanently_closed_at is not null then return event_row.final_report; end if;
-
-  -- Completa l'ordine globale dei lock evento -> ordini -> menu. Le altre RPC
-  -- mutanti mantengono un lock condiviso sull'evento finché hanno finito.
-  perform 1 from public.orders
-  where event_id = event_row.id order by id for update;
-
-  with reserved as (
-    select (line->>'id')::uuid id, sum((line->>'qty')::integer)::integer qty
-    from public.orders orders_row
-    cross join lateral jsonb_array_elements(orders_row.items) line
-    where orders_row.event_id = event_row.id and orders_row.status = 'in_attesa_pagamento'
-    group by 1
-  )
-  update public.menu_items menu set
-    stock_capacity = case
-      when menu.available_portions is not null and menu.stock_capacity is not null
-        then greatest(menu.stock_capacity, menu.available_portions + reserved.qty)
-      else menu.stock_capacity end,
-    available_portions = case
-      when menu.available_portions is null then null else menu.available_portions + reserved.qty end
-  from reserved where menu.id = reserved.id;
-
-  select jsonb_build_object(
-    'event_id', event_row.id,
-    'event_name', event_row.name,
-    'closed_at', now(),
-    'summary', jsonb_build_object(
-      'orders_total', count(*),
-      'orders_paid', count(*) filter (where status in ('pagato', 'consegnato')),
-      'orders_cancelled', count(*) filter (where status = 'annullato'),
-      'orders_abandoned', count(*) filter (where status = 'in_attesa_pagamento'),
-      'revenue_total', coalesce(sum(total) filter (where status in ('pagato', 'consegnato')), 0)
-    ),
-    'products', coalesce((
-      select jsonb_agg(product order by product->>'name') from (
-        select jsonb_build_object(
-          'id', line->>'id', 'name', line->>'name', 'category', line->>'category',
-          'quantity', sum((line->>'qty')::integer),
-          'revenue', sum((line->>'qty')::integer * (line->>'price')::numeric)
-        ) product
-        from public.orders paid_order
-        cross join lateral jsonb_array_elements(paid_order.items) line
-        where paid_order.event_id = event_row.id and paid_order.status in ('pagato', 'consegnato')
-        group by line->>'id', line->>'name', line->>'category'
-      ) products_rows
-    ), '[]'::jsonb),
-    'orders', coalesce(jsonb_agg(jsonb_build_object(
-      'number', display_number, 'created_at', created_at, 'paid_at', paid_at,
-      'status', case when status = 'in_attesa_pagamento' then 'abbandonato' else status end,
-      'items', items, 'total', total
-    ) order by display_number), '[]'::jsonb)
-  ) into report from public.orders where event_id = event_row.id;
-
-  update public.orders set
-    status = case
-      when status = 'in_attesa_pagamento' then 'annullato'
-      when status = 'pagato' then 'consegnato'
-      else status end,
-    cancelled_at = case when status = 'in_attesa_pagamento' then now() else cancelled_at end,
-    delivered_at = case when status = 'pagato' then now() else delivered_at end,
-    completed_at = case when status = 'pagato' then now() else completed_at end,
-    alias = null, notes = null, qr_token_hash = null, client_request_id = null,
-    claimed_token_hash = null, claim_expires_at = null
-  where event_id = event_row.id;
-  update public.order_events set permanently_closed_at = now(), manual_closed = true,
-    final_report = report - 'orders' where id = event_row.id;
-  return report;
-end;
-$$;
-
-revoke execute on function public.close_order_event() from public;
-grant execute on function public.close_order_event() to authenticated;
-
 alter table public.orders add column if not exists report_status text;
 
 create or replace function public.get_order_event_report()
@@ -1506,30 +1115,6 @@ $$;
 
 revoke execute on function public.create_next_order_event(text, timestamptz, timestamptz, integer) from public;
 grant execute on function public.create_next_order_event(text, timestamptz, timestamptz, integer) to authenticated;
-
-create or replace function public.get_low_stock_items()
-returns table (id uuid, name text, remaining integer, available integer)
-language plpgsql
-security invoker
-set search_path = public
-as $$
-begin
-  if not exists (
-    select 1 from public.profiles where id = auth.uid() and role in ('cucina', 'admin')
-  ) then
-    raise exception 'not authorized to read stock warnings' using errcode = '42501';
-  end if;
-  return query
-    select menu.id, menu.name, menu.available_portions, menu.stock_capacity
-    from public.menu_items menu
-    where menu.available_portions is not null and menu.stock_capacity is not null
-      and menu.available_portions <= ceil(menu.stock_capacity * 0.2)
-    order by menu.available_portions, menu.name;
-end;
-$$;
-
-revoke execute on function public.get_low_stock_items() from public;
-grant execute on function public.get_low_stock_items() to authenticated;
 
 -- ============================================================
 -- NOTIFICHE WEB PUSH
@@ -1785,9 +1370,6 @@ grant select, insert on public.tournament_snapshots to authenticated;
 -- ============================================================
 do $$
 begin
-  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'announcements') then
-    alter publication supabase_realtime add table public.announcements;
-  end if;
   if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'program_slots') then
     alter publication supabase_realtime add table public.program_slots;
   end if;
@@ -1800,10 +1382,7 @@ begin
 end
 $$;
 
-commit;
-
 -- Flusso ordini multi-postazione (sincronizzato con la migrazione 20260901113000).
-begin;
 -- Ruolo Bar e nuova destinazione Furgone esterno.
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles add constraint profiles_role_check
@@ -1995,39 +1574,6 @@ $$;
 revoke execute on function public.get_cashier_pending_orders() from public;
 grant execute on function public.get_cashier_pending_orders() to authenticated;
 
-create or replace function public.claim_order_for_station(
-  p_order_id uuid, p_station text, p_device_id text
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare order_row public.orders%rowtype; device_hash text; active_station text;
-begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
-    raise exception 'not_authorized' using errcode = '42501';
-  end if;
-  if p_station !~ '^cassa_[1-5]$' then raise exception 'invalid_station'; end if;
-  if p_device_id is null or length(p_device_id) not between 32 and 80 then raise exception 'invalid_device'; end if;
-  device_hash := encode(extensions.digest(p_device_id, 'sha256'), 'hex');
-  delete from public.order_claim_devices where expires_at <= now();
-  select * into order_row from public.orders where id = p_order_id for update;
-  if not found or order_row.status <> 'in_attesa_pagamento' then raise exception 'order_not_available'; end if;
-  select station into active_station from public.order_claim_devices
-    where order_id = p_order_id and expires_at > now() limit 1;
-  if active_station is not null and active_station <> p_station then raise exception 'order_already_claimed'; end if;
-  insert into public.order_claim_devices (order_id, station, device_hash, expires_at)
-    values (p_order_id, p_station, device_hash, now() + interval '30 seconds')
-    on conflict (order_id, device_hash) do update
-      set station = excluded.station, expires_at = excluded.expires_at;
-  return (to_jsonb(order_row) - 'qr_token_hash' - 'claimed_token_hash' - 'client_request_id')
-    || jsonb_build_object('claimed_station', p_station, 'claim_expires_at', now() + interval '30 seconds');
-end;
-$$;
-revoke execute on function public.claim_order_for_station(uuid, text, text) from public;
-grant execute on function public.claim_order_for_station(uuid, text, text) to authenticated;
-
 create or replace function public.claim_order_by_qr_for_station(
   p_qr_token text, p_station text, p_device_id text
 )
@@ -2081,40 +1627,6 @@ $$;
 revoke execute on function public.force_release_order(uuid) from public;
 grant execute on function public.force_release_order(uuid) to authenticated;
 
-create or replace function public.pay_order_for_station(
-  p_order_id uuid, p_station text, p_device_id text
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare order_row public.orders%rowtype; event_row public.order_events%rowtype; device_hash_value text;
-begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
-    raise exception 'not_authorized' using errcode = '42501';
-  end if;
-  device_hash_value := encode(extensions.digest(p_device_id, 'sha256'), 'hex');
-  select event.* into event_row from public.order_events event
-    join public.orders target on target.event_id = event.id
-    where target.id = p_order_id for key share of event;
-  if not found or event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
-  select * into order_row from public.orders where id = p_order_id for update;
-  if not found or order_row.status <> 'in_attesa_pagamento' or not exists (
-    select 1 from public.order_claim_devices claims where claims.order_id = p_order_id
-      and claims.station = p_station and claims.device_hash = device_hash_value and claims.expires_at > now()
-  ) then raise exception 'claim_lost'; end if;
-  perform public.seed_order_fulfillment(order_row.id, order_row.items);
-  update public.orders set status = 'pagato', paid_at = now(), delivered_at = null,
-    completed_at = null, claimed_token_hash = null, claim_expires_at = null
-    where id = p_order_id returning * into order_row;
-  delete from public.order_claim_devices where order_id = p_order_id;
-  return to_jsonb(order_row) - 'qr_token_hash' - 'claimed_token_hash' - 'client_request_id';
-end;
-$$;
-revoke execute on function public.pay_order_for_station(uuid, text, text) from public;
-grant execute on function public.pay_order_for_station(uuid, text, text) to authenticated;
-
 create or replace function public.cancel_order_for_station(
   p_order_id uuid, p_station text, p_device_id text
 )
@@ -2152,128 +1664,7 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 revoke execute on function public.fulfillment_station_allowed(text) from public, anon, authenticated;
 
-create or replace function public.get_fulfillment_queue(p_station text)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare result jsonb;
-begin
-  if not public.fulfillment_station_allowed(p_station) then raise exception 'not_authorized' using errcode = '42501'; end if;
-  perform public.purge_completed_order_personal_data();
-  select coalesce(jsonb_agg(order_payload order by paid_at, display_number), '[]'::jsonb) into result
-  from (
-    select orders_row.id, orders_row.display_number, orders_row.alias, orders_row.notes,
-      orders_row.paid_at, orders_row.status,
-      jsonb_agg(jsonb_build_object(
-        'id', fulfillment.menu_item_id, 'name', fulfillment.name,
-        'subcategory', fulfillment.subcategory, 'station', fulfillment.station,
-        'quantity', fulfillment.quantity, 'delivered_quantity', fulfillment.delivered_quantity
-      ) order by fulfillment.subcategory, fulfillment.name) as items
-    from public.orders orders_row
-    join public.order_fulfillment_items fulfillment on fulfillment.order_id = orders_row.id
-    where orders_row.status in ('pagato', 'ritiro_parziale')
-      and fulfillment.delivered_quantity < fulfillment.quantity
-      and (case when p_station = 'cucina' then fulfillment.category = 'cibo' else fulfillment.station = p_station end)
-    group by orders_row.id
-  ) order_payload;
-  return result;
-end;
-$$;
-revoke execute on function public.get_fulfillment_queue(text) from public;
-grant execute on function public.get_fulfillment_queue(text) to authenticated;
-
-create or replace function public.get_fulfillment_order_by_qr(p_qr_token text, p_station text)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare result jsonb;
-begin
-  if not public.fulfillment_station_allowed(p_station) then raise exception 'not_authorized' using errcode = '42501'; end if;
-  if p_qr_token is null or length(p_qr_token) not between 32 and 80 then raise exception 'invalid_qr_token'; end if;
-  select jsonb_build_object(
-    'id', orders_row.id, 'display_number', orders_row.display_number,
-    'alias', orders_row.alias, 'notes', orders_row.notes, 'paid_at', orders_row.paid_at,
-    'status', orders_row.status,
-    'items', jsonb_agg(jsonb_build_object(
-      'id', fulfillment.menu_item_id, 'name', fulfillment.name,
-      'subcategory', fulfillment.subcategory, 'station', fulfillment.station,
-      'quantity', fulfillment.quantity, 'delivered_quantity', fulfillment.delivered_quantity
-    ) order by fulfillment.name)
-  ) into result
-  from public.orders orders_row
-  join public.order_fulfillment_items fulfillment on fulfillment.order_id = orders_row.id
-  where orders_row.qr_token_hash = encode(extensions.digest(p_qr_token, 'sha256'), 'hex')
-    and orders_row.status in ('pagato', 'ritiro_parziale')
-    and fulfillment.delivered_quantity < fulfillment.quantity
-    and (case when p_station = 'cucina' then fulfillment.category = 'cibo' else fulfillment.station = p_station end)
-  group by orders_row.id;
-  if result is null then raise exception 'order_not_available'; end if;
-  return result;
-end;
-$$;
-revoke execute on function public.get_fulfillment_order_by_qr(text, text) from public;
-grant execute on function public.get_fulfillment_order_by_qr(text, text) to authenticated;
-
 -- All order mutations lock the event before the order, then delivery/stock rows.
-create or replace function public.lock_open_order_event(p_order_id uuid)
-returns void language plpgsql security definer set search_path=public as $$
-begin
-  perform 1 from public.order_events e join public.orders o on o.event_id=e.id
-    where o.id=p_order_id and e.is_current and e.permanently_closed_at is null for key share of e;
-  if not found then raise exception 'event_closed'; end if;
-end;
-$$;
-revoke execute on function public.lock_open_order_event(uuid) from public,anon,authenticated;
-
-create or replace function public.deliver_fulfillment_items(
-  p_order_id uuid, p_station text, p_items jsonb
-)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare order_row public.orders%rowtype; normalized jsonb; delivery_id uuid;
-  total_quantity integer; total_delivered integer;
-begin
-  if p_station = 'cucina' or not public.fulfillment_station_allowed(p_station) then
-    raise exception 'not_authorized' using errcode = '42501';
-  end if;
-  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
-    raise exception 'invalid_delivery';
-  end if;
-  if exists (select 1 from jsonb_array_elements(p_items) item
-    where coalesce(item->>'id', '') !~* '^[0-9a-f-]{36}$'
-      or coalesce(item->>'qty', '') !~ '^[1-9][0-9]*$') then raise exception 'invalid_delivery'; end if;
-  perform public.lock_open_order_event(p_order_id);
-  select * into order_row from public.orders where id = p_order_id for update;
-  if not found or order_row.status not in ('pagato', 'ritiro_parziale') then raise exception 'order_not_available'; end if;
-
-  with requested as (
-    select (item->>'id')::uuid id, sum((item->>'qty')::integer)::integer qty
-    from jsonb_array_elements(p_items) item group by 1
-  )
-  select jsonb_agg(jsonb_build_object('id', requested.id, 'qty', requested.qty)) into normalized
-  from requested join public.order_fulfillment_items fulfillment
-    on fulfillment.order_id = p_order_id and fulfillment.menu_item_id = requested.id
-  where fulfillment.station = p_station and requested.qty <= fulfillment.quantity - fulfillment.delivered_quantity;
-  if normalized is null or jsonb_array_length(normalized) <> (
-    select count(distinct item->>'id') from jsonb_array_elements(p_items) item
-  ) then raise exception 'invalid_delivery_quantity'; end if;
-
-  update public.order_fulfillment_items fulfillment
-  set delivered_quantity = fulfillment.delivered_quantity + requested.qty
-  from (select (item->>'id')::uuid id, (item->>'qty')::integer qty
-    from jsonb_array_elements(normalized) item) requested
-  where fulfillment.order_id = p_order_id and fulfillment.menu_item_id = requested.id;
-
-  insert into public.fulfillment_deliveries (order_id, station, quantities, delivered_by)
-    values (p_order_id, p_station, normalized, auth.uid()) returning id into delivery_id;
-  select sum(quantity), sum(delivered_quantity) into total_quantity, total_delivered
-    from public.order_fulfillment_items where order_id = p_order_id;
-  update public.orders set
-    status = case when total_delivered >= total_quantity then 'consegnato' else 'ritiro_parziale' end,
-    delivered_at = case when total_delivered >= total_quantity then now() else null end,
-    completed_at = case when total_delivered >= total_quantity then now() else null end
-    where id = p_order_id;
-  return jsonb_build_object('delivery_id', delivery_id,
-    'status', case when total_delivered >= total_quantity then 'consegnato' else 'ritiro_parziale' end);
-end;
-$$;
-revoke execute on function public.deliver_fulfillment_items(uuid, text, jsonb) from public;
-grant execute on function public.deliver_fulfillment_items(uuid, text, jsonb) to authenticated;
 
 create or replace function public.get_recent_fulfillment_deliveries(p_station text)
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -2297,101 +1688,7 @@ $$;
 revoke execute on function public.get_recent_fulfillment_deliveries(text) from public;
 grant execute on function public.get_recent_fulfillment_deliveries(text) to authenticated;
 
-create or replace function public.undo_fulfillment_delivery(p_delivery_id uuid, p_station text)
-returns void language plpgsql security definer set search_path = public as $$
-declare delivery_row public.fulfillment_deliveries%rowtype; user_role text;
-begin
-  select role into user_role from public.profiles where id = auth.uid();
-  if not coalesce(user_role in ('admin','cucina','bar'),false) then
-    raise exception 'not_authorized' using errcode='42501';
-  end if;
-  select * into delivery_row from public.fulfillment_deliveries where id=p_delivery_id;
-  if not found then raise exception 'delivery_not_available'; end if;
-  perform public.lock_open_order_event(delivery_row.order_id);
-  perform 1 from public.orders where id=delivery_row.order_id for update;
-  select * into delivery_row from public.fulfillment_deliveries where id=p_delivery_id for update;
-  if not found or delivery_row.reversed_at is not null then raise exception 'delivery_not_available'; end if;
-  if user_role <> 'admin' and (
-    not coalesce(public.fulfillment_station_allowed(p_station),false)
-    or delivery_row.station is distinct from p_station
-    or delivery_row.created_at <= now()-interval '5 minutes'
-  ) then raise exception 'undo_window_expired'; end if;
-  update public.order_fulfillment_items fulfillment
-  set delivered_quantity = greatest(0, fulfillment.delivered_quantity - requested.qty)
-  from (select (item->>'id')::uuid id, (item->>'qty')::integer qty
-    from jsonb_array_elements(delivery_row.quantities) item) requested
-  where fulfillment.order_id = delivery_row.order_id and fulfillment.menu_item_id = requested.id;
-  update public.fulfillment_deliveries set reversed_at = now(), reversed_by = auth.uid()
-    where id = p_delivery_id;
-  update public.orders set status = case when exists (
-      select 1 from public.order_fulfillment_items where order_id = delivery_row.order_id and delivered_quantity > 0
-    ) then 'ritiro_parziale' else 'pagato' end,
-    delivered_at = null, completed_at = null where id = delivery_row.order_id;
-end;
-$$;
-revoke execute on function public.undo_fulfillment_delivery(uuid, text) from public;
-grant execute on function public.undo_fulfillment_delivery(uuid, text) to authenticated;
-
-create or replace function public.get_public_order_statuses(p_qr_tokens text[])
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare result jsonb;
-begin
-  if p_qr_tokens is null or cardinality(p_qr_tokens) < 1 or cardinality(p_qr_tokens) > 50 then
-    raise exception 'invalid_qr_tokens';
-  end if;
-  if exists (select 1 from unnest(p_qr_tokens) token
-    where token is null or length(token) not between 32 and 80) then raise exception 'invalid_qr_tokens'; end if;
-  perform public.expire_unpaid_orders();
-  perform public.purge_completed_order_personal_data();
-  select coalesce(jsonb_agg(jsonb_build_object(
-    'order_id', orders_row.id, 'status', orders_row.status,
-    'progress', coalesce(progress.payload, '[]'::jsonb)
-  )), '[]'::jsonb) into result
-  from public.orders orders_row
-  left join lateral (
-    select jsonb_agg(jsonb_build_object(
-      'station', station, 'quantity', quantity, 'delivered', delivered
-    ) order by station) payload
-    from (select station, sum(quantity)::integer quantity,
-      sum(delivered_quantity)::integer delivered
-      from public.order_fulfillment_items where order_id = orders_row.id group by station) grouped
-  ) progress on true
-  where orders_row.qr_token_hash in (
-    select encode(extensions.digest(token, 'sha256'), 'hex') from unnest(p_qr_tokens) token
-  );
-  return result;
-end;
-$$;
-revoke execute on function public.get_public_order_statuses(text[]) from public;
-grant execute on function public.get_public_order_statuses(text[]) to anon, authenticated;
-
 -- Gli ordini creati d'emergenza in cassa entrano sempre nelle code di ritiro.
-create or replace function public.create_counter_order(p_alias text, p_notes text, p_items jsonb)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare event_row public.order_events%rowtype; normalized jsonb; calculated_total numeric;
-  next_number bigint; created_order public.orders%rowtype;
-begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role in ('cassa', 'admin')) then
-    raise exception 'not_authorized' using errcode = '42501';
-  end if;
-  if p_alias is null or length(btrim(p_alias)) not between 2 and 32 then raise exception 'invalid_alias'; end if;
-  if length(coalesce(p_notes, '')) > 300 then raise exception 'notes_too_long'; end if;
-  select * into event_row from public.order_events where is_current for no key update;
-  if not found or event_row.permanently_closed_at is not null then raise exception 'event_closed'; end if;
-  normalized := public.normalize_order_items(p_items);
-  perform public.apply_order_stock('[]'::jsonb, normalized);
-  select sum((line->>'price')::numeric * (line->>'qty')::integer)
-    into calculated_total from jsonb_array_elements(normalized) line;
-  select coalesce(max(display_number), 0) + 1 into next_number from public.orders where event_id = event_row.id;
-  insert into public.orders (event_id, display_number, alias, notes, items, total, status, paid_at)
-    values (event_row.id, next_number, btrim(p_alias), nullif(btrim(coalesce(p_notes, '')), ''),
-      normalized, calculated_total::numeric(7,2), 'pagato', now()) returning * into created_order;
-  perform public.seed_order_fulfillment(created_order.id, created_order.items);
-  return to_jsonb(created_order) - 'qr_token_hash' - 'claimed_token_hash' - 'client_request_id';
-end;
-$$;
-revoke execute on function public.create_counter_order(text, text, jsonb) from public;
-grant execute on function public.create_counter_order(text, text, jsonb) to authenticated;
 
 -- I ruoli di evasione leggono gli ordini attivi tramite le RPC filtrate.
 drop policy if exists "La cucina legge solo gli ordini pagati" on public.orders;
@@ -2505,44 +1802,6 @@ end
 $$;
 
 -- Corregge riferimenti ambigui rilevati dal lint PostgreSQL.
-create or replace function public.claim_order_for_station(
-  p_order_id uuid, p_station text, p_device_id text
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare order_row public.orders%rowtype; device_hash_value text; active_station text;
-begin
-  if not exists (select 1 from public.profiles profile where profile.id = auth.uid() and profile.role in ('cassa', 'admin')) then
-    raise exception 'not_authorized' using errcode = '42501';
-  end if;
-  if p_station !~ '^cassa_[1-5]$' then raise exception 'invalid_station'; end if;
-  if p_device_id is null or length(p_device_id) not between 32 and 80 then raise exception 'invalid_device'; end if;
-  perform 1 from public.order_events e join public.orders o on o.event_id=e.id
-    where o.id=p_order_id and e.permanently_closed_at is null for key share of e;
-  if not found then raise exception 'event_closed'; end if;
-  device_hash_value := encode(extensions.digest(p_device_id, 'sha256'), 'hex');
-  delete from public.order_claim_devices where expires_at <= now();
-  select * into order_row from public.orders where id = p_order_id for update;
-  if not found or order_row.status <> 'in_attesa_pagamento' then raise exception 'order_not_available'; end if;
-  if order_row.created_at <= now()-interval '60 minutes' and not exists (
-    select 1 from public.order_claim_devices c where c.order_id=p_order_id and c.expires_at>now()
-  ) then raise exception 'reservation_expired'; end if;
-  select claims.station into active_station from public.order_claim_devices claims
-    where claims.order_id = p_order_id and claims.expires_at > now() limit 1;
-  if active_station is not null and active_station <> p_station then raise exception 'order_already_claimed'; end if;
-  insert into public.order_claim_devices (order_id, station, device_hash, expires_at)
-    values (p_order_id, p_station, device_hash_value, now() + interval '30 seconds')
-    on conflict (order_id, device_hash) do update
-      set station = excluded.station, expires_at = excluded.expires_at;
-  return (to_jsonb(order_row) - 'qr_token_hash' - 'claimed_token_hash' - 'client_request_id')
-    || jsonb_build_object('claimed_station', p_station, 'claim_expires_at', now() + interval '30 seconds');
-end;
-$$;
-revoke execute on function public.claim_order_for_station(uuid, text, text) from public;
-grant execute on function public.claim_order_for_station(uuid, text, text) to authenticated;
 
 create or replace function public.get_low_stock_items()
 returns table (id uuid, name text, remaining integer, available integer)
@@ -2567,8 +1826,6 @@ end;
 $$;
 revoke execute on function public.get_low_stock_items() from public;
 grant execute on function public.get_low_stock_items() to authenticated;
-
-commit;
 
 -- Retired APIs: frontend uses only station-based RPCs. Never re-grant these.
 revoke execute on function public.claim_order(uuid, text) from public, anon, authenticated, service_role;
@@ -2727,12 +1984,7 @@ $$;
 revoke execute on function public.recover_order_history(text,uuid) from public;
 grant execute on function public.recover_order_history(text,uuid) to anon,authenticated;
 
-
 -- The public Edge function validates a single-use Turnstile proof before this RPC.
-revoke execute on function public.submit_public_order(text,text,jsonb,uuid,text,text,uuid,text) from public,anon,authenticated;
-grant execute on function public.submit_public_order(text,text,jsonb,uuid,text,text,uuid,text) to service_role;
-
-
 
 revoke execute on function public.upsert_push_subscription(text,text,text,text,text) from public,anon,authenticated;
 grant execute on function public.upsert_push_subscription(text,text,text,text,text) to service_role;
@@ -2745,7 +1997,6 @@ grant execute on function public.has_push_subscription(text,text) to anon,authen
 
 -- Deferred preparation and shared kitchen admission (100 slots).
 
-begin;
 alter table public.orders add column if not exists preparation_mode text not null default 'immediate' check(preparation_mode in ('immediate','deferred'));
 alter table public.orders add column if not exists kitchen_state text not null default 'none' check(kitchen_state in ('none','reserved','dormant','waiting','active','done'));
 alter table public.orders add column if not exists kitchen_requested_at timestamptz;
@@ -2858,6 +2109,7 @@ begin
   if not found then raise exception 'event_closed'; end if;
 end;
 $$;
+revoke execute on function public.lock_open_order_event(uuid) from public,anon,authenticated;
 
 create or replace function public.submit_public_order(
   p_alias text,
@@ -3005,6 +2257,8 @@ begin
     || jsonb_build_object('claimed_station', p_station, 'claim_expires_at', now() + interval '30 seconds');
 end;
 $$;
+revoke execute on function public.claim_order_for_station(uuid, text, text) from public;
+grant execute on function public.claim_order_for_station(uuid, text, text) to authenticated;
 
 create or replace function public.pay_order_for_station(
   p_order_id uuid, p_station text, p_device_id text
@@ -3043,6 +2297,8 @@ begin
   return to_jsonb(order_row) - 'qr_token_hash' - 'claimed_token_hash' - 'client_request_id';
 end;
 $$;
+revoke execute on function public.pay_order_for_station(uuid, text, text) from public;
+grant execute on function public.pay_order_for_station(uuid, text, text) to authenticated;
 
 create or replace function public.create_counter_order(p_alias text, p_notes text, p_items jsonb, p_preparation_mode text default 'immediate')
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -3105,6 +2361,8 @@ begin
   return result;
 end;
 $$;
+revoke execute on function public.get_fulfillment_queue(text) from public;
+grant execute on function public.get_fulfillment_queue(text) to authenticated;
 
 create or replace function public.get_fulfillment_order_by_qr(p_qr_token text, p_station text)
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -3133,6 +2391,8 @@ begin
   return result;
 end;
 $$;
+revoke execute on function public.get_fulfillment_order_by_qr(text, text) from public;
+grant execute on function public.get_fulfillment_order_by_qr(text, text) to authenticated;
 
 create or replace function public.deliver_fulfillment_items(
   p_order_id uuid, p_station text, p_items jsonb
@@ -3188,6 +2448,8 @@ begin
     'status', case when total_delivered >= total_quantity then 'consegnato' else 'ritiro_parziale' end);
 end;
 $$;
+revoke execute on function public.deliver_fulfillment_items(uuid, text, jsonb) from public;
+grant execute on function public.deliver_fulfillment_items(uuid, text, jsonb) to authenticated;
 
 create or replace function public.undo_fulfillment_delivery(p_delivery_id uuid, p_station text)
 returns void language plpgsql security definer set search_path = public as $$
@@ -3222,6 +2484,8 @@ begin
   perform public.reconcile_kitchen_order(delivery_row.order_id);
 end;
 $$;
+revoke execute on function public.undo_fulfillment_delivery(uuid, text) from public;
+grant execute on function public.undo_fulfillment_delivery(uuid, text) to authenticated;
 
 create or replace function public.get_public_order_statuses(p_qr_tokens text[])
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -3254,6 +2518,8 @@ begin
   return result;
 end;
 $$;
+revoke execute on function public.get_public_order_statuses(text[]) from public;
+grant execute on function public.get_public_order_statuses(text[]) to anon, authenticated;
 revoke execute on function public.submit_public_order(text,text,jsonb,uuid,text,text,uuid,text,text) from public,anon,authenticated;
 grant execute on function public.submit_public_order(text,text,jsonb,uuid,text,text,uuid,text,text) to service_role;
 revoke execute on function public.create_counter_order(text,text,jsonb,text) from public;

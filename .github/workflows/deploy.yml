@@ -40,6 +40,7 @@ jobs:
           LAG_AUDIT_PGLITE_MODULE: ${{ runner.temp }}/lag-security/node_modules/@electric-sql/pglite/dist/index.js
         run: |
           node scripts/security/verify-migrations.mjs
+          node scripts/security/verify-schema-matches-migrations.mjs
           node scripts/security/verify-public-orders.mjs
           node scripts/security/verify-workflow-safety.mjs
           node scripts/security/verify-push.mjs
