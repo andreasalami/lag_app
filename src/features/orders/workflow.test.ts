@@ -4,6 +4,7 @@ import {
   fulfillmentStationForSubcategory,
   isCashStation,
   publicOrderStatusFromProgress,
+  storedFulfillmentStation,
 } from "./workflow";
 
 describe("order workflow", () => {
@@ -19,6 +20,13 @@ describe("order workflow", () => {
     expect(fulfillmentStationForSubcategory("bevande")).toBe("bar");
     expect(fulfillmentStationForSubcategory("birre")).toBe("birre");
     expect(fulfillmentStationForSubcategory("furgone")).toBe("furgone");
+  });
+
+  it("ripristina solo una postazione valida per l'area corrente", () => {
+    expect(storedFulfillmentStation("bar", "birre")).toBe("birre");
+    expect(storedFulfillmentStation("bar", "primi")).toBeNull();
+    expect(storedFulfillmentStation("cucina", "primi")).toBe("primi");
+    expect(storedFulfillmentStation("cucina", "valore-obsoleto")).toBeNull();
   });
 
   it("calcola gli stati pubblici senza modificare il totale dell'ordine", () => {

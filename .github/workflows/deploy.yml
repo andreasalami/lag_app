@@ -3,13 +3,62 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  verify-frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+  verify-database:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start clean Supabase and apply every migration
+        run: supabase start
+      - name: Database regression tests
+        run: supabase test db
+      - name: Order workflow stress tests
+        shell: bash
+        run: |
+          eval "$(supabase status -o env)"
+          LOADTEST_CONFIRM=LOCAL_SUPABASE_ONLY \
+          LOADTEST_SUPABASE_URL="$API_URL" \
+          LOADTEST_SUPABASE_ANON_KEY="$ANON_KEY" \
+          LOADTEST_SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+          npm run stress:orders
+
   build-and-deploy:
+    if: github.event_name == 'push'
+    needs: [verify-frontend, verify-database]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,9 +77,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Test
-        run: npm test
 
       - name: Build
         env:

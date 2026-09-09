@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
+import { OperationalSyncStatus } from "../../components/ui/OperationalSyncStatus";
 import { StaffPageHeading, StaffPanel } from "../../components/ui/StaffPanel";
 import { supabase } from "../../lib/supabaseClient";
+import { useOperationalSync } from "../../lib/useOperationalSync";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
 import { useAuth } from "../auth/AuthContext";
 import { downloadCsv, parseQrPayload, priceFormatter, type EventReport } from "./orderUtils";
 import { OrderEditor } from "./OrderEditor";
+import { clearOperationId, getOrCreateOperationId, operationFingerprint } from "./operationJournal";
 import { QrScanner } from "./QrScanner";
 import type { OrderLine, OrderMenuItem, StaffOrder } from "./types";
-import { CASH_STATIONS, cashStationLabel, type CashStation } from "./workflow";
+import { CASH_STATIONS, cashStationLabel, isCashStation, type CashStation } from "./workflow";
 
 type PendingOrder = Pick<StaffOrder,
   "id" | "event_id" | "display_number" | "alias" | "total" | "created_at" | "status" | "claim_expires_at"
-> & { claimed_station: CashStation | null };
+> & {
+  claimed_station: CashStation | null;
+  claimed_by_device: boolean;
+  pending_expires_at: string | null;
+};
 
 type EventState = {
   id: string;
@@ -35,8 +42,8 @@ function toLocalDateTime(iso: string) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function orderAge(createdAt: string) {
-  const minutes = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000));
+function orderAge(createdAt: string, now: number) {
+  const minutes = Math.max(0, Math.floor((now - new Date(createdAt).getTime()) / 60000));
   if (minutes < 1) return "adesso";
   if (minutes < 60) return `${minutes} min fa`;
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min fa`;
@@ -51,7 +58,10 @@ export function Cassa() {
   const [aliasSearch, setAliasSearch] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<StaffOrder | null>(null);
-  const [cashStation, setCashStation] = useState<CashStation | null>(null);
+  const [cashStation, setCashStation] = useState<CashStation | null>(() => {
+    const stored = localStorage.getItem("lag:cash-station");
+    return isCashStation(stored) ? stored : null;
+  });
   const [actionBusy, setActionBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [counterAlias, setCounterAlias] = useState("");
@@ -65,7 +75,7 @@ export function Cassa() {
   const [closeEventModal, setCloseEventModal] = useState(false);
   const [cancelOrderModal, setCancelOrderModal] = useState(false);
   const [closeEventText, setCloseEventText] = useState("");
-  const [, setClockTick] = useState(0);
+  const [clockNow, setClockNow] = useState(Date.now);
   const deviceIdRef = useRef(localStorage.getItem("lag:cash-device-id") ?? crypto.randomUUID());
   const activeOrderRef = useRef<StaffOrder | null>(null);
 
@@ -79,11 +89,14 @@ export function Cassa() {
   const authorized = role === "cassa" || role === "admin";
 
   const refetchOrders = useCallback(async () => {
-    if (!authorized) return;
-    const { data, error } = await supabase.rpc("get_cashier_pending_orders");
+    if (!authorized) return false;
+    const { data, error } = await supabase.rpc("get_cashier_pending_orders", {
+      p_device_id: deviceIdRef.current,
+    });
     if (error) setMessage("Elenco ordini non disponibile. Riprova.");
     else setPendingOrders((data ?? []) as PendingOrder[]);
     setOrdersLoading(false);
+    return !error;
   }, [authorized]);
 
   const loadEventState = useCallback(async () => {
@@ -105,26 +118,19 @@ export function Cassa() {
     localStorage.setItem("lag:cash-device-id", deviceIdRef.current);
   }, []);
 
-  useEffect(() => {
-    if (!authorized) return;
-    void refetchOrders();
-    void loadEventState();
-    const channel = supabase
-      .channel("orders-register")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void refetchOrders())
-      .subscribe();
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") void refetchOrders();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      void supabase.removeChannel(channel);
-    };
-  }, [authorized, loadEventState, refetchOrders]);
+  const sync = useOperationalSync({
+    enabled: authorized,
+    channelName: "orders-register",
+    tables: ["orders"],
+    refresh: refetchOrders,
+  });
 
   useEffect(() => {
-    const timer = window.setInterval(() => setClockTick((value) => value + 1), 30_000);
+    if (authorized) void loadEventState();
+  }, [authorized, loadEventState]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -133,12 +139,13 @@ export function Cassa() {
   }, [activeOrder]);
 
   useEffect(() => {
+    const deviceId = deviceIdRef.current;
     return () => {
       if (activeOrderRef.current) {
         void supabase.rpc("release_order_for_station", {
           p_order_id: activeOrderRef.current.id,
           p_station: cashStation,
-          p_device_id: deviceIdRef.current,
+          p_device_id: deviceId,
         });
       }
     };
@@ -181,7 +188,7 @@ export function Cassa() {
       setMessage(error?.message.includes("already_claimed")
         ? "Ordine già preso in carico da un’altra cassa."
         : "Ordine non più disponibile. Aggiorno l’elenco.");
-      void refetchOrders();
+      void sync.refreshNow();
       return;
     }
     setClaimedOrder(data as StaffOrder);
@@ -222,42 +229,52 @@ export function Cassa() {
     });
     setActionBusy(false);
     setActiveOrder(null);
-    void refetchOrders();
+    void sync.refreshNow();
   }
 
   async function payActiveOrder() {
     if (!activeOrder || !cashStation) return;
+    const scope = `pay:${activeOrder.id}`;
+    const fingerprint = operationFingerprint({ station: cashStation, orderId: activeOrder.id });
+    const operationId = getOrCreateOperationId(scope, fingerprint);
     setActionBusy(true);
     const { error } = await supabase.rpc("pay_order_for_station", {
       p_order_id: activeOrder.id,
       p_station: cashStation,
       p_device_id: deviceIdRef.current,
+      p_operation_id: operationId,
     });
     setActionBusy(false);
     if (error) {
-      setMessage("Pagamento non confermato nell’app. Riprova prima di chiudere l’ordine.");
+      setMessage("Esito del pagamento non verificato. Non batterlo di nuovo: premi ancora “Pagato e invia” per riconciliare la stessa operazione.");
       return;
     }
+    clearOperationId(scope, operationId);
     setMessage(`Ordine #${activeOrder.display_number} pagato e inviato alle postazioni.`);
     setActiveOrder(null);
-    void refetchOrders();
+    void sync.refreshNow();
   }
 
   async function cancelActiveOrder() {
     if (!activeOrder || !cashStation) return;
+    const scope = `cancel:${activeOrder.id}`;
+    const fingerprint = operationFingerprint({ station: cashStation, orderId: activeOrder.id });
+    const operationId = getOrCreateOperationId(scope, fingerprint);
     setActionBusy(true);
     const { error } = await supabase.rpc("cancel_order_for_station", {
       p_order_id: activeOrder.id,
       p_station: cashStation,
       p_device_id: deviceIdRef.current,
+      p_operation_id: operationId,
     });
     setActionBusy(false);
     if (error) setMessage("Ordine non annullato. Riprova.");
     else {
+      clearOperationId(scope, operationId);
       setCancelOrderModal(false);
       setMessage(`Ordine #${activeOrder.display_number} annullato.`);
       setActiveOrder(null);
-      void refetchOrders();
+      void sync.refreshNow();
       void refetchMenu();
     }
   }
@@ -269,11 +286,20 @@ export function Cassa() {
       return;
     }
     if (!window.confirm("Confermi che le voci sono state battute e il pagamento è stato ricevuto?")) return;
+    const payload = {
+      alias: counterAlias.trim(),
+      notes: counterNotes.trim(),
+      items: lines.map((line) => ({ id: line.id, qty: line.qty })),
+    };
+    const scope = "counter-order";
+    const fingerprint = operationFingerprint(payload);
+    const operationId = getOrCreateOperationId(scope, fingerprint);
     setActionBusy(true);
     const { data, error } = await supabase.rpc("create_counter_order", {
-      p_alias: counterAlias.trim(),
-      p_notes: counterNotes.trim(),
-      p_items: lines.map((line) => ({ id: line.id, qty: line.qty })),
+      p_alias: payload.alias,
+      p_notes: payload.notes,
+      p_items: payload.items,
+      p_operation_id: operationId,
     });
     setActionBusy(false);
     if (error || !data) {
@@ -282,6 +308,7 @@ export function Cassa() {
         : "Ordine eccezionale non creato.");
       return;
     }
+    clearOperationId(scope, operationId);
     const created = data as StaffOrder;
     setMessage(`Ordine #${created.display_number} creato, pagato e inviato.`);
     setCounterAlias("");
@@ -328,7 +355,7 @@ export function Cassa() {
     downloadCsv(data as EventReport);
     setMessage("Evento chiuso e report anonimo scaricato.");
     void loadEventState();
-    void refetchOrders();
+    void sync.refreshNow();
   }
 
   async function downloadExistingReport() {
@@ -435,7 +462,7 @@ export function Cassa() {
           </div>
         )}
         <div className="mb-6">{renderEventManagement()}</div>
-        <StaffPanel eyebrow="Configurazione dispositivo" title="Scegli la cassa" description="Uno o due dispositivi possono lavorare sulla stessa cassa.">
+        <StaffPanel eyebrow="Configurazione dispositivo" title="Scegli la cassa" description="Ogni ordine può essere gestito da un solo dispositivo alla volta.">
           <div className="grid gap-3 sm:grid-cols-2">
             {CASH_STATIONS.map((station) => (
               <button key={station.key} type="button" onClick={() => { localStorage.setItem("lag:cash-station", station.key); setCashStation(station.key); }} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)]">
@@ -507,6 +534,7 @@ export function Cassa() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
       <StaffPageHeading title={cashStationLabel(cashStation)} description="Preordini e ordini eccezionali della postazione." action={<Button variant="staff-secondary" onClick={() => setCashStation(null)}>Cambia cassa</Button>} />
+      <OperationalSyncStatus sync={sync} />
 
       <div className="mt-5 grid grid-cols-2 rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1">
         {(["ordini", "manuale"] as Tab[]).map((value) => (
@@ -547,17 +575,17 @@ export function Cassa() {
           {ordersLoading ? <p className="mt-4 text-sm text-[var(--text-secondary)]">Carico…</p> : (
             <div className="mt-3 flex flex-col gap-2">
               {filteredOrders.map((order) => {
-                const claimed = order.claimed_station !== null && order.claim_expires_at !== null && new Date(order.claim_expires_at).getTime() > Date.now();
-                const ours = order.claimed_station === cashStation;
+                const claimed = order.claimed_station !== null && order.claim_expires_at !== null && new Date(order.claim_expires_at).getTime() > clockNow;
+                const ours = order.claimed_by_device;
                 return (
                   <div key={order.id} className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--surface-border)] p-3 text-left">
                     <span>
                       <strong>#{order.display_number} · {order.alias}</strong>
                       <span className="mt-1 block text-xs text-[var(--text-secondary)]">
-                        {claimed ? `In gestione a ${cashStationLabel(order.claimed_station!)}` : orderAge(order.created_at)}
+                        {claimed ? `In gestione a ${cashStationLabel(order.claimed_station!)}` : orderAge(order.created_at, clockNow)}
                       </span>
                     </span>
-                    <div className="flex items-center gap-2"><span className="font-mono text-[var(--accent-primary)]">{priceFormatter.format(Number(order.total))}</span>{(!claimed || ours) ? <Button variant="staff-secondary" onClick={() => void claimOrder(order.id)} disabled={actionBusy}>Apri</Button> : <Button variant="staff-secondary" onClick={async () => { await supabase.rpc("force_release_order", { p_order_id: order.id }); void refetchOrders(); }} disabled={actionBusy}>Sblocca</Button>}</div>
+                    <div className="flex items-center gap-2"><span className="font-mono text-[var(--accent-primary)]">{priceFormatter.format(Number(order.total))}</span>{(!claimed || ours) ? <Button variant="staff-secondary" onClick={() => void claimOrder(order.id)} disabled={actionBusy}>Apri</Button> : <Button variant="staff-secondary" onClick={async () => { await supabase.rpc("force_release_order", { p_order_id: order.id }); void sync.refreshNow(); }} disabled={actionBusy}>Sblocca</Button>}</div>
                   </div>
                 );
               })}

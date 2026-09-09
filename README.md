@@ -24,7 +24,7 @@ Produzione:
 | Menu | Prodotti, prezzi, scorte e allergeni 1–14 | staff / cucina |
 | Instagram | Embed ufficiali dei post dell'evento | — |
 | Torneo | Riepilogo con turno e ultimi 5 risultati, più tabellone completo separato | tournament_manager |
-| Ordini | Preordine pubblico, QR, cassa, coda cucina e report anonimo | cassa / cucina |
+| Ordini | Preordine pubblico, QR, cassa, code cucina/bar e report anonimo | cassa / cucina / bar |
 
 ## Ruoli e accesso
 
@@ -38,8 +38,9 @@ sul dispositivo. Dopo il login, l'area Staff mostra i collegamenti in questo ord
 3. Gestione torneo (admin)
 4. Cassa
 5. Cucina
+6. Bar
 
-Le sezioni editoriali precedono Cassa e Cucina, raccolte in fondo come strumenti operativi.
+Le sezioni editoriali precedono Cassa, Cucina e Bar, raccolte in fondo come strumenti operativi.
 
 | Ruolo | Permessi |
 |---|---|
@@ -48,6 +49,7 @@ Le sezioni editoriali precedono Cassa e Cucina, raccolte in fondo come strumenti
 | `tournament_manager` | Modifica esclusivamente il torneo |
 | `cassa` | Gestisce preordini, ordini eccezionali, apertura evento e report |
 | `cucina` | Gestisce menu/scorte e consegna gli ordini alimentari |
+| `bar` | Gestisce le consegne delle postazioni birre, drinks e bar |
 | `pending` | Nessun permesso operativo |
 
 I permessi sono verificati da Supabase tramite Row Level Security. Il ruolo
@@ -73,17 +75,20 @@ stesso cliente sono ancora in sospeso.
 
 Alla cassa l'ordine può essere aperto tramite QR oppure cercando numero e alias
 insieme. Un ordine aperto è temporaneamente non selezionabile dalle altre
-casse; **Chiudi senza pagare** lo rende subito disponibile e un blocco
-abbandonato scade comunque dopo 10 minuti.
+casse. Il claim dura 30 secondi, viene rinnovato mentre la schermata è aperta e
+può appartenere a un solo dispositivo; **Chiudi senza pagare** lo libera subito.
 
 La cassa batte sul registratore tutte le singole voci, riceve il pagamento e
-preme **Pagato e invia**. Solo le righe `cibo` arrivano alla cucina; le bevande
-restano sullo scontrino per il ritiro alle postazioni dedicate. La cucina vede
-numero, alias, prodotti alimentari e note, può attivare il segnale sonoro e
-anonimizza l'ordine premendo **Consegnato** oppure scansionando una seconda
-volta lo stesso QR già usato in cassa. Il cliente può consultare lo stato del
-proprio ordine mediante il token del QR, senza accesso pubblico alla tabella
-degli ordini.
+preme **Pagato e invia**. Le righe vengono instradate verso primi, secondi,
+contorni, dolci, furgone, birre, drinks o bar. Ogni postazione registra anche
+consegne parziali; l'ordine diventa `consegnato` soltanto quando tutte le righe
+sono state ritirate. Il cliente usa lo stesso QR in ogni postazione e consulta
+lo stato senza accesso pubblico alla tabella degli ordini.
+
+Un ordine pubblico non pagato viene annullato automaticamente dopo 45 minuti e
+le quantità prenotate tornano disponibili. Ogni browser può inviare al massimo
+sei nuovi ordini in dieci minuti; i retry della stessa richiesta non vengono
+conteggiati due volte.
 
 La sezione Evento della cassa gestisce:
 
@@ -94,8 +99,8 @@ La sezione Evento della cassa gestisce:
 - download del CSV finale senza alias e note;
 - creazione dell'evento successivo con numerazione nuovamente da 1.
 
-Alias e note sono temporanei e vengono eliminati alla consegna,
-all'annullamento o alla chiusura definitiva. Del token QR resta nel database
+Alias e note sono temporanei e vengono eliminati alla chiusura definitiva.
+Del token QR resta nel database
 solo l'impronta crittografica: insieme all'identità della richiesta viene
 conservata fino alla chiusura dell'evento per impedire duplicati tardivi. Il
 PDF cliente viene generato localmente ed è indicato come documento non fiscale.
@@ -125,11 +130,10 @@ dei dati è affidata alle policy RLS.
 ### Supabase
 
 1. Crea un progetto su [supabase.com](https://supabase.com).
-2. Esegui [supabase/schema.sql](supabase/schema.sql) nell'SQL Editor. Lo script
-   funziona sia su un database nuovo sia su quello esistente e non elimina dati
-   o account Auth. Se un database precedente contiene già hash QR duplicati, la
-   transazione si interrompe senza modificare lo schema: risolvi prima quelle
-   righe, quindi ripeti l'esecuzione.
+2. Avvia Supabase locale con `npx supabase start`: le migrazioni in
+   `supabase/migrations` sono la fonte ufficiale e ricostruiscono il database da
+   zero. `supabase/schema.sql` resta uno snapshot completo per ispezione o
+   recupero manuale, non il normale meccanismo di deploy.
 3. In **Authentication → Users**, crea gli account con email e password.
 4. In `profiles`, assegna manualmente il ruolo corretto allo stesso `id`
    dell'utente Auth. Gli account nuovi partono come `pending`.
@@ -148,6 +152,10 @@ orari, salva, quindi premi **Riapri ordinazioni** quando il sistema è pronto.
 Prima dell'evento reale è consigliato provare almeno questi casi con account di
 test: ultima porzione concorrente, ordine annullato, due casse che aprono lo
 stesso ordine, ordine composto solo da bevande, consegna cucina e CSV finale.
+La procedura per riallineare un database remoto creato prima della baseline è
+descritta in [docs/DATABASE_RELEASE.md](docs/DATABASE_RELEASE.md). Non eseguire
+`db push` su produzione prima del preflight indicato lì.
+
 La suite locale automatizzata e i relativi vincoli di sicurezza sono descritti
 in [docs/STRESS_TEST.md](docs/STRESS_TEST.md).
 La configurazione completa delle notifiche broadcast è descritta in
@@ -168,8 +176,9 @@ I permalink dei post Instagram sono definiti in
 npm run dev       # sviluppo, http://localhost:5173
 npm run build     # build di produzione in dist/
 npm run preview   # anteprima della build di produzione
-npm run lint      # controllo TypeScript senza generare la build
+npm run lint      # ESLint e controllo TypeScript
 npm test          # test unitari
+npm run test:e2e  # smoke test browser con Playwright
 ```
 
 ## Deploy su GitHub Pages
@@ -207,17 +216,20 @@ gli step di build e deploy risultino verdi.
    leggibili senza login, ma scrivibili solo dai ruoli autorizzati.
 - Gli ordini non sono leggibili pubblicamente: le RPC pubbliche restituiscono
   esclusivamente il risultato dell'ordine appena creato.
-- La cassa può leggere soltanto gli ordini `in_attesa_pagamento`; la cucina
-  soltanto gli ordini `pagato`. Il passaggio di stato effettuato in cassa è il
-  confine tra i due flussi, oltre al controllo dei rispettivi ruoli Auth.
-- `submit_public_order`, aggiornamento cassa, annullamento e pagamento
+- La cassa legge gli ordini da pagare; cucina e bar ricevono soltanto le righe
+  ancora da consegnare per la propria postazione tramite RPC filtrate.
+- `submit_public_order`, annullamento, pagamento e consegna
   ricalcolano prezzi e scorte nel database e applicano tutto atomicamente.
+- Pagamento, annullamento, ordine manuale, consegna e ripristino usano un
+  `operation_id`: un retry dopo una risposta di rete persa restituisce lo stesso
+  risultato senza applicare due volte l'operazione.
 - Il QR contiene un token casuale; nel database viene conservata soltanto la
   sua impronta SHA-256, eliminata alla chiusura definitiva dell'evento.
 - Il report permanente non duplica il dettaglio ordini: conserva solo
   riepilogo e aggregati prodotto; il CSV viene ricostruito dalle righe già
   anonimizzate quando viene riscaricato.
-- Le connessioni realtime sono limitate ai pochi dispositivi cassa/cucina. I
+- Le connessioni realtime sono limitate ai dispositivi cassa/cucina/bar e sono
+  affiancate da polling visibile ogni 15 secondi e segnalazione dei dati obsoleti. I
   telefoni del pubblico effettuano solo le letture indispensabili.
 - Non inserire mai chiavi `service_role`, password o altri segreti nei file
    `VITE_*`, in `.env.local`, nel repository o nel bundle frontend.
@@ -228,9 +240,6 @@ gli step di build e deploy risultino verdi.
   riepilogo attivo per browser e cap di coda). Per contrastare un attacco
   intenzionale servirebbe aggiungere Turnstile/CAPTCHA tramite una funzione
   server-side.
-- Gli ordini non pagati non scadono automaticamente: restano prenotati finché
-  una cassa li annulla oppure chiude definitivamente l'evento.
-
 - Le notifiche Web Push richiedono la chiave VAPID pubblica nella build e la
   Edge Function configurata con i relativi segreti; senza questi valori l'app
   mostra un errore di configurazione senza registrare il dispositivo.

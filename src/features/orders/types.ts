@@ -31,6 +31,7 @@ export type SubmittedOrder = {
   items: OrderLine[];
   total: number;
   qr_token: string;
+  expires_at?: string;
 };
 
 export type OrderingStatus = {

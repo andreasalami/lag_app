@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
+import { OperationalSyncStatus } from "../../components/ui/OperationalSyncStatus";
 import { StaffPageHeading, StaffPanel } from "../../components/ui/StaffPanel";
 import { supabase } from "../../lib/supabaseClient";
+import { useOperationalSync } from "../../lib/useOperationalSync";
 import { useAuth } from "../auth/AuthContext";
+import { clearOperationId, getOrCreateOperationId, operationFingerprint } from "./operationJournal";
 import { parseQrPayload } from "./orderUtils";
 import { QrScanner } from "./QrScanner";
-import { BAR_STATIONS, KITCHEN_STATIONS, type FulfillmentStation } from "./workflow";
+import { BAR_STATIONS, KITCHEN_STATIONS, storedFulfillmentStation, type FulfillmentStation } from "./workflow";
 
 type FulfillmentItem = {
   id: string;
@@ -51,7 +54,9 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   const options = area === "cucina" ? KITCHEN_STATIONS : BAR_STATIONS;
   const areaLabel = area === "cucina" ? "Cucina" : "Bar";
   const authorized = role === area || role === "admin";
-  const [station, setStation] = useState<FulfillmentStation | null>(null);
+  const [station, setStation] = useState<FulfillmentStation | null>(() => (
+    storedFulfillmentStation(area, localStorage.getItem(AREA_STORAGE[area]))
+  ));
   const [orders, setOrders] = useState<FulfillmentOrder[]>([]);
   const [activeOrder, setActiveOrder] = useState<FulfillmentOrder | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -76,13 +81,13 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   }, []);
 
   const refetch = useCallback(async () => {
-    if (!authorized || !station) return;
+    if (!authorized || !station) return false;
     setLoading(true);
     const { data, error } = await supabase.rpc("get_fulfillment_queue", { p_station: station });
     setLoading(false);
     if (error) {
       setMessage("Coda non disponibile. Controlla la connessione e riprova.");
-      return;
+      return false;
     }
     const next = (data ?? []) as FulfillmentOrder[];
     if (station === "cucina") {
@@ -101,21 +106,15 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
     } else {
       setRecent([]);
     }
+    return true;
   }, [authorized, soundEnabled, station]);
 
-  useEffect(() => {
-    void refetch();
-    if (!authorized || !station) return;
-    const channel = supabase.channel(`fulfillment-${area}-${station}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void refetch())
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_fulfillment_items" }, () => void refetch())
-      .subscribe();
-    const timer = window.setInterval(() => void refetch(), 15_000);
-    return () => {
-      window.clearInterval(timer);
-      void supabase.removeChannel(channel);
-    };
-  }, [area, authorized, refetch, station]);
+  const sync = useOperationalSync({
+    enabled: authorized && station !== null,
+    channelName: `fulfillment-${area}-${station ?? "unconfigured"}`,
+    tables: ["orders", "order_fulfillment_items"],
+    refresh: refetch,
+  });
 
   const filtered = useMemo(() => orders.filter((order) => (
     (!numberSearch.trim() || String(order.display_number).includes(numberSearch.trim()))
@@ -166,33 +165,43 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
       setMessage("Seleziona almeno una quantità da consegnare.");
       return;
     }
+    const scope = `deliver:${activeOrder.id}:${station}`;
+    const fingerprint = operationFingerprint({ station, items });
+    const operationId = getOrCreateOperationId(scope, fingerprint);
     setBusy(true);
     const { error } = await supabase.rpc("deliver_fulfillment_items", {
       p_order_id: activeOrder.id,
       p_station: station,
       p_items: items,
+      p_operation_id: operationId,
     });
     setBusy(false);
     if (error) {
       setMessage("Consegna non registrata: la coda potrebbe essere cambiata. Riprova.");
-      await refetch();
+      await sync.refreshNow();
       return;
     }
+    clearOperationId(scope, operationId);
     setMessage(`Consegna dell’ordine #${activeOrder.display_number} registrata.`);
     setActiveOrder(null);
-    await refetch();
+    await sync.refreshNow();
   }
 
   async function undoDelivery(id: string) {
     if (!station) return;
+    const scope = `undo-delivery:${id}`;
+    const fingerprint = operationFingerprint({ station, deliveryId: id });
+    const operationId = getOrCreateOperationId(scope, fingerprint);
     setBusy(true);
     const { error } = await supabase.rpc("undo_fulfillment_delivery", {
       p_delivery_id: id,
       p_station: station,
+      p_operation_id: operationId,
     });
     setBusy(false);
+    if (!error) clearOperationId(scope, operationId);
     setMessage(error ? "Ripristino non riuscito o finestra di 5 minuti scaduta." : "Consegna ripristinata nella coda.");
-    await refetch();
+    await sync.refreshNow();
   }
 
   if (authLoading) return <main className="mx-auto max-w-3xl px-4 py-10 text-sm text-[var(--text-secondary)]">Carico…</main>;
@@ -252,6 +261,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
       <StaffPageHeading title={stationLabel} description={`${areaLabel} · coda ordinata dall’orario di pagamento`} action={<Button variant="staff-secondary" onClick={() => setStation(null)}>Cambia postazione</Button>} />
+      <OperationalSyncStatus sync={sync} />
       {message && <div className="mb-4 rounded-[var(--radius-sm)] border border-[var(--surface-border)] p-3 text-sm">{message}</div>}
       <StaffPanel
         eyebrow="Ritiro ordini"
@@ -292,7 +302,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
             {recent.map((delivery) => (
               <div key={delivery.id} className="flex items-center justify-between gap-3 border-b border-[var(--surface-border)] py-2 last:border-0">
                 <span>#{delivery.display_number} · {delivery.alias}</span>
-                <Button variant="staff-secondary" onClick={() => void undoDelivery(delivery.id)} disabled={busy || (!delivery.can_undo && role !== "admin")}>Annulla consegna</Button>
+                <Button variant="staff-secondary" onClick={() => void undoDelivery(delivery.id)} disabled={busy || !delivery.can_undo}>Annulla consegna</Button>
               </div>
             ))}
           </div>

@@ -7,7 +7,8 @@ flusso Torneo. Va quindi validato sul branch prima del merge in `main`.
 
 - `npm test`: logica tabellone, turno corrente, ordine cronologico dei
   risultati, ordini, orari e Web Push.
-- `npm run build`: controllo TypeScript e build Vite di produzione.
+- `npm run lint`: ESLint e controllo TypeScript.
+- `npm run build`: build Vite di produzione.
 - Obiettivo: 100% dei test e build verdi prima di ogni push del branch.
 
 ## Matrice responsive
@@ -54,8 +55,8 @@ aggiornamento.
 
 ## Stato del collaudo locale
 
-- Test automatici: superati (22/22).
+- Test automatici: coperti dalla CI corrente; il conteggio può crescere con le regressioni.
 - Build di produzione: superata.
 - Browser: superati i controlli anonimi a 320, 390, 430 e 1280 px.
-- Da completare prima del merge: percorso autenticato con account di test e
+- Da completare prima di ogni rilascio che modifica questi flussi: percorso autenticato con account di test e
   prova Web Push su iPhone con Edge Function e chiavi VAPID di produzione.

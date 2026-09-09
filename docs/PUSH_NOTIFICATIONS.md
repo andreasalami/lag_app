@@ -16,9 +16,10 @@ repository, in GitHub Pages o in variabili `VITE_*`.
 
 ## 2. Aggiornare il database
 
-Copiare tutto `supabase/schema.sql` nel Supabase SQL Editor ed eseguirlo. Lo
-schema crea `push_subscriptions`, lo storico `push_broadcasts` e le RPC
-pubbliche protette.
+Applicare le migrazioni con `npx supabase db push` dopo il preflight descritto
+in `docs/DATABASE_RELEASE.md`. Le migrazioni creano `push_subscriptions`, lo
+storico `push_broadcasts` e le RPC pubbliche protette. `supabase/schema.sql` è
+soltanto lo snapshot completo di riferimento.
 
 ## 3. Configurare la build GitHub Pages
 

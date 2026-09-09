@@ -154,7 +154,6 @@ export function TournamentBracket({ management = false }: { management?: boolean
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canEdit]);
 
   // Polling SOLO per chi guarda: ricontrolla l'ultimo pubblicato ogni

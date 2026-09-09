@@ -37,6 +37,13 @@ export function isFulfillmentStation(value: unknown): value is FulfillmentStatio
     && [...KITCHEN_STATIONS, ...BAR_STATIONS].some((station) => station.key === value);
 }
 
+export function storedFulfillmentStation(area: "cucina" | "bar", value: unknown): FulfillmentStation | null {
+  const allowed = area === "cucina" ? KITCHEN_STATIONS : BAR_STATIONS;
+  return typeof value === "string" && allowed.some((station) => station.key === value)
+    ? value as FulfillmentStation
+    : null;
+}
+
 export function cashStationLabel(station: CashStation) {
   return CASH_STATIONS.find((candidate) => candidate.key === station)?.label ?? station;
 }

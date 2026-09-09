@@ -64,7 +64,12 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [refreshingStatuses, setRefreshingStatuses] = useState(false);
   const [newOrderMessage, setNewOrderMessage] = useState<string | null>(null);
   const requestIdentityRef = useRef({ requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() });
+  const publicClientIdRef = useRef(localStorage.getItem("lag:public-order-device-id") ?? crypto.randomUUID());
   const historyRef = useRef(orderHistory);
+
+  useEffect(() => {
+    localStorage.setItem("lag:public-order-device-id", publicClientIdRef.current);
+  }, []);
 
   useEffect(() => {
     historyRef.current = orderHistory;
@@ -225,6 +230,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       p_client_request_id: requestId,
       p_qr_token: qrToken,
       p_bot_field: botField,
+      p_client_id: publicClientIdRef.current,
     });
     setSubmitting(false);
     setShowConfirmation(false);
@@ -235,6 +241,8 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         await loadCatalog();
       } else if (message.includes("capacity_reached")) {
         setSubmitError(orderingReasonMessage("capacity_reached"));
+      } else if (message.includes("submission_rate_limited")) {
+        setSubmitError("Hai inviato molti ordini in pochi minuti. Attendi prima di crearne un altro oppure rivolgiti alla cassa.");
       } else if (/ordering_|event_closed|not_open_yet/.test(message)) {
         setSubmitError("Le ordinazioni sono state chiuse prima dell’invio. Rivolgiti alla cassa.");
       } else {
@@ -320,6 +328,11 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
                 ? "Mostra lo stesso QR in ogni postazione in cui devi ritirare."
                 : "Il QR e il riepilogo restano disponibili per tutta la durata dell’evento."}
           </p>
+          {submittedOrder.status === "in_attesa_pagamento" && submittedOrder.expires_at && (
+            <p className="mt-2 text-xs font-semibold text-[var(--state-warning)]">
+              Pagalo entro le {new Date(submittedOrder.expires_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}; dopo 45 minuti verrà annullato automaticamente.
+            </p>
+          )}
         </section>
 
         {submittedOrder.progress && submittedOrder.progress.length > 0 && (

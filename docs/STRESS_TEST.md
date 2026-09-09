@@ -1,26 +1,21 @@
 # Stress test degli ordini
 
 Il runner `scripts/stress/orders.mjs` verifica automaticamente concorrenza,
-capienza, scorte, idempotenza, claim della cassa, lettura pubblica dello stato,
-seconda scansione QR in cucina e chiusura evento.
+capienza, scorte, idempotenza di invio/pagamento/consegna, claim esclusivo per
+dispositivo, scadenza con restituzione scorte, rate limit, assenza delle RPC
+legacy e gara fra pagamento e chiusura evento.
 
 Per sicurezza accetta esclusivamente un Supabase raggiungibile via HTTP su
 `localhost`, `127.0.0.1` o `::1`. Non può essere puntato alla produzione.
 
-1. Avvia Supabase locale e applica `supabase/schema.sql`.
-2. Nel solo database locale, abilita il setup e la pulizia del runner:
-
-   ```sql
-   grant all privileges on all tables in schema public to service_role;
-   grant all privileges on all sequences in schema public to service_role;
-   ```
-
+1. Esegui `npx supabase start`; tutte le migrazioni vengono applicate da zero.
+2. Esegui `npx supabase test db` per i test strutturali pgTAP.
 3. Copia `.env.stress.example` in `.env.stress.local` e inserisci le chiavi
    locali stampate da `supabase status`.
 4. Esegui `npm run stress:orders`.
 
-Per isolare un caso, imposta ad esempio
-`LOADTEST_SCENARIOS=capacity` oppure `LOADTEST_SCENARIOS=read`.
+Per isolare un caso, imposta ad esempio `LOADTEST_SCENARIOS=expiry`,
+`LOADTEST_SCENARIOS=idempotency` oppure `LOADTEST_SCENARIOS=capacity`.
 
 I valori predefiniti costituiscono la regressione ripetibile: 200 letture,
 200 invii contro una capienza di 150, 50 concorrenti sull'ultima porzione e
