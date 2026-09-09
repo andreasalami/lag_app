@@ -116,6 +116,8 @@ Compila `.env.local` con i valori pubblici del progetto:
 ```dotenv
 VITE_SUPABASE_URL=https://tuoprogetto.supabase.co
 VITE_SUPABASE_ANON_KEY=la-chiave-anon-public
+VITE_TURNSTILE_SITE_KEY=la-site-key-turnstile
+VITE_WEB_PUSH_PUBLIC_KEY=la-chiave-vapid-pubblica
 VITE_EVENTBRITE_EVENT_ID=
 VITE_INSTAGRAM_HANDLE=lagroaigiovani
 ```
@@ -124,14 +126,29 @@ La chiave Supabase deve essere la chiave `anon` / `publishable`, mai la
 chiave `service_role`. La chiave anon è destinata al client; la protezione
 dei dati è affidata alle policy RLS.
 
+`VITE_TURNSTILE_SITE_KEY` e `VITE_WEB_PUSH_PUBLIC_KEY` sono **obbligatorie in
+CI**: senza di loro il workflow di deploy si ferma prima del build. In locale
+si può lavorare anche senza — l'ordinazione pubblica mostra "Le ordinazioni
+online non sono ancora configurate" e le notifiche restano spente — ma nessuna
+delle due strade porta a una build pubblicabile.
+
 ### Supabase
 
 1. Crea un progetto su [supabase.com](https://supabase.com).
 2. Esegui [supabase/schema.sql](supabase/schema.sql) nell'SQL Editor. Lo script
-   funziona sia su un database nuovo sia su quello esistente e non elimina dati
-   o account Auth. Se un database precedente contiene già hash QR duplicati, la
+   è una singola transazione: o si applica tutto, o il database non cambia.
+   Funziona sia su un database nuovo sia su quello esistente e non elimina
+   account Auth. Se un database precedente contiene già hash QR duplicati, la
    transazione si interrompe senza modificare lo schema: risolvi prima quelle
    righe, quindi ripeti l'esecuzione.
+
+   **Su un database esistente questo esegue anche `drop table announcements`**,
+   perché la sezione Annunci è stata rimossa dall'app. Se il testo degli
+   annunci serve, esportalo prima nell'SQL Editor:
+
+   ```sql
+   select * from public.announcements order by published_at;
+   ```
 3. In **Authentication → Users**, crea gli account con email e password.
 4. In `profiles`, assegna manualmente il ruolo corretto allo stesso `id`
    dell'utente Auth. Gli account nuovi partono come `pending`.
@@ -192,14 +209,18 @@ Crea questi **Repository secrets**:
 | `VITE_SUPABASE_URL` | URL del progetto Supabase |
 | `VITE_SUPABASE_ANON_KEY` | chiave `anon` / `publishable` Supabase |
 
-Le variabili opzionali possono essere aggiunte come **Repository variables**:
+Crea poi queste **Repository variables**. Le prime due sono **obbligatorie**:
+il workflow si ferma prima del build se mancano.
 
-| Nome | Valore |
-|---|---|
-| `VITE_EVENTBRITE_EVENT_ID` | ID numerico dell'evento Eventbrite |
-| `VITE_INSTAGRAM_HANDLE` | handle Instagram |
+| Nome | Valore | Obbligatoria |
+|---|---|---|
+| `VITE_TURNSTILE_SITE_KEY` | site key pubblica Cloudflare Turnstile | sì |
+| `VITE_WEB_PUSH_PUBLIC_KEY` | chiave VAPID pubblica (`npm run push:keys`) | sì |
+| `VITE_EVENTBRITE_EVENT_ID` | ID numerico dell'evento Eventbrite | no |
+| `VITE_INSTAGRAM_HANDLE` | handle Instagram | no |
 
-Il workflow interrompe la build se mancano i due valori Supabase obbligatori.
+Il workflow interrompe la build se manca uno dei quattro valori obbligatori
+(i due secret Supabase e le due variabili qui sopra).
 Dopo il push, controlla **Actions → Deploy to GitHub Pages** e attendi che
 gli step di build e deploy risultino verdi.
 
@@ -223,16 +244,24 @@ gli step di build e deploy risultino verdi.
   telefoni del pubblico effettuano solo le letture indispensabili.
 - Non inserire mai chiavi `service_role`, password o altri segreti nei file
    `VITE_*`, in `.env.local`, nel repository o nel bundle frontend.
+- `supabase/schema.sql` descrive lo stato finale (una definizione per funzione,
+   una sola transazione); la storia sta in `supabase/migrations/`. La CI applica
+   entrambi su due database PGlite isolati e confronta l'intero catalogo, così i
+   due non possono divergere senza far fallire il build.
 
 ## Limiti noti
 
-- La protezione pubblica è volutamente leggera (honeypot, idempotenza, un
-  riepilogo attivo per browser e cap di coda). Per contrastare un attacco
-  intenzionale servirebbe aggiungere Turnstile/CAPTCHA tramite una funzione
-  server-side.
-- Gli ordini non pagati non scadono automaticamente: restano prenotati finché
-  una cassa li annulla oppure chiude definitivamente l'evento.
-
+- L'ordinazione pubblica passa da una Edge Function che verifica un token
+  Cloudflare Turnstile prima di toccare il database: il browser non ha alcun
+  permesso di scrittura sulla tabella ordini. Restano attivi anche honeypot,
+  idempotenza e cap di coda. Se `TURNSTILE_SECRET_KEY` o `ORDER_ALLOWED_ORIGINS`
+  non sono configurate sulla funzione, l'ordinazione online si spegne invece di
+  aprirsi: gli ordini si prendono in cassa.
+- Gli ordini non pagati scadono dopo 60 minuti, ma la scadenza è *pigra*: viene
+  applicata quando qualcuno legge lo stato delle ordinazioni, non da uno
+  scheduler. Se per un'ora nessuno apre l'app, le scorte restano prenotate fino
+  alla lettura successiva. È una scelta per non dipendere da infrastruttura a
+  pagamento, non una svista.
 - Le notifiche Web Push richiedono la chiave VAPID pubblica nella build e la
   Edge Function configurata con i relativi segreti; senza questi valori l'app
   mostra un errore di configurazione senza registrare il dispositivo.

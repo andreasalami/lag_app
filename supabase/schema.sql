@@ -59,71 +59,12 @@ insert into public.profiles (id, role)
 select id, 'pending' from auth.users
 on conflict (id) do nothing;
 
--- ============================================================
--- ANNUNCI
--- ============================================================
-create table if not exists public.announcements (
-  id uuid primary key default gen_random_uuid(),
-  title text not null,
-  message text not null,
-  published_at timestamptz not null default now(),
-  created_by uuid default auth.uid() references auth.users(id)
-);
-
-alter table public.announcements
-  alter column created_by set default auth.uid();
-alter table public.announcements enable row level security;
-
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conrelid = 'public.announcements'::regclass and conname = 'announcements_title_valid') then
-    alter table public.announcements add constraint announcements_title_valid
-      check (btrim(title) <> '' and length(title) <= 200) not valid;
-  end if;
-  if not exists (select 1 from pg_constraint where conrelid = 'public.announcements'::regclass and conname = 'announcements_message_valid') then
-    alter table public.announcements add constraint announcements_message_valid
-      check (btrim(message) <> '' and length(message) <= 5000) not valid;
-  end if;
-end
-$$;
-
-drop policy if exists "Chiunque legge gli annunci" on public.announcements;
-drop policy if exists "Solo lo staff pubblica annunci" on public.announcements;
-drop policy if exists "Solo lo staff modifica annunci" on public.announcements;
-drop policy if exists "Solo lo staff elimina annunci" on public.announcements;
-
-create policy "Chiunque legge gli annunci"
-  on public.announcements for select using (true);
-create policy "Solo lo staff pubblica annunci"
-  on public.announcements for insert
-  with check (
-    created_by = auth.uid() and exists (
-      select 1 from public.profiles
-      where id = auth.uid() and role in ('staff', 'admin')
-    )
-  );
-create policy "Solo lo staff modifica annunci"
-  on public.announcements for update
-  using (exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role in ('staff', 'admin')
-  ))
-  with check (exists (
-    select 1 from public.profiles
-    where id = auth.uid()
-      and (role = 'admin' or (role = 'staff' and created_by = auth.uid()))
-  ));
-create policy "Solo lo staff elimina annunci"
-  on public.announcements for delete
-  using (exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role in ('staff', 'admin')
-  ));
-
-create index if not exists announcements_published_at_idx
-  on public.announcements (published_at desc);
-grant select on public.announcements to anon, authenticated;
-grant insert, update, delete on public.announcements to authenticated;
+-- La sezione ANNUNCI viveva qui. Il componente React è stato rimosso e la
+-- feature non tornerà. Policy, indice, constraint e appartenenza alla
+-- publication realtime se ne vanno insieme alla tabella.
+-- ATTENZIONE: su un database esistente questo elimina gli annunci pubblicati.
+-- Vedi supabase/migrations/20260909120000_remove_announcements.sql.
+drop table if exists public.announcements;
 
 -- ============================================================
 -- PROGRAMMA E IMPOSTAZIONI
@@ -1429,9 +1370,6 @@ grant select, insert on public.tournament_snapshots to authenticated;
 -- ============================================================
 do $$
 begin
-  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'announcements') then
-    alter publication supabase_realtime add table public.announcements;
-  end if;
   if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'program_slots') then
     alter publication supabase_realtime add table public.program_slots;
   end if;
