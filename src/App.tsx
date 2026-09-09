@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { Home } from "./pages/Home";
 import { Staff } from "./pages/Staff";
-import { OrderPage } from "./features/orders/OrderPage";
 import { AuthProvider, useAuth, type Role } from "./features/auth/AuthContext";
 import { TournamentBoard } from "./pages/TournamentBoard";
 import { TournamentManagement } from "./pages/TournamentManagement";
@@ -10,10 +9,15 @@ import { MenuManagement } from "./pages/MenuManagement";
 import { StaffBackButton } from "./components/layout/StaffBackButton";
 import { Button } from "./components/ui/Button";
 
-const FeaturePreview = lazy(() => import("./pages/FeaturePreview").then((module) => ({ default: module.FeaturePreview })));
+// OrderPage porta con sé carrello, QR, PDF e scanner: chi apre la Home per
+// vedere orari o programma non deve scaricarla. Come Cassa/Cucina/Bar, arriva
+// solo quando si entra davvero in #ordina.
+const OrderPage = lazy(() => import("./features/orders/OrderPage").then((module) => ({ default: module.OrderPage })));
 const Cassa = lazy(() => import("./features/orders/Cassa").then((module) => ({ default: module.Cassa })));
 const Cucina = lazy(() => import("./features/orders/Cucina").then((module) => ({ default: module.Cucina })));
 const Bar = lazy(() => import("./features/orders/Bar").then((module) => ({ default: module.Bar })));
+
+const LOADING = <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Carico…</section>;
 
 function ProtectedOperationalPage({
   allowedRoles,
@@ -50,7 +54,7 @@ function ProtectedOperationalPage({
       <div className="mx-auto w-full max-w-5xl px-4 pt-4">
         <StaffBackButton />
       </div>
-      <Suspense fallback={<section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Carico…</section>}>
+      <Suspense fallback={LOADING}>
         <Component />
       </Suspense>
     </>
@@ -71,15 +75,15 @@ function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  const previewEnabled = import.meta.env.VITE_FEATURE_PREVIEW === "true";
-  const internalPages = previewEnabled
-    ? ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo", "anteprima"]
-    : ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo"];
+  // Le anteprime dimostrative vivono nel loro entry point (anteprima.html), non
+  // qui: non caricano Supabase né la sessione staff e non finiscono nel bundle.
+  const internalPages = ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo"];
   const hashRoute = hashPath.split("?")[0];
   const internalPage = internalPages.includes(hashRoute) ? hashRoute : path.slice(1);
 
   return (
     <AuthProvider>
+      <Suspense fallback={LOADING}>
       {internalPage === "staff" ? (
         <Staff />
       ) : internalPage === "cassa" ? (
@@ -112,13 +116,10 @@ function App() {
           component={TournamentManagement}
           title="Gestione torneo"
         />
-      ) : internalPage === "anteprima" && previewEnabled ? (
-        <Suspense fallback={<p className="p-8 text-sm text-[var(--text-secondary)]">Carico l’anteprima…</p>}>
-          <FeaturePreview />
-        </Suspense>
       ) : (
         <Home />
       )}
+      </Suspense>
     </AuthProvider>
   );
 }
