@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { StaffPanel } from "../../components/ui/StaffPanel";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
+import { newDraftId, useDraftRows } from "../../lib/useDraftRows";
 import { ProgramGrid, type ProgramSlotData } from "./ProgramGrid";
+import { appHref } from "../../lib/browser";
 
 const STAGES = ["Stage 1", "Stage 2"];
 const MAX_DAYS = 3;
@@ -15,9 +17,6 @@ const FALLBACK_SLOTS: ProgramSlotData[] = [
   { id: "f2", day: 1, stage: "Stage 1", title: "DJ set — esempio", start_time: "19:00", end_time: "21:00" },
   { id: "f3", day: 1, stage: "Stage 2", title: "Live band — esempio", start_time: "19:30", end_time: "20:30" },
 ];
-
-const NEW_ID_PREFIX = "new:";
-const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
 
 /*
   Programma — dati Supabase, editing riservato al ruolo 'staff'/'admin'.
@@ -48,19 +47,9 @@ export function Program({ management = false }: { management?: boolean }) {
     fallback: FALLBACK_SLOTS,
   });
 
-  const [savedSlots, setSavedSlots] = useState<ProgramSlotData[]>([]);
-  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const draft = useDraftRows(slots, setSlots, loading);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const savedOnceRef = useRef(false);
-
-  useEffect(() => {
-    if (!loading && !savedOnceRef.current) {
-      setSavedSlots(slots);
-      savedOnceRef.current = true;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
 
   // Il numero di giorni è condiviso (riga singola su Supabase,
   // program_settings) — non più uno state locale al browser di chi
@@ -85,7 +74,7 @@ export function Program({ management = false }: { management?: boolean }) {
     };
   }, []);
 
-  const isDirty = days !== savedDays || deletedIds.length > 0 || JSON.stringify(slots) !== JSON.stringify(savedSlots);
+  const isDirty = days !== savedDays || draft.isDirty;
 
   // Rete di sicurezza: se per qualsiasi motivo il valore salvato non
   // è ancora arrivato (o è rimasto indietro) ma esistono comunque
@@ -96,13 +85,8 @@ export function Program({ management = false }: { management?: boolean }) {
   function addSlot() {
     setSlots((prev) => [
       ...prev,
-      { id: `${NEW_ID_PREFIX}${crypto.randomUUID()}`, day: 1, stage: STAGES[0], title: "Nuovo evento", start_time: "20:00", end_time: "21:00" },
+      { id: newDraftId(), day: 1, stage: STAGES[0], title: "Nuovo evento", start_time: "20:00", end_time: "21:00" },
     ]);
-  }
-
-  function deleteSlot(id: string) {
-    setSlots((prev) => prev.filter((s) => s.id !== id));
-    if (!isNewId(id)) setDeletedIds((prev) => [...prev, id]);
   }
 
   async function handleSave() {
@@ -123,21 +107,13 @@ export function Program({ management = false }: { management?: boolean }) {
       return;
     }
 
-    const created = slots
-      .filter((s) => isNewId(s.id))
-      .map(({ day, stage, title, start_time, end_time }) => ({ day, stage, title, start_time, end_time }));
-
-    const updated = slots.filter((s) => {
-      if (isNewId(s.id)) return false;
-      const original = savedSlots.find((o) => o.id === s.id);
-      return original && JSON.stringify(original) !== JSON.stringify(s);
-    });
+    const created = draft.created.map(({ day, stage, title, start_time, end_time }) => ({ day, stage, title, start_time, end_time }));
 
     const { error } = await supabase.rpc("save_program", {
       p_days: days,
       p_created: created,
-      p_updated: updated,
-      p_deleted: deletedIds,
+      p_updated: draft.updated.map(({ row }) => row),
+      p_deleted: draft.deletedIds,
     });
 
     if (error) {
@@ -147,10 +123,8 @@ export function Program({ management = false }: { management?: boolean }) {
       return;
     }
 
-    const fresh = await refetch();
-    if (fresh) setSavedSlots(fresh);
+    draft.markSaved(await refetch());
     setSavedDays(days);
-    setDeletedIds([]);
     setSaving(false);
   }
 
@@ -164,7 +138,7 @@ export function Program({ management = false }: { management?: boolean }) {
             : "Due palchi in contemporanea — l’orario può continuare dopo mezzanotte."}
         </p>
         {!management && canManage && (
-          <Button href={`${import.meta.env.BASE_URL}#gestione-programma`} className="mb-5 w-full justify-start sm:w-64">
+          <Button href={appHref("#gestione-programma")} className="mb-5 w-full justify-start sm:w-64">
             Gestisci Scaletta
           </Button>
         )}
@@ -228,7 +202,7 @@ export function Program({ management = false }: { management?: boolean }) {
                 />
               </div>
               <button
-                onClick={() => deleteSlot(slot.id)}
+                onClick={() => draft.removeRow(slot.id)}
                 className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto"
               >
                 Elimina

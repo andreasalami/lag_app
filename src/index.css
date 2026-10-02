@@ -54,4 +54,21 @@ section[id] {
     max-width: 100%;
     min-width: 0;
   }
+
+  .field::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.6;
+  }
+
+  /* Intestazione arancione sfumata dei pannelli: StaffPanel, Menu, Torneo, Instagram. */
+  .panel-header {
+    @apply border-b border-[var(--surface-border)] bg-[linear-gradient(135deg,rgba(242,128,46,0.16),transparent_65%)] px-5 py-5 sm:px-6;
+  }
+
+  /* Tessera arancione cliccabile: collegamenti staff, scelta postazione, coda ritiri. */
+  .tile {
+    /* Il bordo resta quello predefinito, come prima della classe condivisa: Tailwind 3
+       non genera il colore con opacità da una variabile CSS (border-[var(--accent-primary)]/45). */
+    @apply rounded-[var(--radius-md)] border bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)];
+  }
 }

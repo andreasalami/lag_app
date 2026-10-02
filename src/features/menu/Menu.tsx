@@ -1,31 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
+import { newDraftId, useDraftRows } from "../../lib/useDraftRows";
 import { ALLERGENS, priceFormatter } from "../orders/orderUtils";
 import { OrderEntryButton } from "../orders/OrderEntryButton";
+import type { OrderMenuItem } from "../orders/types";
+import { FreeWaterNotice } from "./FreeWaterNotice";
 import {
   MENU_SECTIONS,
   isMenuSectionForCategory,
   type MenuCategory,
   type MenuSection,
 } from "./menuSections";
+import { appHref } from "../../lib/browser";
 
 type Category = MenuCategory;
 
-type MenuItem = {
-  id: string;
-  category: Category;
-  subcategory: MenuSection;
-  name: string;
-  price: number;
-  available_portions: number | null;
-  stock_capacity: number | null;
-  allergens: number[];
-};
+// Stessa forma dei prodotti usati dagli ordini.
+type MenuItem = OrderMenuItem;
 
 const CATEGORIES: Category[] = ["cibo", "bevande"];
 const CATEGORY_LABEL: Record<Category, string> = { cibo: "Cucina", bevande: "Bar" };
@@ -41,13 +37,6 @@ const FALLBACK_ITEMS: MenuItem[] = [
   { id: "f4", category: "bevande", subcategory: "bevande", name: "Acqua — esempio", price: 1.5, available_portions: null, stock_capacity: null, allergens: [] },
 ];
 
-// I prodotti aggiunti in locale (non ancora salvati) hanno un id
-// temporaneo con questo prefisso, mai una vera uuid — così al salvataggio
-// sappiamo distinguere "va inserito" da "va aggiornato" senza dover
-// confrontare con l'ultimo stato noto del DB riga per riga.
-const NEW_ID_PREFIX = "new:";
-const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
-
 /*
   Menu — dati Supabase, editing riservato al ruolo 'staff'/'admin'.
 
@@ -56,12 +45,8 @@ const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
   creazioni, modifiche ed eliminazioni in un colpo solo, in una
   transazione atomica — o va tutto a buon fine, o niente cambia.
 
-  `savedItems` è l'ultimo stato noto per certo dal DB (sincronizzato al
-  primo caricamento e di nuovo subito dopo un salvataggio riuscito).
-  isDirty confronta `items` con `savedItems`: è la versione "semplice"
-  (un confronto diretto, non un diff campo per campo) — sufficiente per
-  sapere SE mostrare il tasto Salva, non ci serve sapere esattamente
-  cosa è cambiato per farlo.
+  La bozza (righe nuove, modificate, eliminate) è gestita da useDraftRows,
+  condiviso con il Programma.
 */
 export function Menu({ management = false }: { management?: boolean }) {
   const { role } = useAuth();
@@ -77,29 +62,15 @@ export function Menu({ management = false }: { management?: boolean }) {
     fallback: FALLBACK_ITEMS,
   });
 
-  const [savedItems, setSavedItems] = useState<MenuItem[]>([]);
-  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const draft = useDraftRows(items, setItems, loading);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const savedOnceRef = useRef(false);
-
-  // Sincronizza lo snapshot "salvato" al primo caricamento vero (non ad
-  // ogni render: solo quando la fetch iniziale finisce).
-  useEffect(() => {
-    if (!loading && !savedOnceRef.current) {
-      setSavedItems(items);
-      savedOnceRef.current = true;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
-
-  const isDirty = deletedIds.length > 0 || JSON.stringify(items) !== JSON.stringify(savedItems);
 
   function addItem(category: Category, subcategory: MenuSection) {
     setItems((prev) => [
       ...prev,
       {
-        id: `${NEW_ID_PREFIX}${crypto.randomUUID()}`,
+        id: newDraftId(),
         category,
         subcategory,
         name: "Nuovo prodotto",
@@ -115,12 +86,6 @@ export function Menu({ management = false }: { management?: boolean }) {
     const [category, subcategory] = value.split(":") as [Category, MenuSection];
     if (!CATEGORIES.includes(category) || !isMenuSectionForCategory(category, subcategory)) return;
     setItems((prev) => prev.map((item) => item.id === id ? { ...item, category, subcategory } : item));
-  }
-
-  function deleteItem(id: string) {
-    setItems((prev) => prev.filter((i) => i.id !== id));
-    // Un prodotto mai salvato non esiste nel DB: niente da eliminare lì.
-    if (!isNewId(id)) setDeletedIds((prev) => [...prev, id]);
   }
 
   async function handleSave() {
@@ -145,28 +110,21 @@ export function Menu({ management = false }: { management?: boolean }) {
       return;
     }
 
-    const created = items
-      .filter((i) => isNewId(i.id))
-      .map(({ category, subcategory, name, price, available_portions, allergens }) => ({
-        category,
-        subcategory,
-        name,
-        price,
-        available_portions,
-        allergens,
-      }));
-
-    const updated = items.flatMap((item) => {
-      if (isNewId(item.id)) return [];
-      const original = savedItems.find((saved) => saved.id === item.id);
-      if (!original || JSON.stringify(original) === JSON.stringify(item)) return [];
-      return [{ ...item, original_available_portions: original.available_portions }];
-    });
+    const created = draft.created.map(({ category, subcategory, name, price, available_portions, allergens }) => ({
+      category,
+      subcategory,
+      name,
+      price,
+      available_portions,
+      allergens,
+    }));
+    // Le porzioni originali permettono al database di accorgersi se un ordine le ha cambiate nel frattempo.
+    const updated = draft.updated.map(({ row, original }) => ({ ...row, original_available_portions: original.available_portions }));
 
     const { error } = await supabase.rpc("bulk_upsert_menu_items", {
       p_created: created,
       p_updated: updated,
-      p_deleted: deletedIds,
+      p_deleted: draft.deletedIds,
     });
 
     if (error) {
@@ -178,9 +136,7 @@ export function Menu({ management = false }: { management?: boolean }) {
       return;
     }
 
-    const fresh = await refetch();
-    if (fresh) setSavedItems(fresh);
-    setDeletedIds([]);
+    draft.markSaved(await refetch());
     setSaving(false);
   }
 
@@ -192,7 +148,7 @@ export function Menu({ management = false }: { management?: boolean }) {
       </p>
 
       {!management && canManage && (
-        <Button href={`${import.meta.env.BASE_URL}#gestione-menu`} className="mb-5 w-full justify-start sm:w-64">
+        <Button href={appHref("#gestione-menu")} className="mb-5 w-full justify-start sm:w-64">
           Gestione Menu e Scorte
         </Button>
       )}
@@ -204,18 +160,14 @@ export function Menu({ management = false }: { management?: boolean }) {
       ) : (
         CATEGORIES.map((category) => (
           <Card key={category} className="mb-6 overflow-hidden !p-0">
-            <div className="border-b border-[var(--surface-border)] bg-[linear-gradient(135deg,rgba(242,128,46,0.16),transparent_65%)] px-5 py-5 sm:px-6">
+            <div className="panel-header">
               <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-secondary)]">Menu dell’evento</p>
               <h3 className="mt-1 font-display text-2xl text-[var(--accent-primary)]">{CATEGORY_LABEL[category]}</h3>
               <p className="mt-1 text-sm text-[var(--text-secondary)]">{CATEGORY_DESCRIPTION[category]}</p>
             </div>
 
             <div className="px-4 py-2 sm:px-6">
-              {category === "bevande" && (
-                <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--accent-primary)]/40 bg-[rgba(242,128,46,0.08)] px-4 py-3 text-sm font-semibold text-[var(--accent-primary)]">
-                  Acqua Gratis
-                </div>
-              )}
+              {category === "bevande" && <FreeWaterNotice />}
 
               {MENU_SECTIONS[category].map((section) => {
                 const sectionItems = items.filter((item) =>
@@ -245,8 +197,9 @@ export function Menu({ management = false }: { management?: boolean }) {
                                 min="0"
                                 max="9999.99"
                                 aria-label={`Prezzo di ${item.name}`}
-                                value={item.price}
-                                onChange={(e) => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? { ...candidate, price: Number(e.target.value) } : candidate))}
+                                value={Number.isNaN(item.price) ? "" : item.price}
+                                // Un campo svuotato resta vuoto (NaN) invece di diventare 0: il salvataggio lo segnala come prezzo non valido.
+                                onChange={(e) => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? { ...candidate, price: e.target.value === "" ? Number.NaN : Number(e.target.value) } : candidate))}
                                 className="field w-full min-w-0 text-right font-mono sm:w-20"
                               />
                               <input
@@ -262,7 +215,7 @@ export function Menu({ management = false }: { management?: boolean }) {
                                 } : candidate))}
                                 className="field w-full min-w-0 text-right font-mono sm:w-24"
                               />
-                              <button type="button" onClick={() => deleteItem(item.id)} className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto">
+                              <button type="button" onClick={() => draft.removeRow(item.id)} className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto">
                                 Elimina
                               </button>
                             </div>
@@ -349,7 +302,7 @@ export function Menu({ management = false }: { management?: boolean }) {
           cercare — sei sempre a un tap da salvare o sai sempre che hai
           roba non ancora scritta sul DB. Stesso identico banner in
           Programma e Torneo, così il gesto è sempre lo stesso. */}
-      {canEdit && isDirty && (
+      {canEdit && draft.isDirty && (
         <SaveBanner
           message="Ci sono modifiche al Menu non ancora salvate."
           saving={saving}

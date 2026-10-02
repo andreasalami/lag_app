@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
+import { appHref } from "./browser";
 
-const serviceWorkerUrl = `${import.meta.env.BASE_URL}service-worker.js`;
+const serviceWorkerUrl = appHref("service-worker.js");
 
 function getVapidPublicKey() {
   return import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY?.trim();
@@ -23,7 +24,7 @@ export function urlBase64ToUint8Array(value: string) {
 
 export async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) throw new Error("push_unsupported");
-  return navigator.serviceWorker.register(serviceWorkerUrl, { scope: import.meta.env.BASE_URL });
+  return navigator.serviceWorker.register(serviceWorkerUrl, { scope: appHref() });
 }
 
 export async function getExistingPushSubscription() {

@@ -1,12 +1,13 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Card } from "../../components/ui/Card";
 import { priceFormatter } from "./orderUtils";
-import type { OrderLine, OrderMenuItem } from "./types";
+import { addToCart, cartTotal, lineTotal, remainingStock, removeOneFromCart, type Cart } from "./cart";
+import type { OrderMenuItem } from "./types";
 
 type Props = {
   menuItems: OrderMenuItem[];
-  cart: Record<string, OrderLine>;
-  setCart: Dispatch<SetStateAction<Record<string, OrderLine>>>;
+  cart: Cart;
+  setCart: Dispatch<SetStateAction<Cart>>;
   alias: string;
   setAlias: (value: string) => void;
   notes: string;
@@ -15,37 +16,7 @@ type Props = {
 
 export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, setNotes }: Props) {
   const lines = Object.values(cart);
-  const total = lines.reduce((sum, line) => sum + Number(line.price) * line.qty, 0);
-
-  function addItem(item: OrderMenuItem) {
-    setCart((current) => {
-      const existing = current[item.id];
-      return {
-        ...current,
-        [item.id]: {
-          id: item.id,
-          category: item.category,
-          subcategory: item.subcategory,
-          name: item.name,
-          price: Number(item.price),
-          qty: (existing?.qty ?? 0) + 1,
-          allergens: item.allergens ?? [],
-        },
-      };
-    });
-  }
-
-  function decrement(id: string) {
-    setCart((current) => {
-      const line = current[id];
-      if (!line) return current;
-      if (line.qty <= 1) {
-        const { [id]: _removed, ...rest } = current;
-        return rest;
-      }
-      return { ...current, [id]: { ...line, qty: line.qty - 1 } };
-    });
-  }
+  const total = cartTotal(lines);
 
   return (
     <div className="flex flex-col gap-4">
@@ -65,8 +36,8 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
           <button
             key={item.id}
             type="button"
-            onClick={() => addItem(item)}
-            disabled={item.available_portions === 0 && !cart[item.id]}
+            onClick={() => setCart((current) => addToCart(current, item).cart)}
+            disabled={remainingStock(cart, item) === 0}
             className="field flex min-h-12 items-center justify-between gap-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span className="text-sm">{item.name}{item.available_portions === 0 ? " — terminato" : ""}</span>
@@ -82,8 +53,8 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
           <div key={line.id} className="flex items-center justify-between gap-3 text-sm">
             <span>{line.qty}× {line.name}</span>
             <div className="flex items-center gap-3">
-              <span className="font-mono">{priceFormatter.format(Number(line.price) * line.qty)}</span>
-              <button type="button" onClick={() => decrement(line.id)} className="text-lg text-[var(--state-error)]" aria-label={`Rimuovi una unità di ${line.name}`}>−</button>
+              <span className="font-mono">{priceFormatter.format(lineTotal(line))}</span>
+              <button type="button" onClick={() => setCart((current) => removeOneFromCart(current, line.id))} className="text-lg text-[var(--state-error)]" aria-label={`Rimuovi una unità di ${line.name}`}>−</button>
             </div>
           </div>
         ))}

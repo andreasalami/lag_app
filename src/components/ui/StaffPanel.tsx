@@ -14,7 +14,7 @@ type StaffPanelProps = {
 export function StaffPanel({ eyebrow, title, description, action, children, className = "", contentClassName = "" }: StaffPanelProps) {
   return (
     <Card className={`overflow-hidden !p-0 ${className}`}>
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--surface-border)] bg-[linear-gradient(135deg,rgba(242,128,46,0.16),transparent_65%)] px-5 py-5 sm:px-6">
+      <div className="flex flex-wrap items-start justify-between gap-4 panel-header">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-secondary)]">{eyebrow}</p>
           <h2 className="mt-1 font-display text-2xl text-[var(--accent-primary)]">{title}</h2>

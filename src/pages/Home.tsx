@@ -7,6 +7,7 @@ import { Menu } from "../features/menu/Menu";
 import { InstagramLink } from "../features/social/InstagramLink";
 import { TournamentPreview } from "../features/tournament/TournamentPreview";
 import { Button } from "../components/ui/Button";
+import { appHref } from "../lib/browser";
 
 export function Home() {
   // Chi arriva da /staff con un link tipo "/#menu" fa una navigazione
@@ -48,7 +49,7 @@ export function Home() {
 
       <section className="mx-auto max-w-3xl px-4 pb-4 pt-2 text-center sm:hidden">
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Solo per lo staff</p>
-        <Button href={`${import.meta.env.BASE_URL}#staff`} variant="ghost" className="mt-3">
+        <Button href={appHref("#staff")} variant="ghost" className="mt-3">
           Login staff
         </Button>
       </section>

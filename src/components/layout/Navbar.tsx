@@ -1,20 +1,26 @@
-import { useState } from "react";
-import { orderStatusClassName, readOrderHistory, syncOrderHistoryStatuses, type PublicOrderStatus, type StoredOrder } from "../../features/orders/orderHistory";
+import { useEffect, useRef, useState } from "react";
+import { ORDER_STATUS_LABELS, orderStatusClassName, readOrderHistory, syncOrderHistoryStatuses, type StoredOrder } from "../../features/orders/orderHistory";
 import { priceFormatter } from "../../features/orders/orderUtils";
-
-const ORDER_STATUS_LABELS: Record<PublicOrderStatus, string> = {
-  in_attesa_pagamento: "Da pagare",
-  pagato: "In preparazione",
-  ritiro_parziale: "Ritiro parziale",
-  consegnato: "Ritirato",
-  annullato: "Annullato",
-};
+import { appHref } from "../../lib/browser";
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [orders, setOrders] = useState<StoredOrder[]>([]);
   const [refreshingOrders, setRefreshingOrders] = useState(false);
-  const staffPath = `${import.meta.env.BASE_URL}#staff`;
+  const staffPath = appHref("#staff");
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  // Esc chiude il menu e riporta il focus al pulsante che l'ha aperto.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      toggleRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   async function refreshOrders() {
     const stored = readOrderHistory();
@@ -34,7 +40,7 @@ export function Navbar() {
     <header className="sticky top-0 z-50 px-4 pt-4">
       <div className="glass-elevated mx-auto flex max-w-3xl items-center justify-between rounded-[var(--radius-pill)] px-5 py-3">
         <a href="#home" className="flex items-center gap-2">
-          <img src={`${import.meta.env.BASE_URL}logo-lag.png`} alt="L'Agro ai Giovani" className="h-9 w-auto" />
+          <img src={appHref("logo-lag.png")} alt="L'Agro ai Giovani" className="h-9 w-auto" />
         </a>
 
         <nav className="hidden gap-6 text-sm text-[var(--text-secondary)] sm:flex">
@@ -47,6 +53,7 @@ export function Navbar() {
 
         <div className="relative h-10 w-10 sm:hidden">
           <button
+            ref={toggleRef}
             type="button"
             onClick={openMenu}
             aria-label="Apri menu"
@@ -104,7 +111,7 @@ export function Navbar() {
                     </ul>
                   )}
                   <a
-                    href={`${import.meta.env.BASE_URL}#ordina`}
+                    href={appHref("#ordina")}
                     onClick={() => setMenuOpen(false)}
                     className="mt-3 block text-center text-xs font-semibold text-[var(--accent-primary)] hover:underline"
                   >

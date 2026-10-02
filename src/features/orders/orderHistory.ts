@@ -1,8 +1,16 @@
-import type { SubmittedOrder } from "./types";
+import type { KitchenState, OrderStatus, PreparationMode, SubmittedOrder } from "./types";
 import type { FulfillmentProgress } from "./workflow";
 import { supabase } from "../../lib/supabaseClient";
 
-export type PublicOrderStatus = "in_attesa_pagamento" | "pagato" | "ritiro_parziale" | "consegnato" | "annullato";
+export type PublicOrderStatus = OrderStatus;
+
+export const ORDER_STATUS_LABELS: Record<PublicOrderStatus, string> = {
+  in_attesa_pagamento: "Da pagare",
+  pagato: "In preparazione",
+  ritiro_parziale: "Ritiro parziale",
+  consegnato: "Ritirato",
+  annullato: "Annullato",
+};
 
 export type StoredOrder = SubmittedOrder & {
   status: PublicOrderStatus;
@@ -100,26 +108,46 @@ export function orderStatusClassName(status: PublicOrderStatus) {
   return "text-[var(--accent-primary)]";
 }
 
-export async function syncOrderHistoryStatuses(orders: StoredOrder[]) {
-  if (orders.length === 0) return orders;
+type StatusUpdate = Pick<StoredOrder, "status" | "progress"> & Partial<Pick<StoredOrder, "kitchen_state" | "preparation_mode">>;
+
+const KITCHEN_STATES = new Set<KitchenState>(["none", "reserved", "dormant", "waiting", "active", "done"]);
+
+/** Chiede al server lo stato aggiornato degli ordini, a lotti di 50 token QR. */
+export async function fetchOrderStatusUpdates(orders: StoredOrder[]) {
+  const updates = new Map<string, StatusUpdate>();
   const batches = Array.from({ length: Math.ceil(orders.length / 50) }, (_, index) =>
     orders.slice(index * 50, (index + 1) * 50));
   const results = await Promise.all(batches.map(async (batch) => {
     const { data, error } = await supabase.rpc("get_public_order_statuses", {
       p_qr_tokens: batch.map((order) => order.qr_token),
     });
-    return error ? [] : data as Array<{ order_id?: unknown; status?: unknown; progress?: unknown }>;
+    return error ? [] : data as Array<{ order_id?: unknown; status?: unknown; progress?: unknown; kitchen_state?: unknown; preparation_mode?: unknown }>;
   }));
-  const updates = new Map<string, Pick<StoredOrder, "status" | "progress">>();
   results.flat().forEach((result) => {
-    if (typeof result.order_id === "string" && isPublicOrderStatus(result.status)) {
-      updates.set(result.order_id, {
-        status: result.status,
-        progress: Array.isArray(result.progress) ? result.progress as FulfillmentProgress[] : undefined,
-      });
+    if (typeof result.order_id !== "string" || !isPublicOrderStatus(result.status)) return;
+    const update: StatusUpdate = {
+      status: result.status,
+      progress: Array.isArray(result.progress) ? result.progress as FulfillmentProgress[] : undefined,
+    };
+    if (KITCHEN_STATES.has(result.kitchen_state as KitchenState)) update.kitchen_state = result.kitchen_state as KitchenState;
+    if (result.preparation_mode === "immediate" || result.preparation_mode === "deferred") {
+      update.preparation_mode = result.preparation_mode as PreparationMode;
     }
+    updates.set(result.order_id, update);
   });
-  const next = orders.map((order) => ({ ...order, ...updates.get(order.order_id) }));
+  return updates;
+}
+
+export function applyStatusUpdates(orders: StoredOrder[], updates: Map<string, StatusUpdate>) {
+  return orders.map((order) => {
+    const update = updates.get(order.order_id);
+    return update ? { ...order, ...update } : order;
+  });
+}
+
+export async function syncOrderHistoryStatuses(orders: StoredOrder[]) {
+  if (orders.length === 0) return orders;
+  const next = applyStatusUpdates(orders, await fetchOrderStatusUpdates(orders));
   saveOrderHistory(next);
   return next;
 }

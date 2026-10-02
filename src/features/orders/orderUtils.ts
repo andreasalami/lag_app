@@ -1,4 +1,5 @@
 import type { OrderLine, SubmittedOrder } from "./types";
+import { lineTotal } from "./cart";
 
 export const priceFormatter = new Intl.NumberFormat("it-IT", {
   style: "currency",
@@ -40,16 +41,12 @@ export function orderingReasonMessage(reason: string | null, opensAt?: string | 
   }
 }
 
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function parseQrPayload(value: string) {
   const trimmed = value.trim();
   const token = trimmed.startsWith("LAGORDER:") ? trimmed.slice("LAGORDER:".length) : trimmed;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token)
-    ? token
-    : null;
-}
-
-export function cartTotal(lines: OrderLine[]) {
-  return lines.reduce((sum, line) => sum + Number(line.price) * line.qty, 0);
+  return UUID_PATTERN.test(token) ? token : null;
 }
 
 function csvCell(value: unknown) {
@@ -133,7 +130,7 @@ export async function downloadOrderPdf(order: SubmittedOrder, qrDataUrl: string)
     const label = pdf.splitTextToSize(`${line.qty}x ${line.name}`, 130) as string[];
     ensureSpace(label.length * 6 + 4);
     pdf.text(label, 15, y);
-    pdf.text(priceFormatter.format(Number(line.price) * line.qty), 190, y, { align: "right" });
+    pdf.text(priceFormatter.format(lineTotal(line)), 190, y, { align: "right" });
     y += label.length * 6 + 4;
   }
   ensureSpace(20);

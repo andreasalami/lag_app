@@ -7,6 +7,7 @@ import {
   subscribeToPushNotifications,
   syncExistingPushSubscription,
 } from "../../lib/pushNotifications";
+import { appHref } from "../../lib/browser";
 
 type PermissionState = "unsupported" | "default" | "granted" | "denied";
 type MobilePlatform = "ios" | "android";
@@ -96,8 +97,8 @@ export function NotificationPermission() {
       try {
         await registration.showNotification("L'Agro ai Giovani", {
           body: "Notifiche del torneo attive su questo dispositivo.",
-          icon: `${import.meta.env.BASE_URL}apple-touch-icon.png`,
-          data: { url: `${window.location.origin}${import.meta.env.BASE_URL}#tornei` },
+          icon: appHref("apple-touch-icon.png"),
+          data: { url: `${window.location.origin}${appHref()}#tornei` },
         });
       } catch {
         // L'iscrizione e' gia attiva: la notifica di conferma non deve annullare il flusso.
@@ -118,9 +119,9 @@ export function NotificationPermission() {
       const registration = await navigator.serviceWorker.ready;
       await registration.showNotification("Test notifiche Torneo LAG", {
         body: "Se leggi questo messaggio, le notifiche sono abilitate correttamente su questo dispositivo.",
-        icon: `${import.meta.env.BASE_URL}apple-touch-icon.png`,
+        icon: appHref("apple-touch-icon.png"),
         tag: `lag-device-test-${Date.now()}`,
-        data: { url: `${window.location.origin}${import.meta.env.BASE_URL}#tornei` },
+        data: { url: `${window.location.origin}${appHref()}#tornei` },
       });
       setTestFeedback("Notifica di prova attivata su questo dispositivo.");
     } catch (error) {
