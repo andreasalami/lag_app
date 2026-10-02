@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import type { Side } from "./bracketUtils";
+import { TEAM_NAME_MAX_LENGTH, teamNameTooLong } from "./tournamentState";
 
 interface SlotRowProps {
   name: string | null;
@@ -14,25 +15,38 @@ interface SlotRowProps {
 function SlotRow({ name, isWinner, score, editable, onScoreChange, onOverride }: SlotRowProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name ?? "");
+  const errorId = useId();
 
   if (editing) {
+    // Un nome troppo lungo non viene applicato: il campo resta aperto con l'avviso.
+    const tooLong = teamNameTooLong(draft.trim());
+    const commit = () => {
+      if (tooLong) return;
+      onOverride(draft);
+      setEditing(false);
+    };
     return (
-      <input
-        autoFocus
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => {
-          onOverride(draft);
-          setEditing(false);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            onOverride(draft);
-            setEditing(false);
-          }
-        }}
-        className="field w-full"
-      />
+      <div>
+        <input
+          autoFocus
+          value={draft}
+          placeholder={`Max ${TEAM_NAME_MAX_LENGTH} caratteri`}
+          aria-invalid={tooLong}
+          aria-describedby={tooLong ? errorId : undefined}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setEditing(false);
+          }}
+          className={`field w-full ${tooLong ? "border-[var(--state-error)]" : ""}`}
+        />
+        {tooLong && (
+          <p id={errorId} role="alert" className="mt-0.5 text-[11px] text-[var(--state-error)]">
+            Nome troppo lungo: max {TEAM_NAME_MAX_LENGTH}
+          </p>
+        )}
+      </div>
     );
   }
 

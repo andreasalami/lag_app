@@ -19,12 +19,17 @@ import {
   defaultTeams,
   roundLabel,
   resolveSlot,
+  slotKey,
   winnerFromScore,
 } from "./bracketUtils";
 import {
   EMPTY_TOURNAMENT_SNAPSHOT,
+  fetchPublishedRevision,
+  fetchPublishedTournament,
   parseTournamentArchive,
   parseTournamentSnapshot,
+  TEAM_NAME_MAX_LENGTH,
+  teamNameTooLong,
   type TournamentArchive,
   type TournamentSnapshot,
 } from "./tournamentState";
@@ -116,17 +121,17 @@ export function TournamentBracket({ management = false }: { management?: boolean
         return;
       }
 
-      const { data, error } = await supabase.from("tournament_state").select("size, teams, matches, overrides, revision").eq("id", "main").maybeSingle();
+      const latest = await fetchPublishedTournament();
       if (cancelled) return;
-      if (error) { setLoadError("Tabellone non disponibile. Ricarica prima di modificare il torneo."); return; }
+      if (latest.error) { setLoadError("Tabellone non disponibile. Ricarica prima di modificare il torneo."); return; }
 
-      const published = parseTournamentSnapshot(data) ?? EMPTY_TOURNAMENT_SNAPSHOT;
-      setLoadError(error ? "Tabellone non disponibile. Riprova più tardi." : null);
+      const published = latest.snapshot ?? EMPTY_TOURNAMENT_SNAPSHOT;
+      setLoadError(null);
       setSavedSnapshot(published);
-      if (!error) setLastSyncedAt(new Date());
+      setLastSyncedAt(new Date());
 
       let starting = published;
-      let baseRevision: number | null = typeof data?.revision === "number" ? data.revision : null;
+      let baseRevision = latest.revision;
       if (canEdit) {
         try {
           const draftRaw = localStorage.getItem(draftKey) ?? localStorage.getItem(DRAFT_KEY);
@@ -136,7 +141,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
             if (parsed) {
               starting = parsed;
               baseRevision = typeof draft.revision === "number" ? draft.revision : null;
-              if(baseRevision !== data?.revision) setPublishError("La bozza parte da una versione precedente. La pubblicazione è protetta: confronta la bozza con il tabellone aggiornato prima di sostituirla.");
+              if (baseRevision !== latest.revision) setPublishError("La bozza parte da una versione precedente. La pubblicazione è protetta: confronta la bozza con il tabellone aggiornato prima di sostituirla.");
             }
           }
         } catch {
@@ -185,12 +190,11 @@ export function TournamentBracket({ management = false }: { management?: boolean
       if (busy || document.visibilityState !== "visible") return;
       busy = true;
       try {
-      const probe = await supabase.from("tournament_state").select("revision").eq("id", "main").maybeSingle();
-      if (cancelled || probe.error || (seenRevision !== null && probe.data?.revision === seenRevision)) return;
-      const { data, error } = await supabase.from("tournament_state").select("size, teams, matches, overrides, revision").eq("id", "main").maybeSingle();
-      const snapshot = parseTournamentSnapshot(data);
+      const probe = await fetchPublishedRevision();
+      if (cancelled || probe.error || (seenRevision !== null && probe.revision === seenRevision)) return;
+      const { error, snapshot, revision } = await fetchPublishedTournament();
       if (cancelled || error || !snapshot) return;
-      seenRevision = data?.revision ?? null;
+      seenRevision = revision;
       setSize(snapshot.size);
       setTeams(snapshot.teams);
       setMatches(snapshot.matches);
@@ -227,6 +231,9 @@ export function TournamentBracket({ management = false }: { management?: boolean
     savedSnapshot !== null &&
     JSON.stringify({ size, teams, matches, overrides }) !== JSON.stringify(savedSnapshot);
 
+  // I ripescaggi vengono salvati già senza spazi esterni (vedi setOverride).
+  const hasTooLongNames = [...teams, ...Object.values(overrides)].some(teamNameTooLong);
+
   // Avviso del browser se provi a chiudere/ricaricare con modifiche
   // non ancora pubblicate — la rete di sicurezza per non perderle
   // cambiando device senza accorgertene.
@@ -241,6 +248,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
   }, [isDirty]);
 
   async function handlePublish(): Promise<boolean> {
+    if (hasTooLongNames) return false;
     setPublishing(true);
     setPublishError(null);
     const { data: nextRevision, error } = await supabase.rpc("publish_tournament", {
@@ -266,11 +274,10 @@ export function TournamentBracket({ management = false }: { management?: boolean
     setPublishing(true);
     try {
       localStorage.setItem(`${draftKey}:before-reload`, JSON.stringify({size,teams,matches,overrides,revision}));
-      const {data,error} = await supabase.from("tournament_state").select("size,teams,matches,overrides,revision").eq("id","main").single();
-      const latest = parseTournamentSnapshot(data);
-      if(error || !latest) throw new Error("load_failed");
+      const { error, snapshot: latest, revision: latestRevision } = await fetchPublishedTournament();
+      if (error || !latest) throw new Error("load_failed");
       setSize(latest.size); setTeams(latest.teams); setMatches(latest.matches); setOverrides(latest.overrides);
-      setRevision(data.revision); setSavedSnapshot(latest); setPublishError(null);
+      setRevision(latestRevision); setSavedSnapshot(latest); setPublishError(null);
     } catch {setPublishError("Impossibile conservare la bozza o caricare il tabellone. Le modifiche attuali sono ancora aperte.");}
     finally {setPublishing(false);}
   }
@@ -390,7 +397,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
   }
 
   function setOverride(round: number, index: number, side: Side, name: string) {
-    const key = `${round}-${index}-${side}`;
+    const key = slotKey(round, index, side);
     setOverrides((prev) => {
       const next = { ...prev };
       if (name.trim()) next[key] = name.trim();
@@ -443,19 +450,31 @@ export function TournamentBracket({ management = false }: { management?: boolean
 
             {editingTeams && (
               <div className="mt-4 grid grid-cols-2 gap-2 border-t border-[var(--surface-border)] pt-4 sm:grid-cols-4">
-                {teams.map((t, i) => (
-                  <input
-                    key={i}
-                    aria-label={`Nome squadra ${i + 1}`}
-                    value={t}
-                    onChange={(e) => {
-                      const next = [...teams];
-                      next[i] = e.target.value;
-                      setTeams(next);
-                    }}
-                    className="field py-2"
-                  />
-                ))}
+                {teams.map((t, i) => {
+                  const tooLong = teamNameTooLong(t);
+                  return (
+                    <div key={i}>
+                      <input
+                        aria-label={`Nome squadra ${i + 1}`}
+                        aria-invalid={tooLong}
+                        aria-describedby={tooLong ? `team-name-error-${i}` : undefined}
+                        placeholder={`Max ${TEAM_NAME_MAX_LENGTH} caratteri`}
+                        value={t}
+                        onChange={(e) => {
+                          const next = [...teams];
+                          next[i] = e.target.value;
+                          setTeams(next);
+                        }}
+                        className={`field w-full py-2 ${tooLong ? "border-[var(--state-error)]" : ""}`}
+                      />
+                      {tooLong && (
+                        <p id={`team-name-error-${i}`} role="alert" className="mt-1 text-xs text-[var(--state-error)]">
+                          Nome della squadra troppo lungo: massimo {TEAM_NAME_MAX_LENGTH} caratteri (ora {t.length}).
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -544,7 +563,8 @@ export function TournamentBracket({ management = false }: { management?: boolean
         <SaveBanner
           message="Ci sono modifiche al Torneo non ancora salvate — chi guarda vede ancora l'ultimo turno pubblicato."
           saving={publishing}
-          error={publishError}
+          error={hasTooLongNames ? `Un nome squadra supera i ${TEAM_NAME_MAX_LENGTH} caratteri: accorcialo per poter salvare.` : publishError}
+          disabled={hasTooLongNames}
           onSave={handlePublish}
         />
       )}
@@ -596,34 +616,30 @@ export function TournamentBracket({ management = false }: { management?: boolean
         {archiveError && <p className="mt-3 text-[var(--state-error)]">{archiveError}</p>}
       </Modal>
 
-      {showCloseWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="glass-elevated glass-elevated--strong w-full max-w-sm rounded-[var(--radius-md)] border border-[var(--state-error)] p-5">
-            <p className="mb-1 text-sm font-semibold text-[var(--state-error)]">⚠ Modifiche non pubblicate</p>
-            <p className="mb-4 text-sm text-[var(--text-secondary)]">
-              Hai punteggi o nomi non ancora pubblicati. Se cambi dispositivo o serve che il pubblico veda il
-              tabellone aggiornato, devi pubblicare ora — altrimenti restano solo su questo browser.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="staff-danger"
-                onClick={handleCloseWithoutSaving}
-                className="px-4 py-2 text-xs"
-              >
-                Chiudi senza pubblicare
-              </Button>
-              <Button
-                variant="staff-primary"
-                onClick={handlePublishAndClose}
-                disabled={publishing}
-                className="px-4 py-2 text-xs"
-              >
-                {publishing ? "Salvo..." : "Salva ora"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showCloseWarning}
+        title="Modifiche non pubblicate"
+        dismissible={!publishing}
+        onClose={() => setShowCloseWarning(false)}
+        actions={(
+          <>
+            <Button variant="staff-danger" onClick={handleCloseWithoutSaving} disabled={publishing} className="px-4 py-2 text-xs">
+              Chiudi senza pubblicare
+            </Button>
+            <Button variant="staff-primary" onClick={() => void handlePublishAndClose()} disabled={publishing || hasTooLongNames} className="px-4 py-2 text-xs">
+              {publishing ? "Salvo..." : "Salva ora"}
+            </Button>
+          </>
+        )}
+      >
+        <p>
+          Hai punteggi o nomi non ancora pubblicati. Se cambi dispositivo o serve che il pubblico veda il
+          tabellone aggiornato, devi pubblicare ora — altrimenti restano solo su questo browser.
+        </p>
+        {hasTooLongNames && (
+          <p className="mt-2 text-[var(--state-error)]">Prima accorcia i nomi squadra oltre i {TEAM_NAME_MAX_LENGTH} caratteri.</p>
+        )}
+      </Modal>
     </section>
   );
 }

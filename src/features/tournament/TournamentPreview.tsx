@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
+import { isSupabaseConfigured } from "../../lib/supabaseClient";
 import { useAuth } from "../auth/AuthContext";
 import { NotificationPermission } from "../notifications/NotificationPermission";
 import { currentRoundLabel, latestTournamentResults } from "./tournamentOverview";
 import {
   EMPTY_TOURNAMENT_SNAPSHOT,
-  parseTournamentSnapshot,
+  fetchPublishedRevision,
+  fetchPublishedTournament,
   type TournamentSnapshot,
 } from "./tournamentState";
+import { appHref } from "../../lib/browser";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -35,23 +37,18 @@ export function TournamentPreview() {
       busy = true;
       try {
       if (revision !== null) {
-        const probe = await supabase.from("tournament_state").select("revision").eq("id", "main").maybeSingle();
+        const probe = await fetchPublishedRevision();
         if (cancelled) return;
         if (probe.error) { setLoadError("Aggiornamenti del torneo non disponibili. Riprova più tardi."); return; }
-        if (probe.data?.revision === revision) { setLoadError(null); return; }
+        if (probe.revision === revision) { setLoadError(null); return; }
       }
-      const { data, error } = await supabase
-        .from("tournament_state")
-        .select("size, teams, matches, overrides, revision")
-        .eq("id", "main")
-        .maybeSingle();
+      const latest = await fetchPublishedTournament();
       if (cancelled) return;
-      const parsed = parseTournamentSnapshot(data);
-      if (error || !parsed) {
+      if (latest.error || !latest.snapshot) {
         setLoadError("Aggiornamenti del torneo non disponibili. Riprova più tardi.");
       } else {
-        revision = data?.revision ?? null;
-        setSnapshot(parsed);
+        revision = latest.revision;
+        setSnapshot(latest.snapshot);
         setLoadError(null);
       }
       setLoading(false);
@@ -88,13 +85,13 @@ export function TournamentPreview() {
       <NotificationPermission />
 
       {canManage && (
-        <Button href={`${import.meta.env.BASE_URL}#gestione-torneo`} className="mb-5 w-full justify-start sm:w-64">
+        <Button href={appHref("#gestione-torneo")} className="mb-5 w-full justify-start sm:w-64">
           Gestisci Torneo
         </Button>
       )}
 
       <Card className="overflow-hidden !p-0">
-        <div className="border-b border-[var(--surface-border)] bg-[linear-gradient(135deg,rgba(242,128,46,0.16),transparent_65%)] px-5 py-5 sm:px-6">
+        <div className="panel-header">
           <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-secondary)]">
             {currentRound === "Torneo concluso" ? "Stato" : "Turno in corso"}
           </p>
@@ -139,7 +136,7 @@ export function TournamentPreview() {
             </ol>
           )}
 
-          <Button variant="ghost" href={`${import.meta.env.BASE_URL}#tabellone`} className="mt-4 w-full">
+          <Button variant="ghost" href={appHref("#tabellone")} className="mt-4 w-full">
             Vedi il tabellone completo
           </Button>
         </div>

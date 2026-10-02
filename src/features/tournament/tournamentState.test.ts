@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTournamentArchive, parseTournamentSnapshot } from "./tournamentState";
+import { parseTournamentArchive, parseTournamentSnapshot, teamNameTooLong } from "./tournamentState";
 
 const snapshot = {
   size: 8,
@@ -12,6 +12,17 @@ describe("tournament state", () => {
   it("valida uno snapshot coerente con la dimensione", () => {
     expect(parseTournamentSnapshot(snapshot)).toEqual(snapshot);
     expect(parseTournamentSnapshot({ ...snapshot, teams: snapshot.teams.slice(0, 7) })).toBeNull();
+  });
+
+  it("limita a 20 caratteri i nomi da pubblicare", () => {
+    expect(teamNameTooLong("A".repeat(20))).toBe(false);
+    expect(teamNameTooLong("A".repeat(21))).toBe(true);
+  });
+
+  it("mostra al pubblico anche un torneo già pubblicato con nomi oltre il limite", () => {
+    const teams = [...snapshot.teams];
+    teams[0] = "Nome già pubblicato molto più lungo";
+    expect(parseTournamentSnapshot({ ...snapshot, teams })?.teams[0]).toBe(teams[0]);
   });
 
   it("converte una riga archivio Supabase", () => {

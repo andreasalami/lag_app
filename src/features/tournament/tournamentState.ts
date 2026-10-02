@@ -1,3 +1,4 @@
+import { supabase } from "../../lib/supabaseClient";
 import {
   BRACKET_SIZES,
   defaultTeams,
@@ -20,6 +21,16 @@ export type TournamentArchive = TournamentSnapshot & {
   createdAt: string;
 };
 
+// Limite per scrivere e pubblicare: le card del tabellone sono strette.
+// La lettura resta tollerante (100) così dati già pubblicati più lunghi
+// non nascondono l'intero torneo al pubblico.
+export const TEAM_NAME_MAX_LENGTH = 20;
+const STORED_TEAM_NAME_MAX_LENGTH = 100;
+
+export function teamNameTooLong(name: string) {
+  return name.length > TEAM_NAME_MAX_LENGTH;
+}
+
 export const EMPTY_TOURNAMENT_SNAPSHOT: TournamentSnapshot = {
   size: 8,
   teams: defaultTeams(8),
@@ -36,7 +47,7 @@ export function parseTournamentSnapshot(value: unknown): TournamentSnapshot | nu
   const candidate = value as Partial<TournamentSnapshot>;
   if (!BRACKET_SIZES.includes(candidate.size as BracketSize)) return null;
   if (!Array.isArray(candidate.teams) || candidate.teams.length !== candidate.size
-    || candidate.teams.some((team) => typeof team !== "string" || team.length > 100)) return null;
+    || candidate.teams.some((team) => typeof team !== "string" || team.length > STORED_TEAM_NAME_MAX_LENGTH)) return null;
   if (!candidate.matches || typeof candidate.matches !== "object" || Array.isArray(candidate.matches)) return null;
   if (!candidate.overrides || typeof candidate.overrides !== "object" || Array.isArray(candidate.overrides)) return null;
 
@@ -84,4 +95,19 @@ export function parseTournamentArchive(value: unknown): TournamentArchive | null
     targetSize,
     createdAt: candidate.created_at,
   };
+}
+
+const PUBLISHED_COLUMNS = "size, teams, matches, overrides, revision";
+const revisionOf = (row: { revision?: unknown } | null) => (typeof row?.revision === "number" ? row.revision : null);
+
+/** Ultimo tabellone pubblicato; `snapshot` è null se la riga manca o non è valida. */
+export async function fetchPublishedTournament() {
+  const { data, error } = await supabase.from("tournament_state").select(PUBLISHED_COLUMNS).eq("id", "main").maybeSingle();
+  return { error, snapshot: parseTournamentSnapshot(data), revision: revisionOf(data) };
+}
+
+/** Solo la revisione: controllo leggero per riscaricare il tabellone soltanto quando cambia. */
+export async function fetchPublishedRevision() {
+  const { data, error } = await supabase.from("tournament_state").select("revision").eq("id", "main").maybeSingle();
+  return { error, revision: revisionOf(data) };
 }
