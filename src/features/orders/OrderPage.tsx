@@ -2,16 +2,20 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Modal } from "../../components/ui/Modal";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { supabase } from "../../lib/supabaseClient";
 import {
   ALLERGENS,
-  cartTotal,
   downloadOrderPdf,
   orderingReasonMessage,
   priceFormatter,
 } from "./orderUtils";
+import { addToCart, cartItemCount, cartTotal, lineTotal, remainingStock, removeOneFromCart, type Cart } from "./cart";
 import {
+  ORDER_STATUS_LABELS,
   addOrderToHistory,
+  applyStatusUpdates,
+  fetchOrderStatusUpdates,
   isPublicOrderStatus,
   orderStatusClassName,
   ordersForEvent,
@@ -20,22 +24,16 @@ import {
   type PublicOrderStatus,
   type StoredOrder,
 } from "./orderHistory";
-import type { OrderLine, OrderMenuItem, OrderingCatalog, SubmittedOrder } from "./types";
+import type { OrderMenuItem, OrderingCatalog, SubmittedOrder } from "./types";
 import { clearPendingOrder, readPendingOrder, savePendingOrder, type PendingOrderRequest } from "./pendingOrder";
 import { getOrCreateRecoveryToken, readRecoveryToken, recoveryOrderQr, saveRecoveryToken, validRecoveryToken } from "./orderRecovery";
 import { TurnstileChallenge } from "../../components/ui/TurnstileChallenge";
 import { RecoveryCard } from "./RecoveryCard";
 import { PreparationChoice, PreparationStatus } from "./PreparationChoice";
-import type { PreparationMode, KitchenState } from "./types";
+import type { PreparationMode } from "./types";
 import { MENU_SECTIONS } from "../menu/menuSections";
-
-const STATUS_LABEL: Record<PublicOrderStatus, string> = {
-  in_attesa_pagamento: "Da pagare",
-  pagato: "In preparazione",
-  ritiro_parziale: "Ritiro parziale",
-  consegnato: "Ritirato",
-  annullato: "Annullato",
-};
+import { FreeWaterNotice } from "../menu/FreeWaterNotice";
+import { appHref } from "../../lib/browser";
 
 function statusMessage(status: PublicOrderStatus) {
   switch (status) {
@@ -55,7 +53,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [showIntro, setShowIntro] = useState(() => !startFresh && readOrderHistory().length === 0);
   const [alias, setAlias] = useState(() => startFresh ? readOrderHistory()[0]?.alias ?? "" : "");
   const [notes, setNotes] = useState("");
-  const [cart, setCart] = useState<Record<string, OrderLine>>({});
+  const [cart, setCart] = useState<Cart>({});
   const [cartExpanded, setCartExpanded] = useState(false);
   const [cartElement, setCartElement] = useState<HTMLElement | null>(null);
   const [cartHeight, setCartHeight] = useState(0);
@@ -80,6 +78,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submittedOrder, setSubmittedOrder] = useState<StoredOrder | null>(() => startFresh || readPendingOrder() ? null : readOrderHistory()[0] ?? null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrError, setQrError] = useState(false);
   const [finalTab, setFinalTab] = useState<"qr" | "summary">("qr");
   const [showCopyPrompt, setShowCopyPrompt] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -101,37 +100,15 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
 
   const refreshOrderStatuses = useCallback(async (orders = historyRef.current) => {
     if (orders.length === 0) return;
-    const batches = Array.from({ length: Math.ceil(orders.length / 50) }, (_, index) =>
-      orders.slice(index * 50, (index + 1) * 50));
-    const results = await Promise.all(batches.map(async (batch) => {
-      const { data, error } = await supabase.rpc("get_public_order_statuses", {
-        p_qr_tokens: batch.map((order) => order.qr_token),
-      });
-      return error ? [] : data as Array<{ order_id?: unknown; status?: unknown; progress?: unknown; kitchen_state?: KitchenState; preparation_mode?: PreparationMode }>;
-    }));
-    const statuses = new Map<string, PublicOrderStatus>();
-    const progress = new Map<string, StoredOrder["progress"]>();
-    const kitchen = new Map<string, {kitchen_state?:KitchenState; preparation_mode?:PreparationMode}>();
-    results.flat().forEach((result) => {
-      if (typeof result.order_id === "string" && isPublicOrderStatus(result.status)) {
-        statuses.set(result.order_id, result.status);
-        kitchen.set(result.order_id,{kitchen_state:result.kitchen_state,preparation_mode:result.preparation_mode});
-        if (Array.isArray(result.progress)) progress.set(result.order_id, result.progress as StoredOrder["progress"]);
-      }
-    });
-    if (statuses.size === 0) return;
+    const updates = await fetchOrderStatusUpdates(orders);
+    if (updates.size === 0) return;
     setOrderHistory((current) => {
-      const next = current.map((order) => {
-        const status = statuses.get(order.order_id);
-        return status ? { ...order, ...kitchen.get(order.order_id), status, progress: progress.get(order.order_id) } : order;
-      });
+      const next = applyStatusUpdates(current, updates);
       saveOrderHistory(next);
       historyRef.current = next;
       return next;
     });
-    setSubmittedOrder((current) => current
-      ? { ...current, ...kitchen.get(current.order_id), status: statuses.get(current.order_id) ?? current.status, progress: progress.get(current.order_id) ?? current.progress }
-      : null);
+    setSubmittedOrder((current) => current ? applyStatusUpdates([current], updates)[0] : null);
   }, []);
 
   async function loadCatalog(restoreLatestOrder = false) {
@@ -183,6 +160,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       return;
     }
     setQrDataUrl(null);
+    setQrError(false);
     let cancelled = false;
     void import("qrcode").then((module) => module.default.toDataURL(
       `LAGORDER:${submittedOrder.qr_token}`,
@@ -190,7 +168,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     )).then((url) => {
       if (!cancelled) setQrDataUrl(url);
     }).catch(() => {
-      if (!cancelled) setSubmitError("QR non generato: usa numero e alias in cassa.");
+      if (!cancelled) setQrError(true);
     });
     return () => { cancelled = true; };
   }, [submittedOrder]);
@@ -199,43 +177,24 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const total = cartTotal(lines);
 
   function addItem(item: OrderMenuItem) {
-    if (item.available_portions === 0) return;
     const maxItem = catalog?.max_item_quantity ?? 25;
     const maxOrder = catalog?.max_order_quantity ?? 60;
-    if ((cart[item.id]?.qty ?? 0) >= maxItem || lines.reduce((sum, line) => sum + line.qty, 0) >= maxOrder) {
+    const result = addToCart(cart, item, { maxItem, maxOrder });
+    setCartExpanded(true);
+    if (result.blocked === "stock") {
+      setSubmitError(`Hai già nel carrello tutte le porzioni rimaste di ${item.name}.`);
+      return;
+    }
+    if (result.blocked) {
       setSubmitError(`Puoi ordinare al massimo ${maxItem} pezzi per prodotto e ${maxOrder} articoli in totale. Per ordini più grandi rivolgiti alla cassa.`);
       return;
     }
-    setCart((current) => {
-      const existing = current[item.id];
-      if ((existing?.qty ?? 0) >= maxItem || Object.values(current).reduce((sum, line) => sum + line.qty, 0) >= maxOrder) return current;
-      if (item.available_portions !== null && (existing?.qty ?? 0) >= item.available_portions) return current;
-      return {
-        ...current,
-        [item.id]: {
-          id: item.id,
-          category: item.category,
-          subcategory: item.subcategory,
-          name: item.name,
-          price: Number(item.price),
-          qty: (existing?.qty ?? 0) + 1,
-          allergens: item.allergens ?? [],
-        },
-      };
-    });
-    setCartExpanded(true);
+    setSubmitError(null);
+    setCart(result.cart);
   }
 
   function decrementItem(id: string) {
-    setCart((current) => {
-      const line = current[id];
-      if (!line) return current;
-      if (line.qty === 1) {
-        const { [id]: _removed, ...rest } = current;
-        return rest;
-      }
-      return { ...current, [id]: { ...line, qty: line.qty - 1 } };
-    });
+    setCart((current) => removeOneFromCart(current, id));
   }
 
   function requestSubmit() {
@@ -299,8 +258,12 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     setShowConfirmation(false);
     if (error || !data) {
       const message = error?.message ?? "";
-      if (/stock_unavailable|capacity_reached|public_order_quantity_limit|invalid_|notes_too_long|ordering_|event_closed|not_open_yet|no_event/.test(message)) {
+      // Errori definitivi: il server ha rifiutato la richiesta senza creare l'ordine, quindi
+      // "Recupera ordine" darebbe sempre lo stesso errore. Si libera la richiesta salvata e
+      // il prossimo invio usa una richiesta nuova.
+      if (/stock_unavailable|capacity_reached|public_order_quantity_limit|order_total_too_high|invalid_|notes_too_long|ordering_|event_closed|event_changed|not_open_yet|no_event|request_id_conflict/.test(message)) {
         clearPendingOrder(requestId); setPendingRequest(null);
+        requestIdentityRef.current = { requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() };
       }
       if (message.includes("public_order_rate_limit")) {
         setSubmitError("Hai inviato più ordini ravvicinati. Attendi un minuto, poi premi Recupera ordine.");
@@ -310,9 +273,14 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         setSubmitError(`Disponibilità cambiata: ${message.split("stock_unavailable:")[1]}. Aggiorna il carrello e riprova.`);
         await loadCatalog();
       } else if (message.includes("public_order_quantity_limit")) {
-        setSubmitError("L’ordine supera il limite di 25 pezzi per prodotto o 60 articoli totali. Riduci le quantità o rivolgiti alla cassa.");
-      } else if (message.includes("request_already_processed")) {
-        setSubmitError("Questo ordine è già stato elaborato oppure è scaduto. Controlla lo storico o rivolgiti alla cassa.");
+        setSubmitError(`L’ordine supera il limite di ${catalog?.max_item_quantity ?? 25} pezzi per prodotto o ${catalog?.max_order_quantity ?? 60} articoli totali. Riduci le quantità o rivolgiti alla cassa.`);
+      } else if (message.includes("order_total_too_high")) {
+        setSubmitError("L’importo dell’ordine è troppo alto per l’app. Riduci le quantità o rivolgiti alla cassa.");
+      } else if (message.includes("event_changed")) {
+        setSubmitError("Nel frattempo è iniziato un nuovo evento: l’ordine non è stato inviato. Controlla il carrello e invialo di nuovo.");
+        await loadCatalog();
+      } else if (message.includes("request_id_conflict")) {
+        setSubmitError("L’ordine non è stato inviato. Premi di nuovo Invia ordine: verrà creata una richiesta nuova.");
       } else if (message.includes("capacity_reached")) {
         setSubmitError(orderingReasonMessage("capacity_reached"));
       } else if (/ordering_|event_closed|not_open_yet/.test(message)) {
@@ -444,7 +412,8 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   if (submittedOrder) {
     return (
       <main className="mx-auto min-h-full max-w-xl px-4 py-8">
-        <Button href={`${import.meta.env.BASE_URL}#menu`} variant="back" className="min-h-10 px-4 py-2">← Indietro</Button>
+        <Button href={appHref("#menu")} variant="back" className="min-h-10 px-4 py-2">← Indietro</Button>
+        {submitError && <p role="alert" className="mt-4 rounded-[var(--radius-sm)] border border-[var(--state-warning)] p-3 text-sm text-[var(--state-warning)]">{submitError}</p>}
         <section className="mt-5 text-center">
           <p className={`text-sm ${orderStatusClassName(submittedOrder.status)}`}>{submittedOrder.event_closed_at ? "Evento concluso. Questo ordine resta nello storico; il QR non è più utilizzabile per il ritiro." : submittedOrder.status==='pagato' && (submittedOrder.kitchen_state==='dormant' || submittedOrder.kitchen_state==='waiting') ? 'Pagamento registrato.' : statusMessage(submittedOrder.status)}</p>
           <h1 className="mt-2 text-4xl">#{submittedOrder.display_number}</h1>
@@ -495,11 +464,11 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
                 <span>
                   <strong>#{order.display_number} · {order.alias}</strong>
                   <span className="mt-0.5 block text-xs text-[var(--text-secondary)]">
-                    {order.event_name} · {order.items.reduce((sum, line) => sum + line.qty, 0)} articoli · {priceFormatter.format(Number(order.total))}
+                    {order.event_name} · {cartItemCount(order.items)} articoli · {priceFormatter.format(Number(order.total))}
                   </span>
                 </span>
                 <span className={`shrink-0 text-xs font-semibold ${orderStatusClassName(order.status)}`}>
-                  {order.event_closed_at ? "Evento concluso" : STATUS_LABEL[order.status]}
+                  {order.event_closed_at ? "Evento concluso" : ORDER_STATUS_LABELS[order.status]}
                 </span>
               </button>
             ))}
@@ -511,22 +480,18 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
           {refreshingStatuses ? "Aggiorno lo stato…" : "Aggiorna stato ordini"}
         </Button>
 
-        <div className="mx-auto mt-5 grid max-w-xs grid-cols-2 rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1">
-          {(["qr", "summary"] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setFinalTab(tab)}
-              className={`rounded-[var(--radius-pill)] px-3 py-2 text-sm ${finalTab === tab ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]" : "text-[var(--text-secondary)]"}`}
-            >
-              {tab === "qr" ? "QR code" : "Riepilogo"}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="mx-auto mt-5 max-w-xs"
+          value={finalTab}
+          onChange={setFinalTab}
+          options={[{ value: "qr", label: "QR code" }, { value: "summary", label: "Riepilogo" }]}
+        />
 
         {finalTab === "qr" ? (
           <Card className="mx-auto mt-4 max-w-sm text-center">
-            {submittedOrder.event_closed_at ? <p className="py-6 text-sm">Evento concluso: puoi consultare il riepilogo dell’ordine.</p> : qrDataUrl ? <img src={qrDataUrl} alt={`QR dell’ordine ${submittedOrder.display_number}`} className="mx-auto w-full max-w-[300px] rounded-xl bg-white" /> : (
+            {submittedOrder.event_closed_at ? <p className="py-6 text-sm">Evento concluso: puoi consultare il riepilogo dell’ordine.</p> : qrDataUrl ? <img src={qrDataUrl} alt={`QR dell’ordine ${submittedOrder.display_number}`} className="mx-auto w-full max-w-[300px] rounded-xl bg-white" /> : qrError ? (
+              <p role="alert" className="py-10 text-sm text-[var(--state-warning)]">QR non generato. In cassa comunica numero e nome dell’ordine.</p>
+            ) : (
               <p className="py-16 text-sm text-[var(--text-secondary)]">Genero il QR…</p>
             )}
           </Card>
@@ -535,7 +500,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
             {submittedOrder.items.map((line) => (
               <div key={line.id} className="flex justify-between gap-3 text-sm">
                 <span>{line.qty}× {line.name}</span>
-                <span className="font-mono">{priceFormatter.format(Number(line.price) * line.qty)}</span>
+                <span className="font-mono">{priceFormatter.format(lineTotal(line))}</span>
               </div>
             ))}
             <div className="mt-2 flex justify-between border-t border-[var(--surface-border)] pt-2 font-semibold">
@@ -554,7 +519,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
           <Button variant="primary" className="w-full" onClick={() => void startNewOrder()} disabled={startingNewOrder}>
             {startingNewOrder ? "Verifico…" : "Ordina di nuovo"}
           </Button>
-          <Button variant="ghost" className="w-full" href={`${import.meta.env.BASE_URL}#programma`}>
+          <Button variant="ghost" className="w-full" href={appHref("#programma")}>
             Torna al programma
           </Button>
           <Button
@@ -602,7 +567,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       style={{ paddingBottom: `calc(${cartHeight + 32}px + env(safe-area-inset-bottom, 0px))` }}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button href={`${import.meta.env.BASE_URL}#menu`} variant="back" className="min-h-10 px-4 py-2">← Torna al menu del sito</Button>
+        <Button href={appHref("#menu")} variant="back" className="min-h-10 px-4 py-2">← Torna al menu del sito</Button>
         {orderHistory.length > 0 && (
           <Button variant="ghost" onClick={() => viewOrder(orderHistory[0])}>
             I miei ordini ({orderHistory.length})
@@ -649,11 +614,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         (["cibo", "bevande"] as const).map((category) => (
           <section key={category} className="mt-8">
             <h2 className="text-2xl">{category === "cibo" ? "Cucina" : "Bar"}</h2>
-            {category === "bevande" && (
-              <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--accent-primary)]/40 bg-[rgba(242,128,46,0.08)] px-4 py-3 text-sm font-semibold text-[var(--accent-primary)]">
-                Acqua Gratis
-              </div>
-            )}
+            {category === "bevande" && <FreeWaterNotice />}
             {MENU_SECTIONS[category].map((section) => {
               const sectionItems = catalog.items.filter((item) => item.category === category && item.subcategory === section.key);
               if (sectionItems.length === 0) return null;
@@ -667,13 +628,16 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
                         && item.available_portions > 0
                         && item.available_portions <= Math.ceil(item.stock_capacity * 0.2);
                       const finished = item.available_portions === 0;
+                      // Le scorte compaiono solo qui: il menu pubblico resta fisso per la serata.
+                      const allInCart = !finished && remainingStock(cart, item) === 0;
                       return (
-                        <button key={item.id} type="button" onClick={() => addItem(item)} disabled={finished} className="surface-solid flex min-h-20 items-start justify-between gap-3 rounded-[var(--radius-md)] p-3 text-left transition-colors hover:bg-[var(--surface-solid-hover)] disabled:cursor-not-allowed disabled:opacity-55">
+                        <button key={item.id} type="button" onClick={() => addItem(item)} disabled={finished || allInCart} className="surface-solid flex min-h-20 items-start justify-between gap-3 rounded-[var(--radius-md)] p-3 text-left transition-colors hover:bg-[var(--surface-solid-hover)] disabled:cursor-not-allowed disabled:opacity-55">
                           <span>
                             <span className="block text-sm font-semibold">{item.name}</span>
                             {item.allergens.length > 0 && <span className="mt-1 block text-xs text-[var(--text-secondary)]">Allergeni: {item.allergens.join(", ")}</span>}
                             {almostFinished && <span className="mt-1 block text-xs text-[var(--state-warning)]">Quasi terminato</span>}
                             {finished && <span className="mt-1 block text-xs text-[var(--state-error)]">Terminato</span>}
+                            {allInCart && <span className="mt-1 block text-xs text-[var(--state-warning)]">Hai nel carrello tutte le porzioni rimaste</span>}
                           </span>
                           <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">{priceFormatter.format(Number(item.price))}</span>
                         </button>
@@ -706,7 +670,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
             className="flex w-full items-center justify-between text-left"
             aria-expanded={cartExpanded}
           >
-            <span className="font-semibold">Carrello · {lines.reduce((sum, line) => sum + line.qty, 0)} articoli</span>
+            <span className="font-semibold">Carrello · {cartItemCount(lines)} articoli</span>
             <span className="font-mono text-[var(--accent-primary)]">{priceFormatter.format(total)} {cartExpanded ? "⌄" : "⌃"}</span>
           </button>
           {cartExpanded && (
@@ -716,7 +680,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
                   <div key={line.id} className="flex items-center justify-between gap-3 text-sm">
                     <span>{line.qty}× {line.name}</span>
                     <div className="flex items-center gap-3">
-                      <span className="font-mono">{priceFormatter.format(line.price * line.qty)}</span>
+                      <span className="font-mono">{priceFormatter.format(lineTotal(line))}</span>
                       <button type="button" onClick={() => decrementItem(line.id)} className="text-lg text-[var(--state-error)]" aria-label={`Rimuovi una unità di ${line.name}`}>−</button>
                     </div>
                   </div>

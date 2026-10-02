@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
+import { Notice } from "../../components/ui/Notice";
 import { StaffPageHeading, StaffPanel } from "../../components/ui/StaffPanel";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../auth/AuthContext";
 import { parseQrPayload } from "./orderUtils";
 import { QrScanner } from "./QrScanner";
-import { BAR_STATIONS, KITCHEN_STATIONS, type FulfillmentStation } from "./workflow";
+import { BAR_STATIONS, KITCHEN_STATIONS, STATION_STORAGE_KEYS, matchesOrderSearch, type FulfillmentStation } from "./workflow";
+import { OrderNotes } from "./OrderNotes";
+import { StationPicker } from "./StationPicker";
 import { PickupSelection } from "./PickupSelection";
 import { kitchenMessage } from "./PreparationChoice";
 import type { KitchenState } from "./types";
-import { isPickupSelectionValid, selectedPickupCount } from "./pickupQuantities";
+import { isPickupSelectionValid, remainingToPickUp, selectedPickupCount } from "./pickupQuantities";
+import { appHref, readStorage, removeStorage, writeStorage } from "../../lib/browser";
 
 type FulfillmentItem = {
   id: string;
@@ -39,8 +43,8 @@ type RecentDelivery = {
   can_undo: boolean;
 };
 
-const AREA_STORAGE = { cucina: "lag:kitchen-station", bar: "lag:bar-station" } as const;
-const KITCHEN_ORDER_SOUND_URL = `${import.meta.env.BASE_URL}sounds/line-simple-bell.mp3`;
+const SOUND_STORAGE_KEY = "lag:kitchen-sound";
+const KITCHEN_ORDER_SOUND_URL = appHref("sounds/line-simple-bell.mp3");
 let kitchenOrderAudio: HTMLAudioElement | null = null;
 
 function playNewKitchenOrderSound() {
@@ -52,11 +56,15 @@ function playNewKitchenOrderSound() {
 }
 
 export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
-  const { role, loading: authLoading } = useAuth();
+  // Il ruolo è già verificato da ProtectedOperationalPage (App.tsx) e dal database.
+  const { role } = useAuth();
   const options = area === "cucina" ? KITCHEN_STATIONS : BAR_STATIONS;
   const areaLabel = area === "cucina" ? "Cucina" : "Bar";
-  const authorized = role === area || role === "admin";
-  const [station, setStation] = useState<FulfillmentStation | null>(null);
+  // Come in Cassa: la postazione resta sul dispositivo finché non si preme "Cambia postazione".
+  const [station, setStation] = useState<FulfillmentStation | null>(() => {
+    const saved = readStorage(STATION_STORAGE_KEYS[area]);
+    return options.find((option) => option.key === saved)?.key ?? null;
+  });
   const [orders, setOrders] = useState<FulfillmentOrder[]>([]);
   const [activeOrder, setActiveOrder] = useState<FulfillmentOrder | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -67,7 +75,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("lag:kitchen-sound") === "on");
+  const [soundEnabled, setSoundEnabled] = useState(() => readStorage(SOUND_STORAGE_KEY) === "on");
   const knownKitchenOrderIds = useRef<Set<string> | null>(null);
   const queueRequestId = useRef(0);
 
@@ -80,7 +88,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   }, []);
 
   const refetch = useCallback(async () => {
-    if (!authorized || !station) return;
+    if (!station) return;
     const requestId = ++queueRequestId.current;
     setLoading(true);
     const { data, error } = await supabase.rpc("get_fulfillment_queue", { p_station: station });
@@ -108,11 +116,11 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
     } else {
       setRecent([]);
     }
-  }, [authorized, soundEnabled, station]);
+  }, [soundEnabled, station]);
 
   useEffect(() => {
     void refetch();
-    if (!authorized || !station) return;
+    if (!station) return;
     const channel = supabase.channel(`fulfillment-${area}-${station}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "order_fulfillment_items" }, () => void refetch())
@@ -126,15 +134,16 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
       document.removeEventListener('visibilitychange',refreshVisible);
       void supabase.removeChannel(channel);
     };
-  }, [area, authorized, refetch, station]);
+  }, [area, refetch, station]);
 
-  const filtered = useMemo(() => orders.filter((order) => (
-    (!numberSearch.trim() || String(order.display_number).includes(numberSearch.trim()))
-    && (!aliasSearch.trim() || (order.alias ?? "").toLocaleLowerCase("it").includes(aliasSearch.trim().toLocaleLowerCase("it")))
-  )), [aliasSearch, numberSearch, orders]);
+  const filtered = useMemo(
+    () => orders.filter((order) => matchesOrderSearch(order, numberSearch, aliasSearch)),
+    [aliasSearch, numberSearch, orders],
+  );
 
-  function chooseStation(next: FulfillmentStation) {
-    localStorage.setItem(AREA_STORAGE[area], next);
+  function chooseStation(next: FulfillmentStation | null) {
+    if (next) writeStorage(STATION_STORAGE_KEYS[area], next);
+    else removeStorage(STATION_STORAGE_KEYS[area]);
     knownKitchenOrderIds.current = null;
     setStation(next);
     setActiveOrder(null);
@@ -144,7 +153,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   function toggleKitchenSound() {
     const next = !soundEnabled;
     setSoundEnabled(next);
-    localStorage.setItem("lag:kitchen-sound", next ? "on" : "off");
+    writeStorage(SOUND_STORAGE_KEY, next ? "on" : "off");
     if (next) playNewKitchenOrderSound();
   }
 
@@ -234,22 +243,12 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
     await refetch();
   }
 
-  if (authLoading) return <main className="mx-auto max-w-3xl px-4 py-10 text-sm text-[var(--text-secondary)]">Carico…</main>;
-  if (!authorized) return <main className="mx-auto max-w-3xl px-4 py-10"><StaffPageHeading title={areaLabel} description="Accesso riservato al personale autorizzato." /></main>;
-
   if (!station) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
         <StaffPageHeading title={areaLabel} description="Configura la postazione di lavoro su questo dispositivo." />
         <StaffPanel eyebrow="Configurazione dispositivo" title="Scegli la postazione" description="La scelta resta memorizzata e può essere cambiata in seguito.">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {options.map((option) => (
-              <button key={option.key} type="button" onClick={() => chooseStation(option.key)} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)]">
-                <strong className="font-display text-lg text-[var(--accent-primary)]">{option.label}</strong>
-                <span className="mt-1 block text-sm text-[var(--text-secondary)]">{option.description}</span>
-              </button>
-            ))}
-          </div>
+          <StationPicker options={options} onPick={chooseStation} />
         </StaffPanel>
       </main>
     );
@@ -261,13 +260,13 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
         <StaffPageHeading title="Ritiro ordine" description={`${areaLabel} · ${stationLabel}`} action={<Button variant="staff-secondary" disabled={busy} onClick={() => setActiveOrder(null)}>Torna alla coda</Button>} />
-        {message && <p role="alert" className="mb-4 rounded-xl border border-[var(--state-error)]/50 p-3 text-sm">{message}</p>}
+        {message && <Notice tone="error" className="mb-4">{message}</Notice>}
         <StaffPanel eyebrow={`Ordine #${activeOrder.display_number}`} title={activeOrder.alias ?? "Senza nome"} description={overview ? "Vista generale di preparazione" : "Puoi consegnare anche solo una parte dell’ordine."}>
-          {activeOrder.notes && <div className="mb-4 rounded-[var(--radius-sm)] border-2 border-[var(--state-warning)] p-3 text-sm"><strong>NOTE:</strong> {activeOrder.notes}</div>}
+          <OrderNotes notes={activeOrder.notes} />
           {foodDormant && <div className="mb-4 rounded-2xl border border-[var(--accent-primary)] p-4"><p className="text-sm">{kitchenMessage(activeOrder.kitchen_state)}</p>{activeOrder.kitchen_state==='dormant' && <Button variant="staff-primary" className="mt-3 w-full" disabled={busy} onClick={()=>void activateFood()}>Avvia preparazione del cibo</Button>}</div>}
           {overview || foodDormant ? <div className="flex flex-col gap-3">
             {activeOrder.items.map((item) => {
-              const remaining = item.quantity - item.delivered_quantity;
+              const remaining = remainingToPickUp(item);
               return (
                 <div key={item.id} className="flex items-center justify-between gap-3 border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0">
                   <div>
@@ -288,8 +287,8 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <StaffPageHeading title={stationLabel} description={`${areaLabel} · cibo ordinato dall’attivazione, bevande dal pagamento`} action={<Button variant="staff-secondary" onClick={() => setStation(null)}>Cambia postazione</Button>} />
-      {message && <div className="mb-4 rounded-[var(--radius-sm)] border border-[var(--surface-border)] p-3 text-sm">{message}</div>}
+      <StaffPageHeading title={stationLabel} description={`${areaLabel} · cibo ordinato dall’attivazione, bevande dal pagamento`} action={<Button variant="staff-secondary" onClick={() => chooseStation(null)}>Cambia postazione</Button>} />
+      {message && <Notice className="mb-4" onDismiss={() => setMessage(null)}>{message}</Notice>}
       <StaffPanel
         eyebrow="Ritiro ordini"
         title="Coda della postazione"
@@ -314,9 +313,9 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {filtered.map((order) => (
-            <button key={order.id} type="button" onClick={() => selectOrder(order)} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)]">
+            <button key={order.id} type="button" onClick={() => selectOrder(order)} className="tile">
               <strong className="font-display text-xl text-[var(--accent-primary)]">#{order.display_number} · {order.alias}</strong>
-              <span className="mt-2 block text-sm">{order.items.map((item) => `${item.quantity - item.delivered_quantity}× ${item.name}`).join(" · ")}</span>
+              <span className="mt-2 block text-sm">{order.items.map((item) => `${remainingToPickUp(item)}× ${item.name}`).join(" · ")}</span>
               {order.notes && <span className="mt-2 block text-sm font-semibold text-[var(--state-warning)]">NOTE: {order.notes}</span>}
             </button>
           ))}
