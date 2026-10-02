@@ -10,7 +10,7 @@ export function Notice({ children, onDismiss, tone = "neutral", className = "" }
   return (
     <div
       role={tone === "error" ? "alert" : "status"}
-      className={`flex items-start justify-between gap-3 rounded-[var(--radius-sm)] border p-3 text-sm ${tone === "error" ? "border-[var(--state-error)]/50" : "border-[var(--surface-border)]"} ${className}`}
+      className={`flex items-start justify-between gap-3 rounded-[var(--radius-sm)] border p-3 text-sm ${tone === "error" ? "border-[rgba(229,88,75,0.5)]" : "border-[var(--surface-border)]"} ${className}`}
     >
       <span>{children}</span>
       {onDismiss && <button type="button" onClick={onDismiss} aria-label="Chiudi avviso">×</button>}

@@ -67,8 +67,8 @@ section[id] {
 
   /* Tessera arancione cliccabile: collegamenti staff, scelta postazione, coda ritiri. */
   .tile {
-    /* Il bordo resta quello predefinito, come prima della classe condivisa: Tailwind 3
-       non genera il colore con opacità da una variabile CSS (border-[var(--accent-primary)]/45). */
-    @apply rounded-[var(--radius-md)] border bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)];
+    /* Colori scritti in rgba: Tailwind 3 ignora in silenzio l'opacità su una variabile CSS
+       (border-[var(--accent-primary)]/45 non genera alcuna regola). */
+    @apply rounded-[var(--radius-md)] border border-[rgba(242,128,46,0.45)] bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)];
   }
 }

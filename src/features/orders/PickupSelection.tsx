@@ -73,7 +73,7 @@ export function PickupSelection({ items, selection, onChange, onConfirm, busy = 
         })}
       </div>
       {!valid && (
-        <div role="alert" className="mt-4 rounded-xl border border-[var(--state-error)]/50 p-3 text-sm">
+        <div role="alert" className="mt-4 rounded-xl border border-[rgba(229,88,75,0.5)] p-3 text-sm">
           Le quantità sono cambiate da un’altra postazione. <button type="button" disabled={busy} className="order-quiet-action" onClick={() => onChange({})}>Scegli di nuovo</button>
         </div>
       )}
