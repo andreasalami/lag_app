@@ -94,8 +94,16 @@ export async function createIncomeSnapshotPdf(snapshot: IncomeSnapshot): Promise
         text(formatWholeEuro(bar.revenue), center, baseline - height - 1.5, bars.length > 12 ? 6 : 7.5, bar === peak ? INK : MUTED, bar === peak, "center");
       }
       text(bar.label, center, baseline + 4.5, 8, MUTED, false, "center");
+      if (bar.day) {
+        // Inizio di una nuova serata: giorno sotto l'ora e linea di separazione dalla precedente.
+        text(bar.day.slice(0, 3), center, baseline + 8.5, 7, MUTED, false, "center");
+        if (index > 0) {
+          pdf.setDrawColor(...BAR);
+          pdf.line(center - slot / 2, baseline - chartHeight, center - slot / 2, baseline + 9);
+        }
+      }
     });
-    y = baseline + 12;
+    y = baseline + (bars.some((bar) => bar.day) ? 16 : 12);
   }
 
   const section = (summary: SectionSummary) => {

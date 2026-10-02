@@ -20,7 +20,8 @@ export type SectionSummary = {
   top: RankedProduct[];
   least: RankedProduct | null;
 };
-export type HourBar = { label: string; revenue: number; orders: number };
+/** `day` è valorizzato sulla prima ora di ogni serata quando il PDF ne copre più di una. */
+export type HourBar = { label: string; revenue: number; orders: number; day: string | null };
 
 const LOCAL_HOUR = /^\d{4}-\d{2}-\d{2}T\d{2}:00:00$/;
 
@@ -83,20 +84,31 @@ export function summarizeSections(products: SnapshotProduct[], category: MenuCat
   });
 }
 
-/** Una colonna per ogni ora tra la prima e l'ultima vendita, anche le ore senza incassi. */
+// Fino a 3 ore senza incassi restano nel grafico come colonne vuote; un buco più
+// lungo (per esempio tra venerdì notte e sabato sera) separa due serate.
+const MAX_FILLED_GAP_HOURS = 3;
+const WEEKDAYS = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
+
+/** Colonne orarie in ordine: riempie i buchi brevi e segna l'inizio di ogni serata. */
 export function hourlyBars(hours: SnapshotHour[]): HourBar[] {
-  if (hours.length === 0) return [];
   // Le ore arrivano già nel fuso dell'evento: si trattano come orari "da parete", senza conversioni.
-  const toMs = (hour: string) => Date.parse(`${hour}Z`);
-  const byHour = new Map(hours.map((row) => [toMs(row.hour), row]));
-  const start = Math.min(...byHour.keys());
-  const end = Math.max(...byHour.keys());
+  const rows = hours.map((row) => ({ ...row, ms: Date.parse(`${row.hour}Z`) })).sort((a, b) => a.ms - b.ms);
+  const bar = (ms: number, revenue: number, orders: number, day: string | null = null): HourBar =>
+    ({ label: new Date(ms).toISOString().slice(11, 13), revenue, orders, day });
   const bars: HourBar[] = [];
-  for (let ms = start; ms <= end; ms += 3_600_000) {
-    const row = byHour.get(ms);
-    bars.push({ label: new Date(ms).toISOString().slice(11, 13), revenue: row?.revenue ?? 0, orders: row?.orders ?? 0 });
-  }
-  return bars;
+  let sessions = 0;
+  rows.forEach((row, index) => {
+    const gapHours = index === 0 ? Infinity : (row.ms - rows[index - 1].ms) / 3_600_000 - 1;
+    if (gapHours > MAX_FILLED_GAP_HOURS) {
+      sessions += 1;
+      bars.push(bar(row.ms, row.revenue, row.orders, WEEKDAYS[new Date(row.ms).getUTCDay()]));
+      return;
+    }
+    for (let missing = 1; missing <= gapHours; missing += 1) bars.push(bar(rows[index - 1].ms + missing * 3_600_000, 0, 0));
+    bars.push(bar(row.ms, row.revenue, row.orders));
+  });
+  // Con una sola serata il giorno non serve: resta solo l'ora.
+  return sessions > 1 ? bars : bars.map((item) => ({ ...item, day: null }));
 }
 
 export function peakHour(bars: HourBar[]) {
@@ -131,7 +143,9 @@ export function peakSentence(bars: HourBar[]) {
   const peak = peakHour(bars);
   if (!peak) return "Non ci sono ancora incassi da mostrare ora per ora.";
   const next = String((Number(peak.label) + 1) % 24).padStart(2, "0");
-  return `Il momento più intenso è stato tra le ${peak.label} e le ${next}: ${formatEuro(peak.revenue)}.`;
+  // Su più serate si dice anche quale: la serata è quella dell'ultima colonna con il giorno.
+  const day = bars.slice(0, bars.indexOf(peak) + 1).reverse().find((item) => item.day)?.day;
+  return `Il momento più intenso è stato ${day ? `${day} ` : ""}tra le ${peak.label} e le ${next}: ${formatEuro(peak.revenue)}.`;
 }
 
 export function leastSentence(least: RankedProduct) {

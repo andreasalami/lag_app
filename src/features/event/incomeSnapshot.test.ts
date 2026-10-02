@@ -59,6 +59,20 @@ describe("income snapshot", () => {
     expect(peakSentence(bars)).toBe("Il momento più intenso è stato tra le 21 e le 22: 890,00 €.");
   });
 
+  it("separa due serate con il giorno invece di riempire le ore del giorno", () => {
+    const bars = hourlyBars([
+      { hour: "2026-10-02T21:00:00", orders: 5, revenue: 300 },
+      { hour: "2026-10-02T23:00:00", orders: 4, revenue: 200 },
+      { hour: "2026-10-03T21:00:00", orders: 9, revenue: 700 },
+    ]);
+    expect(bars.map((bar) => [bar.label, bar.day])).toEqual([["21", "venerdì"], ["22", null], ["23", null], ["21", "sabato"]]);
+    expect(peakSentence(bars)).toBe("Il momento più intenso è stato sabato tra le 21 e le 22: 700,00\u00a0€.");
+  });
+
+  it("un orario anomalo non genera migliaia di colonne", () => {
+    expect(hourlyBars([{ hour: "1970-01-01T01:00:00", orders: 1, revenue: 5 }, { hour: "2026-10-02T21:00:00", orders: 1, revenue: 5 }])).toHaveLength(2);
+  });
+
   it("frasi accessibili anche senza ordini", () => {
     expect(headlineSentences({ ...snapshot, orders_paid: 0, revenue_total: 0 })).toEqual(["Non ci sono ancora ordini pagati."]);
     expect(headlineSentences({ ...snapshot, orders_paid: 1, revenue_total: 12 })).toEqual(["Da 1 ordine pagato. In media ogni ordine vale 12,00 €."]);
