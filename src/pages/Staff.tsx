@@ -3,6 +3,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import { isSupabaseConfigured } from "../lib/supabaseClient";
 import { Button } from "../components/ui/Button";
 import { StaffPageHeading, StaffPanel } from "../components/ui/StaffPanel";
+import { appHref } from "../lib/browser";
 
 /*
   Hub staff: un login unico e generico (qualsiasi ruolo: staff,
@@ -15,20 +16,22 @@ import { StaffPageHeading, StaffPanel } from "../components/ui/StaffPanel";
   navigazione, non un semplice salto d'ancora nella stessa pagina.
 */
 const DESTINATIONS = [
-  { label: "Gestione Scaletta", path: "/#gestione-programma", roles: ["staff", "admin"] },
-  { label: "Gestione Menu e Scorte", path: "/#gestione-menu", roles: ["staff", "cucina", "admin"] },
-  { label: "Gestione torneo", path: "/#gestione-torneo", roles: ["admin"] },
+  { label: "Gestione Scaletta", path: "#gestione-programma", roles: ["staff", "admin"] },
+  { label: "Gestione Menu e Scorte", path: "#gestione-menu", roles: ["staff", "cucina", "admin"] },
+  { label: "Gestione torneo", path: "#gestione-torneo", roles: ["admin"] },
 ];
 
+// La gestione evento (apertura, chiusura, situazione incassi) è separata dalle casse
+// ma riservata agli stessi ruoli: cassa e admin.
 const OPERATIONS = [
-  { label: "Casse", path: "/#cassa", role: "cassa" },
-  { label: "Cucina", path: "/#cucina", role: "cucina" },
-  { label: "Bar", path: "/#bar", role: "bar" },
+  { label: "Gestione evento", path: "#gestione-evento", role: "cassa", hint: "Apertura, chiusura e incassi →" },
+  { label: "Casse", path: "#cassa", role: "cassa", hint: "Avvia postazione →" },
+  { label: "Cucina", path: "#cucina", role: "cucina", hint: "Avvia postazione →" },
+  { label: "Bar", path: "#bar", role: "bar", hint: "Avvia postazione →" },
 ];
 
 export function Staff() {
   const { session, role, loading, profileError, signIn, signOut } = useAuth();
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +42,7 @@ export function Staff() {
   // navigazione (non un salto d'ancora) perché stiamo cambiando pagina.
   useEffect(() => {
     if (session && role === "tournament_manager") {
-      window.location.href = `${import.meta.env.BASE_URL}#gestione-torneo`;
+      window.location.href = appHref("#gestione-torneo");
     }
   }, [session, role]);
 
@@ -94,7 +97,7 @@ export function Staff() {
             {error && <p className="text-xs text-[var(--state-error)]">{error}</p>}
           </form>
         </StaffPanel>
-        <Button variant="back" href={`${basePath}/`} className="mt-4 w-full">← Torna al sito</Button>
+        <Button variant="back" href={appHref()} className="mt-4 w-full">← Torna al sito</Button>
       </section>
     );
   }
@@ -129,7 +132,7 @@ export function Staff() {
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Button variant="staff-secondary" onClick={signOut}>Esci</Button>
-            <Button variant="back" href={`${basePath}/`}>← Torna al sito</Button>
+            <Button variant="back" href={appHref()}>← Torna al sito</Button>
           </div>
         </StaffPanel>
       </section>
@@ -144,7 +147,7 @@ export function Staff() {
         {(role === "staff" || role === "cucina" || role === "admin") && <StaffPanel eyebrow="Contenuti pubblici" title="Sezioni del sito" description="Aggiorna ciò che viene mostrato nella Home.">
           <div className="grid gap-3 sm:grid-cols-2">
             {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
-              <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left font-semibold text-[var(--accent-primary)] transition-colors hover:bg-[rgba(242,128,46,0.16)]">
+              <a key={d.label} href={appHref(d.path)} className="tile font-semibold text-[var(--accent-primary)]">
                 {d.label}
                 <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Apri la pagina di gestione →</span>
               </a>
@@ -153,11 +156,11 @@ export function Staff() {
         </StaffPanel>}
 
         {(role === "cassa" || role === "cucina" || role === "bar" || role === "admin") && <StaffPanel eyebrow="Evento live" title="Operatività" description="Apri la postazione assegnata durante il servizio.">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {OPERATIONS.filter((d) => role === "admin" || d.role === role).map((d) => (
-              <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left font-semibold text-[var(--accent-primary)] transition-colors hover:bg-[rgba(242,128,46,0.16)]">
+              <a key={d.label} href={appHref(d.path)} className="tile font-semibold text-[var(--accent-primary)]">
                 {d.label}
-                <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Avvia postazione →</span>
+                <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">{d.hint}</span>
               </a>
             ))}
           </div>
@@ -166,7 +169,7 @@ export function Staff() {
 
       <div className="mt-6 flex flex-wrap justify-center gap-2">
         <Button variant="staff-secondary" onClick={signOut}>Esci</Button>
-        <Button variant="back" href={`${basePath}/`}>← Torna al sito</Button>
+        <Button variant="back" href={appHref()}>← Torna al sito</Button>
       </div>
     </section>
   );

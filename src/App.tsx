@@ -8,6 +8,7 @@ import { ProgramManagement } from "./pages/ProgramManagement";
 import { MenuManagement } from "./pages/MenuManagement";
 import { StaffBackButton } from "./components/layout/StaffBackButton";
 import { Button } from "./components/ui/Button";
+import { appHref } from "./lib/browser";
 
 // OrderPage porta con sé carrello, QR, PDF e scanner: chi apre la Home per
 // vedere orari o programma non deve scaricarla. Come Cassa/Cucina/Bar, arriva
@@ -16,6 +17,7 @@ const OrderPage = lazy(() => import("./features/orders/OrderPage").then((module)
 const Cassa = lazy(() => import("./features/orders/Cassa").then((module) => ({ default: module.Cassa })));
 const Cucina = lazy(() => import("./features/orders/Cucina").then((module) => ({ default: module.Cucina })));
 const Bar = lazy(() => import("./features/orders/Bar").then((module) => ({ default: module.Bar })));
+const EventManagement = lazy(() => import("./features/event/EventManagement").then((module) => ({ default: module.EventManagement })));
 
 const LOADING = <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Carico…</section>;
 
@@ -29,7 +31,6 @@ function ProtectedOperationalPage({
   title: string;
 }) {
   const { session, role, loading, profileError } = useAuth();
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   if (loading) {
     return <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Verifico l’accesso…</section>;
@@ -42,7 +43,7 @@ function ProtectedOperationalPage({
         <p className="mt-3 text-sm text-[var(--text-secondary)]">
           Questa sezione non è pubblica. Serve un account con il ruolo corretto.
         </p>
-        <Button href={`${basePath}/#staff`} variant="staff-primary" className="mt-6">
+        <Button href={appHref("#staff")} variant="staff-primary" className="mt-6">
           Accedi all’area staff
         </Button>
       </section>
@@ -77,7 +78,7 @@ function App() {
 
   // Le anteprime dimostrative vivono nel loro entry point (anteprima.html), non
   // qui: non caricano Supabase né la sessione staff e non finiscono nel bundle.
-  const internalPages = ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo"];
+  const internalPages = ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo", "gestione-evento"];
   const hashRoute = hashPath.split("?")[0];
   const internalPage = internalPages.includes(hashRoute) ? hashRoute : path.slice(1);
 
@@ -92,6 +93,8 @@ function App() {
         <ProtectedOperationalPage allowedRoles={["cucina", "admin"]} component={Cucina} title="Cucina" />
       ) : internalPage === "bar" ? (
         <ProtectedOperationalPage allowedRoles={["bar", "admin"]} component={Bar} title="Bar" />
+      ) : internalPage === "gestione-evento" ? (
+        <ProtectedOperationalPage allowedRoles={["cassa", "admin"]} component={EventManagement} title="Gestione evento" />
       ) : internalPage === "ordina-nuovo" ? (
         <OrderPage startFresh />
       ) : internalPage === "ordina" ? (
