@@ -19,15 +19,14 @@ const DESTINATIONS = [
   { label: "Gestione Scaletta", path: "#gestione-programma", roles: ["staff", "admin"] },
   { label: "Gestione Menu e Scorte", path: "#gestione-menu", roles: ["staff", "cucina", "admin"] },
   { label: "Gestione torneo", path: "#gestione-torneo", roles: ["admin"] },
+  // Apertura, chiusura e situazione incassi: separata dalle casse, riservata a cassa e admin.
+  { label: "Gestione evento", path: "#gestione-evento", roles: ["cassa", "admin"] },
 ];
 
-// La gestione evento (apertura, chiusura, situazione incassi) è separata dalle casse
-// ma riservata agli stessi ruoli: cassa e admin.
 const OPERATIONS = [
-  { label: "Gestione evento", path: "#gestione-evento", role: "cassa", hint: "Apertura, chiusura e incassi →" },
-  { label: "Casse", path: "#cassa", role: "cassa", hint: "Avvia postazione →" },
-  { label: "Cucina", path: "#cucina", role: "cucina", hint: "Avvia postazione →" },
-  { label: "Bar", path: "#bar", role: "bar", hint: "Avvia postazione →" },
+  { label: "Casse", path: "#cassa", role: "cassa" },
+  { label: "Cucina", path: "#cucina", role: "cucina" },
+  { label: "Bar", path: "#bar", role: "bar" },
 ];
 
 export function Staff() {
@@ -144,7 +143,7 @@ export function Staff() {
       <StaffPageHeading eyebrow="Area riservata" title="Gestione" description={`Accesso attivo · ${session.user.email ?? "account staff"}`} />
 
       <div className="flex flex-col gap-6">
-        {(role === "staff" || role === "cucina" || role === "admin") && <StaffPanel eyebrow="Contenuti pubblici" title="Sezioni del sito" description="Aggiorna ciò che viene mostrato nella Home.">
+        {(role === "staff" || role === "cucina" || role === "cassa" || role === "admin") && <StaffPanel eyebrow="Gestione" title="Sezioni del sito" description="Contenuti mostrati nella Home e gestione dell’evento.">
           <div className="grid gap-3 sm:grid-cols-2">
             {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
               <a key={d.label} href={appHref(d.path)} className="tile font-semibold text-[var(--accent-primary)]">
@@ -160,7 +159,7 @@ export function Staff() {
             {OPERATIONS.filter((d) => role === "admin" || d.role === role).map((d) => (
               <a key={d.label} href={appHref(d.path)} className="tile font-semibold text-[var(--accent-primary)]">
                 {d.label}
-                <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">{d.hint}</span>
+                <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Avvia postazione →</span>
               </a>
             ))}
           </div>

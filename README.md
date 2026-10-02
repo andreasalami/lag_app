@@ -37,12 +37,12 @@ sul dispositivo. Dopo il login, l'area Staff mostra i collegamenti in questo ord
 1. Programma
 2. Menu
 3. Gestione torneo (admin)
-4. Gestione evento
+4. Gestione evento (cassa e admin)
 5. Cassa
 6. Cucina
 7. Bar
 
-Le sezioni editoriali precedono gli strumenti operativi, raccolti in fondo.
+Le sezioni di gestione precedono le postazioni operative, raccolte in fondo.
 Ogni sezione riservata ha in alto **← Area staff**, che riporta sempre al
 login o all'elenco delle sezioni, anche se la pagina è stata aperta da un link
 diretto; dall'area staff **← Torna al sito** riporta alla Home.
