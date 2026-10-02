@@ -39,9 +39,9 @@ l'app restano nel [README](../README.md).
 
 ## Decisioni aperte
 
-- Bordi semitrasparenti `border-[var(--…)]/NN` mai generati da Tailwind 3 (8 punti in 7 file).
+- Comportamenti inattesi dei test di usabilità (docs/USABILITY_TEST_RESULTS_2026-10-02.md).
 - D16 (preparazione PGlite duplicata negli script più vecchi) e D17 (formatter/ESLint).
-- Ambiente per i test di usabilità (progetto Supabase di prova separato oppure solo locale).
+
 - Base della pull request rispetto alla PR #4 ancora aperta.
 
 ## Interventi

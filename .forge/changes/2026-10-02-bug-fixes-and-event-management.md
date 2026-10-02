@@ -48,3 +48,8 @@ Nel progetto non esiste `docs/learning/learning-register.md`; nessuna voce aggiu
 ## Annotazioni successive
 
 —
+
+- 2026-10-02 — Bordi semitrasparenti corretti come progettati (commit `1a52e90`, scelta di Andrea).
+  Test di usabilità in locale con finto Supabase e sul sito pubblicato in sola lettura: trovato e corretto
+  il blocco del PDF con orari distanti (commit `1a216e6`); 11 comportamenti inattesi ancora aperti,
+  descritti in [docs/USABILITY_TEST_RESULTS_2026-10-02.md](../../docs/USABILITY_TEST_RESULTS_2026-10-02.md).
