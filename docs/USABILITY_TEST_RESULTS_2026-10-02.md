@@ -24,10 +24,10 @@ controllo a larghezza desktop.
 
 | # | Gravità | Dove | Cosa succede |
 |---|---|---|---|
-| 1 | Alta | Programma (sito pubblicato) | Due eventi sullo stesso palco alla stessa ora si coprono a vicenda. Venerdì, Stage 1, 00:30–02:00: "Centokili" è completamente nascosto da "Feet DJ". O è un errore di dati, o la griglia deve affiancare i riquadri; la gestione scaletta non avvisa delle sovrapposizioni. |
+| 1 | Risolto (dati) | Programma (sito pubblicato) | Due eventi sullo stesso palco alla stessa ora si coprono a vicenda. Venerdì, Stage 1, 00:30–02:00: "Centokili" è completamente nascosto da "Feet DJ". O è un errore di dati, o la griglia deve affiancare i riquadri; la gestione scaletta non avvisa delle sovrapposizioni. |
 | 2 | Media | Ordine cliente | Se una richiesta resta in sospeso (rete caduta durante l'invio), la pagina mostra solo "Ritroviamo il tuo ordine" con "Recupera ordine": non c'è modo di tornare indietro né di aprire il QR degli ordini già creati, che serve in cassa. |
 | 3 | Media-bassa | Link di recupero | Con un codice di recupero non valido la schermata ha solo il pulsante che fallisce: nessun collegamento per tornare al sito o agli ordini. |
-| 4 | Media-bassa | Gestione evento (telefono) | Dopo "Salva orari e limite" il messaggio compare in cima alla pagina, fuori schermo: chi ha premuto il pulsante non vede la conferma né l'errore. |
+| 4 | Risolto | Gestione evento (telefono) | Il messaggio dopo "Salva" compariva in cima, fuori schermo. Ora è un avviso fisso in basso, sempre visibile. |
 | 5 | Bassa | Editor torneo | Un nome squadra vuoto è accettato e pubblicabile. |
 | 6 | Bassa | Nome dell'ordine | "-trattino" viene rifiutato perché il nome deve iniziare con lettera o numero, ma il messaggio non lo dice. |
 | 7 | Bassa | Testi | "1 totali", "1 ordini trovati", "1 ordini da gestire": manca il singolare. |

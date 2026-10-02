@@ -152,9 +152,14 @@ export function EventManagement() {
   const closed = Boolean(eventState?.permanently_closed_at);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
+    <main className="mx-auto max-w-3xl px-4 pb-28 pt-8">
       <StaffPageHeading title="Gestione evento" description="Apertura e chiusura delle ordinazioni, situazione incassi e report finale." />
-      {message && <Notice className="mb-5" onDismiss={() => setMessage(null)}>{message}</Notice>}
+      {/* Fisso in basso: su telefono i pulsanti sono in fondo alla pagina e un avviso in cima resterebbe fuori schermo. */}
+      {message && (
+        <div className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-3xl">
+          <Notice className="surface-solid shadow-lg" onDismiss={() => setMessage(null)}>{message}</Notice>
+        </div>
+      )}
 
       <StaffPanel
         className="mb-6"
