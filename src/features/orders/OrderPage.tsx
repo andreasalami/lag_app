@@ -76,7 +76,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [challengeAttempt, setChallengeAttempt] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submittedOrder, setSubmittedOrder] = useState<StoredOrder | null>(() => startFresh || readPendingOrder() ? null : readOrderHistory()[0] ?? null);
+  const [submittedOrder, setSubmittedOrder] = useState<StoredOrder | null>(() => startFresh ? null : readOrderHistory()[0] ?? null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrError, setQrError] = useState(false);
   const [finalTab, setFinalTab] = useState<"qr" | "summary">("qr");
@@ -93,6 +93,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [restoreError, setRestoreError] = useState<string|null>(null);
   const [showRecovery, setShowRecovery] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<PendingOrderRequest | null>(readPendingOrder);
+  const [showAbandonConfirmation, setShowAbandonConfirmation] = useState(false);
 
   useEffect(() => {
     historyRef.current = orderHistory;
@@ -128,7 +129,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     setOrderHistory(allHistory);
     if (restoreLatestOrder) {
       const latest = currentHistory[0] ?? null;
-      setSubmittedOrder(readPendingOrder() ? null : latest);
+      setSubmittedOrder(latest);
       setShowIntro(!readPendingOrder() && latest === null);
     }
     setLoading(false);
@@ -199,6 +200,12 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
 
   function requestSubmit() {
     setSubmitError(null);
+    // L'invio riprenderebbe la richiesta in sospeso, non il carrello attuale.
+    if (pendingRequest) {
+      setSubmitError("C’è una richiesta in sospeso in cima alla pagina: recuperala o rinunciaci prima di inviare un nuovo ordine.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (!/^[\p{L}\p{N}][\p{L}\p{N} _-]{1,31}$/u.test(alias.trim())) {
       setSubmitError("Inserisci un nome dell’ordine di 2–32 caratteri usando lettere, numeri, spazi, trattino o underscore.");
       setCartExpanded(true);
@@ -393,27 +400,62 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     finally{setRestoreBusy(false);}
   }
 
-  if(restoreToken) return <main className="mx-auto max-w-md px-4 py-8"><h1 className="text-2xl">Ritrova i tuoi ordini</h1><p className="my-4 text-sm text-[var(--text-secondary)]">Il tuo codice permette di recuperare lo storico, senza account.</p>{restoreError && <p role="alert" className="mb-4 text-sm">{restoreError}</p>}<Button className="w-full" disabled={restoreBusy} onClick={()=>void restoreHistory()}>{restoreBusy ? "Recupero gli ordini…" : "Recupera i miei ordini"}</Button></main>;
+  if(restoreToken) return <main className="mx-auto max-w-md px-4 py-8"><h1 className="text-2xl">Ritrova i tuoi ordini</h1><p className="my-4 text-sm text-[var(--text-secondary)]">Il tuo codice permette di recuperare lo storico, senza account.</p>{restoreError && <p role="alert" className="mb-4 text-sm">{restoreError}</p>}<Button className="w-full" disabled={restoreBusy} onClick={()=>void restoreHistory()}>{restoreBusy ? "Recupero gli ordini…" : "Recupera i miei ordini"}</Button>
+    {/* Un link rovinato non deve lasciare il cliente senza via d'uscita. */}
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      <Button variant="ghost" href={appHref("#ordina")}>Torna agli ordini</Button>
+      <Button variant="ghost" href={appHref()}>Vai alla Home</Button>
+    </div>
+  </main>;
   const recoveryToken = submittedOrder ? readRecoveryToken(submittedOrder.event_id) : null;
   if(showRecovery && submittedOrder && recoveryToken) return <RecoveryCard token={recoveryToken} eventName={submittedOrder.event_name} onBack={()=>setShowRecovery(false)}/>;
 
-  if (pendingRequest && !submittedOrder) {
-    return <main className="mx-auto max-w-xl px-4 py-8">
-      <h1 className="text-2xl">Ritroviamo il tuo ordine</h1>
-      <p className="mt-3 text-sm text-[var(--text-secondary)]">La richiesta è salvata su questo dispositivo. Verifichiamo se è già stata registrata, senza inviarne una nuova.</p>
-      <div className="my-5 space-y-2">{pendingRequest.items.map(line=><p key={line.id}>{line.qty} × {line.name}</p>)}</div>
-      {submitError && <p role="alert" className="mb-4 text-sm text-[var(--state-warning)]">{submitError}</p>}
-      {catalog?.event_id && pendingRequest.eventId !== catalog.event_id && <Button variant="ghost" className="mb-3 w-full" onClick={()=>{clearPendingOrder(pendingRequest.requestId);setPendingRequest(readPendingOrder());setSubmitError(null);}}>Chiudi la richiesta del vecchio evento</Button>}
-      <TurnstileChallenge key={challengeAttempt} onToken={setChallengeToken}/>
-      <Button className="mt-4 w-full" disabled={submitting || !challengeToken} onClick={()=>void submitOrder()}>{submitting ? "Verifico l’ordine…" : "Recupera ordine"}</Button>
-    </main>;
+  function abandonPendingRequest() {
+    if (!pendingRequest) return;
+    clearPendingOrder(pendingRequest.requestId);
+    setPendingRequest(readPendingOrder());
+    requestIdentityRef.current = { requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() };
+    setSubmitError(null);
+    setShowAbandonConfirmation(false);
   }
+
+  // Una richiesta interrotta (per esempio rete caduta) non blocca più la pagina: resta in
+  // evidenza in cima, mentre ordini già fatti, QR e carrello restano utilizzabili.
+  const pendingPanel = pendingRequest && (
+    <section role="region" aria-labelledby="pending-request-title" className="mt-4 rounded-[var(--radius-md)] border-2 border-[var(--state-warning)] p-4 text-left">
+      <h2 id="pending-request-title" className="text-lg">Un ordine non è stato confermato</h2>
+      <p className="mt-1 text-sm text-[var(--text-secondary)]">La connessione si è interrotta durante l’invio. Verifichiamo se è arrivato in cassa, senza crearne un doppione.</p>
+      <ul className="my-3 space-y-1 text-sm">{pendingRequest.items.map((line) => <li key={line.id}>{line.qty} × {line.name}</li>)}</ul>
+      {submitError && <p role="alert" className="mb-3 text-sm text-[var(--state-warning)]">{submitError}</p>}
+      {catalog?.event_id && pendingRequest.eventId !== catalog.event_id && <p className="mb-3 text-sm">Questa richiesta appartiene a un evento precedente: puoi rinunciarci.</p>}
+      <TurnstileChallenge key={challengeAttempt} onToken={setChallengeToken} />
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <Button className="w-full" disabled={submitting || !challengeToken} onClick={() => void submitOrder()}>{submitting ? "Verifico l’ordine…" : "Recupera ordine"}</Button>
+        <Button variant="ghost" className="w-full" disabled={submitting} onClick={() => setShowAbandonConfirmation(true)}>Rinuncia a questa richiesta</Button>
+      </div>
+      <Modal
+        open={showAbandonConfirmation}
+        title="Rinunciare alla richiesta?"
+        dismissible
+        onClose={() => setShowAbandonConfirmation(false)}
+        actions={(
+          <>
+            <Button variant="ghost" onClick={() => setShowAbandonConfirmation(false)}>No, riprovo</Button>
+            <Button variant="primary" onClick={abandonPendingRequest}>Sì, rinuncio</Button>
+          </>
+        )}
+      >
+        <p>Se l’ordine era comunque arrivato in cassa, resterà in attesa di pagamento per 60 minuti e poi scadrà da solo: non paghi nulla finché non passi in cassa.</p>
+      </Modal>
+    </section>
+  );
 
   if (submittedOrder) {
     return (
       <main className="mx-auto min-h-full max-w-xl px-4 py-8">
         <Button href={appHref("#menu")} variant="back" className="min-h-10 px-4 py-2">← Indietro</Button>
-        {submitError && <p role="alert" className="mt-4 rounded-[var(--radius-sm)] border border-[var(--state-warning)] p-3 text-sm text-[var(--state-warning)]">{submitError}</p>}
+        {pendingPanel}
+        {submitError && !pendingRequest && <p role="alert" className="mt-4 rounded-[var(--radius-sm)] border border-[var(--state-warning)] p-3 text-sm text-[var(--state-warning)]">{submitError}</p>}
         <section className="mt-5 text-center">
           <p className={`text-sm ${orderStatusClassName(submittedOrder.status)}`}>{submittedOrder.event_closed_at ? "Evento concluso. Questo ordine resta nello storico; il QR non è più utilizzabile per il ritiro." : submittedOrder.status==='pagato' && (submittedOrder.kitchen_state==='dormant' || submittedOrder.kitchen_state==='waiting') ? 'Pagamento registrato.' : statusMessage(submittedOrder.status)}</p>
           <h1 className="mt-2 text-4xl">#{submittedOrder.display_number}</h1>
@@ -574,6 +616,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
           </Button>
         )}
       </div>
+      {pendingPanel}
       <h1 className="mt-5 text-3xl">Ordina qui</h1>
       <label className="mt-5 block rounded-[var(--radius-md)] border-2 border-[var(--accent-primary)] bg-white/5 p-4">
         <span className="mb-2 block text-lg font-semibold">Inserisci qui il nome del tuo ordine</span>
@@ -697,7 +740,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
                   className="field mt-1 w-full resize-none"
                 />
               </label>
-              {submitError && <p className="mt-2 text-xs text-[var(--state-error)]">{submitError}</p>}
+              {submitError && !pendingRequest && <p className="mt-2 text-xs text-[var(--state-error)]">{submitError}</p>}
               <Button variant="primary" className="mt-3 w-full" onClick={requestSubmit}>Invia ordine</Button>
             </div>
           )}
