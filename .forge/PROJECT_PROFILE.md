@@ -41,8 +41,7 @@ l'app restano nel [README](../README.md).
 
 - Comportamenti inattesi dei test di usabilità (docs/USABILITY_TEST_RESULTS_2026-10-02.md).
 - D16 (preparazione PGlite duplicata negli script più vecchi) e D17 (formatter/ESLint).
-
-- Base della pull request rispetto alla PR #4 ancora aperta.
+- Lavoro pubblicato nella PR #6 verso `main`, che include anche la PR #4: dopo il merge la #4 si può chiudere.
 
 ## Interventi
 
