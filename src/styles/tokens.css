@@ -34,8 +34,10 @@
   --accent-primary: #f2802e;
   --accent-primary-strong: #ff9d52;
 
-  /* Stato positivo / negativo */
+  /* Stato positivo / attenzione / negativo. --state-warning era usato in tutta l'app
+     senza essere definito: avvisi e note restavano del colore del testo. */
   --state-success: #6fa97a;
+  --state-warning: #e8b04a;
   --state-error: #e5584b;
 
   /* Testo — bianco/bianco caldo, terzo colore del brand */
