@@ -23,8 +23,9 @@ Produzione:
 | Programma | Griglia calendario, 2 palchi in contemporanea | staff |
 | Menu | Prodotti, prezzi, scorte e allergeni 1–14 | staff / cucina |
 | Instagram | Embed ufficiali dei post dell'evento | — |
-| Torneo | Riepilogo con turno e ultimi 5 risultati, più tabellone completo separato | tournament_manager |
-| Ordini | Preordine pubblico, QR, cassa, coda cucina e report anonimo | cassa / cucina |
+| Torneo | Riepilogo con turno e ultimi 5 risultati, più tabellone completo separato (nomi squadra fino a 20 caratteri) | tournament_manager |
+| Ordini | Preordine pubblico, QR, cassa, code di cucina e bar | cassa / cucina / bar |
+| Gestione evento | Apertura e chiusura ordinazioni, situazione incassi in PDF, report CSV finale | cassa |
 
 ## Ruoli e accesso
 
@@ -36,25 +37,37 @@ sul dispositivo. Dopo il login, l'area Staff mostra i collegamenti in questo ord
 1. Programma
 2. Menu
 3. Gestione torneo (admin)
-4. Cassa
-5. Cucina
+4. Gestione evento
+5. Cassa
+6. Cucina
+7. Bar
 
-Le sezioni editoriali precedono Cassa e Cucina, raccolte in fondo come strumenti operativi.
+Le sezioni editoriali precedono gli strumenti operativi, raccolti in fondo.
+Ogni sezione riservata ha in alto **← Area staff**, che riporta sempre al
+login o all'elenco delle sezioni, anche se la pagina è stata aperta da un link
+diretto; dall'area staff **← Torna al sito** riporta alla Home.
 
 | Ruolo | Permessi |
 |---|---|
 | `admin` | Accesso a tutte le sezioni e a tutte le operazioni |
 | `staff` | Modifica programma e menu |
 | `tournament_manager` | Modifica esclusivamente il torneo |
-| `cassa` | Gestisce preordini, ordini eccezionali, apertura evento e report |
+| `cassa` | Gestisce preordini e ordini eccezionali; apre e chiude l'evento, scarica situazione incassi e report |
 | `cucina` | Gestisce menu/scorte e consegna gli ordini alimentari |
+| `bar` | Consegna le bevande nelle postazioni del bar |
 | `pending` | Nessun permesso operativo |
 
 I permessi sono verificati da Supabase tramite Row Level Security. Il ruolo
 non viene scelto dal browser: viene letto dalla tabella `profiles` dopo il
-login. Le pagine Cassa e Cucina sono caricate dinamicamente soltanto dopo la
-verifica del ruolo: un visitatore anonimo o un ruolo diverso riceve la sola
-schermata di accesso riservato, anche conoscendo direttamente l'URL.
+login. Le pagine Gestione evento, Cassa, Cucina e Bar sono caricate
+dinamicamente soltanto dopo la verifica del ruolo: un visitatore anonimo o un
+ruolo diverso riceve la sola schermata di accesso riservato, anche conoscendo
+direttamente l'URL.
+
+Cassa, Cucina e Bar ricordano la postazione scelta su quel dispositivo, anche
+dopo un ricaricamento, finché non si preme **Cambia cassa** o **Cambia
+postazione**. Se il browser blocca la memoria locale la pagina funziona lo
+stesso: la postazione va solo riscelta al ricaricamento.
 
 ## Flusso ordini
 
@@ -85,7 +98,7 @@ volta lo stesso QR già usato in cassa. Il cliente può consultare lo stato del
 proprio ordine mediante il token del QR, senza accesso pubblico alla tabella
 degli ordini.
 
-La sezione Evento della cassa gestisce:
+La sezione **Gestione evento** (ruoli `cassa` e `admin`, separata dalle casse) gestisce:
 
 - nome, apertura e chiusura del singolo weekend;
 - limite configurabile degli ordini contemporaneamente in attesa di pagamento (default 100); questo conteggio non include gli ordini già pagati in cucina;
@@ -94,6 +107,11 @@ La sezione Evento della cassa gestisce:
 - sospensione e riapertura anticipata delle ordinazioni;
 - chiusura definitiva protetta dalla digitazione di `CHIUDI EVENTO`;
 - download del CSV finale senza alias e note;
+- in qualsiasi momento, anche a evento aperto, il PDF **Situazione incassi**:
+  incasso totale e spesa media, grafico ora per ora con l'ora di punta e, per
+  ogni sezione del menu (cibo e bevande), i due prodotti più venduti con la
+  percentuale sui pezzi della sezione e quello venduto meno, anche se a zero.
+  Il PDF usa solo aggregati: nessun alias o nota dei clienti;
 - creazione dell'evento successivo con numerazione nuovamente da 1.
 
 Alias e note sono temporanei e vengono eliminati alla consegna,
@@ -160,7 +178,7 @@ delle due strade porta a una build pubblicabile.
 Per una prima verifica si può assegnare `admin` a un account di test; non è
 consigliato usare `admin` per tutti gli account reali.
 
-Dopo l'aggiornamento dello schema, entra una prima volta in **Cassa → Evento**:
+Dopo l'aggiornamento dello schema, entra una prima volta in **Gestione evento**:
 il nuovo evento nasce intenzionalmente con ordinazioni sospese. Imposta nome e
 orari, salva, quindi premi **Riapri ordinazioni** quando il sistema è pronto.
 
