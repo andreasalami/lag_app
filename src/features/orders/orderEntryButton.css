@@ -1,0 +1,61 @@
+/* "Ordina qui": pensato per il tocco. Lo schiacciamento risponde subito al dito,
+   il riempimento parte al tap e accompagna la verifica degli orari. */
+.order-entry-button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  width: 100%;
+  min-height: 60px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+  font-size: 1.125rem;
+  font-weight: 700;
+  box-shadow: 0 6px 24px rgba(242, 128, 46, 0.35);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s ease-out;
+}
+.order-entry-button:active {
+  transform: scale(0.97);
+}
+.order-entry-button:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+}
+.order-entry-button__fill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--accent-primary-strong);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.order-entry-button.is-checking {
+  cursor: progress;
+}
+.order-entry-button.is-checking .order-entry-button__fill {
+  animation: order-entry-fill 0.5s ease-out forwards;
+}
+
+@keyframes order-entry-fill {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order-entry-button {
+    transition: none;
+  }
+  .order-entry-button:active {
+    transform: none;
+  }
+  .order-entry-button.is-checking .order-entry-button__fill {
+    animation: none;
+    transform: scaleX(1);
+  }
+}
