@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from "../lib/supabaseClient";
 import { Button } from "../components/ui/Button";
 import { StaffPageHeading, StaffPanel } from "../components/ui/StaffPanel";
 import { appHref } from "../lib/browser";
+import { staffPagesFor } from "../features/auth/staffPages";
 
 /*
   Hub staff: un login unico e generico (qualsiasi ruolo: staff,
@@ -15,20 +16,6 @@ import { appHref } from "../lib/browser";
   assoluto) perché questa è una pagina diversa: serve una vera
   navigazione, non un semplice salto d'ancora nella stessa pagina.
 */
-const DESTINATIONS = [
-  { label: "Gestione Scaletta", path: "#gestione-programma", roles: ["staff", "admin"] },
-  { label: "Gestione Menu e Scorte", path: "#gestione-menu", roles: ["staff", "cucina", "admin"] },
-  { label: "Gestione torneo", path: "#gestione-torneo", roles: ["admin"] },
-  // Apertura, chiusura e situazione incassi: separata dalle casse, riservata a cassa e admin.
-  { label: "Gestione evento", path: "#gestione-evento", roles: ["cassa", "admin"] },
-];
-
-const OPERATIONS = [
-  { label: "Casse", path: "#cassa", role: "cassa" },
-  { label: "Cucina", path: "#cucina", role: "cucina" },
-  { label: "Bar", path: "#bar", role: "bar" },
-];
-
 export function Staff() {
   const { session, role, loading, profileError, signIn, signOut } = useAuth();
   const [email, setEmail] = useState("");
@@ -162,6 +149,9 @@ export function Staff() {
     );
   }
 
+  const sections = staffPagesFor(role, "sections");
+  const operations = staffPagesFor(role, "operations");
+
   return (
     <section className="mx-auto max-w-3xl px-4 py-10">
       <StaffPageHeading
@@ -171,16 +161,20 @@ export function Staff() {
       />
 
       <div className="flex flex-col gap-6">
-        {(role === "staff" || role === "cucina" || role === "cassa" || role === "admin") && (
+        {sections.length > 0 && (
           <StaffPanel
             eyebrow="Gestione"
             title="Sezioni del sito"
             description="Contenuti mostrati nella Home e gestione dell’evento."
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
-                <a key={d.label} href={appHref(d.path)} className="tile font-semibold text-[var(--accent-primary)]">
-                  {d.label}
+              {sections.map((page) => (
+                <a
+                  key={page.hash}
+                  href={appHref(`#${page.hash}`)}
+                  className="tile font-semibold text-[var(--accent-primary)]"
+                >
+                  {page.title}
                   <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">
                     Apri la pagina di gestione →
                   </span>
@@ -190,16 +184,20 @@ export function Staff() {
           </StaffPanel>
         )}
 
-        {(role === "cassa" || role === "cucina" || role === "bar" || role === "admin") && (
+        {operations.length > 0 && (
           <StaffPanel
             eyebrow="Evento live"
             title="Operatività"
             description="Apri la postazione assegnata durante il servizio."
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              {OPERATIONS.filter((d) => role === "admin" || d.role === role).map((d) => (
-                <a key={d.label} href={appHref(d.path)} className="tile font-semibold text-[var(--accent-primary)]">
-                  {d.label}
+              {operations.map((page) => (
+                <a
+                  key={page.hash}
+                  href={appHref(`#${page.hash}`)}
+                  className="tile font-semibold text-[var(--accent-primary)]"
+                >
+                  {page.title}
                   <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">
                     Avvia postazione →
                   </span>

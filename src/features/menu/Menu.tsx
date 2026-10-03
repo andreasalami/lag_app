@@ -3,6 +3,7 @@ import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
+import { canOpen, staffPage } from "../auth/staffPages";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
 import { newDraftId, useDraftRows } from "../../lib/useDraftRows";
@@ -81,8 +82,11 @@ const FALLBACK_ITEMS: MenuItem[] = [
 */
 export function Menu({ management = false }: { management?: boolean }) {
   const { role } = useAuth();
-  const canManage = role === "staff" || role === "cucina" || role === "admin";
+  const menuPage = staffPage("gestione-menu");
+  const canManage = menuPage !== undefined && canOpen(menuPage, role);
   const canEdit = management && canManage;
+  // Il bar gestisce solo le bevande: nella gestione vede e sposta soltanto quelle (lo impone anche l'RLS).
+  const categories: Category[] = management && role === "bar" ? ["bevande"] : CATEGORIES;
   const {
     rows: items,
     setRows: setItems,
@@ -200,7 +204,7 @@ export function Menu({ management = false }: { management?: boolean }) {
       ) : loading ? (
         <p className="text-sm text-[var(--text-secondary)]">Carico il menu...</p>
       ) : (
-        CATEGORIES.map((category) => (
+        categories.map((category) => (
           <Card key={category} className="mb-6 overflow-hidden !p-0">
             <div className="panel-header">
               <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-secondary)]">Menu dell’evento</p>
@@ -303,7 +307,7 @@ export function Menu({ management = false }: { management?: boolean }) {
                                   onChange={(event) => moveItem(item.id, event.target.value)}
                                   className="field min-w-0 flex-1 text-xs sm:max-w-56"
                                 >
-                                  {CATEGORIES.map((destinationCategory) => (
+                                  {categories.map((destinationCategory) => (
                                     <optgroup key={destinationCategory} label={CATEGORY_LABEL[destinationCategory]}>
                                       {MENU_SECTIONS[destinationCategory].map((destinationSection) => (
                                         <option

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { Home } from "./pages/Home";
 import { Staff } from "./pages/Staff";
 import { AuthProvider, useAuth, type Role } from "./features/auth/AuthContext";
+import { staffPage, type StaffPageHash } from "./features/auth/staffPages";
 import { TournamentBoard } from "./pages/TournamentBoard";
 import { TournamentManagement } from "./pages/TournamentManagement";
 import { ProgramManagement } from "./pages/ProgramManagement";
@@ -21,6 +22,17 @@ const EventManagement = lazy(() =>
   import("./features/event/EventManagement").then((module) => ({ default: module.EventManagement })),
 );
 
+// Componente di ogni pagina riservata; ruoli e titoli stanno in staffPages.ts.
+const PAGE_COMPONENTS: Record<StaffPageHash, ComponentType> = {
+  "gestione-programma": ProgramManagement,
+  "gestione-menu": MenuManagement,
+  "gestione-torneo": TournamentManagement,
+  "gestione-evento": EventManagement,
+  cassa: Cassa,
+  cucina: Cucina,
+  bar: Bar,
+};
+
 const LOADING = (
   <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Carico…</section>
 );
@@ -30,7 +42,7 @@ function ProtectedOperationalPage({
   component: Component,
   title,
 }: {
-  allowedRoles: Role[];
+  allowedRoles: readonly Role[];
   component: ComponentType;
   title: string;
 }) {
@@ -86,63 +98,28 @@ function App() {
 
   // Le anteprime dimostrative vivono nel loro entry point (anteprima.html), non
   // qui: non caricano Supabase né la sessione staff e non finiscono nel bundle.
-  const internalPages = [
-    "staff",
-    "cassa",
-    "cucina",
-    "bar",
-    "ordina",
-    "ordina-nuovo",
-    "tabellone",
-    "gestione-programma",
-    "gestione-menu",
-    "gestione-torneo",
-    "gestione-evento",
-  ];
   const hashRoute = hashPath.split("?")[0];
-  const internalPage = internalPages.includes(hashRoute) ? hashRoute : path.slice(1);
+  const publicPages = ["staff", "ordina", "ordina-nuovo", "tabellone"];
+  const internalPage = publicPages.includes(hashRoute) || staffPage(hashRoute) ? hashRoute : path.slice(1);
+  const protectedPage = staffPage(internalPage);
 
   return (
     <AuthProvider>
       <Suspense fallback={LOADING}>
-        {internalPage === "staff" ? (
-          <Staff />
-        ) : internalPage === "cassa" ? (
-          <ProtectedOperationalPage allowedRoles={["cassa", "admin"]} component={Cassa} title="Casse" />
-        ) : internalPage === "cucina" ? (
-          <ProtectedOperationalPage allowedRoles={["cucina", "admin"]} component={Cucina} title="Cucina" />
-        ) : internalPage === "bar" ? (
-          <ProtectedOperationalPage allowedRoles={["bar", "admin"]} component={Bar} title="Bar" />
-        ) : internalPage === "gestione-evento" ? (
+        {protectedPage ? (
           <ProtectedOperationalPage
-            allowedRoles={["cassa", "admin"]}
-            component={EventManagement}
-            title="Gestione evento"
+            allowedRoles={protectedPage.roles}
+            component={PAGE_COMPONENTS[protectedPage.hash]}
+            title={protectedPage.title}
           />
+        ) : internalPage === "staff" ? (
+          <Staff />
         ) : internalPage === "ordina-nuovo" ? (
           <OrderPage startFresh />
         ) : internalPage === "ordina" ? (
           <OrderPage key={hashPath} />
         ) : internalPage === "tabellone" ? (
           <TournamentBoard />
-        ) : internalPage === "gestione-programma" ? (
-          <ProtectedOperationalPage
-            allowedRoles={["staff", "admin"]}
-            component={ProgramManagement}
-            title="Gestione Scaletta"
-          />
-        ) : internalPage === "gestione-menu" ? (
-          <ProtectedOperationalPage
-            allowedRoles={["staff", "cucina", "admin"]}
-            component={MenuManagement}
-            title="Gestione Menu e Scorte"
-          />
-        ) : internalPage === "gestione-torneo" ? (
-          <ProtectedOperationalPage
-            allowedRoles={["tournament_manager", "admin"]}
-            component={TournamentManagement}
-            title="Gestione torneo"
-          />
         ) : (
           <Home />
         )}

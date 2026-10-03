@@ -35,7 +35,7 @@ Il menu mobile in alto mostra il Programma e il riepilogo degli ordini salvati
 sul dispositivo. Dopo il login, l'area Staff mostra i collegamenti in questo ordine:
 
 1. Programma
-2. Menu
+2. Menu (staff, cucina, bar, admin)
 3. Gestione torneo (admin)
 4. Gestione evento (cassa e admin)
 5. Cassa
@@ -53,11 +53,13 @@ diretto; dall'area staff **← Torna al sito** riporta alla Home.
 | `staff` | Modifica programma e menu |
 | `tournament_manager` | Modifica esclusivamente il torneo |
 | `cassa` | Gestisce preordini e ordini eccezionali; apre e chiude l'evento, scarica situazione incassi e report |
-| `cucina` | Gestisce menu/scorte e consegna gli ordini alimentari |
-| `bar` | Consegna le bevande nelle postazioni del bar |
+| `cucina` | Gestisce tutto il menu (prezzi e scorte compresi) e consegna gli ordini alimentari |
+| `bar` | Gestisce le bevande del menu (prezzi e scorte) e le consegna nelle postazioni del bar |
 | `pending` | Nessun permesso operativo |
 
-I permessi sono verificati da Supabase tramite Row Level Security. Il ruolo
+Pagine e ruoli dell'interfaccia stanno in un solo punto,
+[src/features/auth/staffPages.ts](src/features/auth/staffPages.ts). I permessi sono
+verificati da Supabase tramite Row Level Security. Il ruolo
 non viene scelto dal browser: viene letto dalla tabella `profiles` dopo il
 login. Le pagine Gestione evento, Cassa, Cucina e Bar sono caricate
 dinamicamente soltanto dopo la verifica del ruolo: un visitatore anonimo o un
