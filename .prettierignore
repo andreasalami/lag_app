@@ -1,0 +1,7 @@
+dist
+graphify-out
+package-lock.json
+supabase/functions/**/deno.lock
+# Documentazione e SQL restano formattati a mano.
+*.md
+*.sql
