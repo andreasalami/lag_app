@@ -31,6 +31,23 @@ for (const endpoint of [
     rpc("upsert_push_subscription", [endpoint, key, auth, "tournament", null]),
     /invalid_push_subscription/,
   );
+// Solo avvisi del torneo: una sorgente o un tipo "annunci" non sono più ammessi.
+await assert.rejects(
+  rpc("upsert_push_subscription", [
+    "https://fcm.googleapis.com/fcm/send/old-announcements",
+    key,
+    auth,
+    "announcements",
+    null,
+  ]),
+  /invalid_push_subscription/,
+);
+await db.exec("reset role");
+await assert.rejects(
+  db.query("insert into push_broadcasts(kind,title,message) values ('announcement','Titolo','Messaggio')"),
+  /push_broadcasts_kind_check/,
+);
+await db.exec("set role service_role");
 for (let n = 0; n < 30; n++)
   await rpc("upsert_push_subscription", [
     `https://fcm.googleapis.com/fcm/send/test-${n}`,
