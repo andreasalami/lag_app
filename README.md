@@ -102,18 +102,22 @@ degli ordini.
 
 La sezione **Gestione evento** (ruoli `cassa` e `admin`, separata dalle casse) gestisce:
 
-- nome, apertura e chiusura del singolo weekend;
+- nome, apertura e chiusura del singolo weekend, e durata in serate (da 1 a 3);
 - limite configurabile degli ordini contemporaneamente in attesa di pagamento (default 100); questo conteggio non include gli ordini già pagati in cucina;
 - preparazione del cibo immediata al pagamento oppure differita, attivabile dallo staff tramite QR o numero ordine, con scorte già riservate;
 - capienza cucina di 100 ordini fra attivi e posti temporaneamente riservati dalle casse; bevande indipendenti e ritiri parziali;
 - sospensione e riapertura anticipata delle ordinazioni;
-- chiusura definitiva protetta dalla digitazione di `CHIUDI EVENTO`;
-- download del CSV finale senza alias e note;
+- chiusura definitiva protetta dalla digitazione di `CHIUDI EVENTO`, che scarica
+  il CSV finale e il PDF **Situazione incassi**;
+- nuovo download del CSV finale senza alias e note;
 - in qualsiasi momento, anche a evento aperto, il PDF **Situazione incassi**:
   incasso totale e spesa media, grafico ora per ora con l'ora di punta e, per
   ogni sezione del menu (cibo e bevande), i due prodotti più venduti con la
   percentuale sui pezzi della sezione e quello venduto meno, anche se a zero.
-  Il PDF usa solo aggregati: nessun alias o nota dei clienti;
+  Con 2 o 3 serate il PDF ha una parte per ogni serata (stesse statistiche) e
+  poi il totale dell'evento, ognuna da una pagina nuova. Una serata va dalle
+  06:00 alle 05:59 del giorno dopo, ora di Roma: la serata 1 è quella
+  dell'apertura ordini. Il PDF usa solo aggregati: nessun alias o nota dei clienti;
 - creazione dell'evento successivo con numerazione nuovamente da 1.
 
 Alias e note sono temporanei e vengono eliminati alla consegna,
@@ -197,7 +201,8 @@ Il collaudo di questo aggiornamento mobile è tracciato in
 ### Variabili opzionali
 
 - `VITE_EVENTBRITE_EVENT_ID`: ID numerico dell'evento Eventbrite. Se vuoto,
-  il checkout resta nello stato "Biglietti in arrivo".
+  la sezione Biglietti e i suoi link in Navbar e TabBar non compaiono; la
+  sezione si nasconde anche se il widget di Eventbrite non si carica.
 - `VITE_INSTAGRAM_HANDLE`: handle Instagram mostrato nell'app.
 
 I permalink dei post Instagram sono definiti in
