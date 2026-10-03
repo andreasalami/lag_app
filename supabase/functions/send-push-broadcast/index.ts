@@ -3,7 +3,6 @@ import webpush from "web-push";
 import { validPushEndpoint, validPushKeys } from "../_shared/pushValidation.ts";
 import { createClient } from "@supabase/supabase-js";
 
-type BroadcastKind = "announcement" | "tournament";
 type PushRow = { id: string; endpoint: string; p256dh: string; auth: string };
 type DeliveryResult = { id: string; delivered: boolean; expired: boolean };
 
@@ -92,20 +91,17 @@ Deno.serve(async (request) => {
   }
   const broadcastId = typeof body.broadcast_id === "string" ? body.broadcast_id : "";
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(broadcastId)) return json(request,{error:"invalid_broadcast_id"},400);
-  const kind = body.kind as BroadcastKind;
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const message = typeof body.message === "string" ? body.message.trim() : "";
-  if (!(["announcement", "tournament"] as BroadcastKind[]).includes(kind)
+  // Solo notifiche del torneo: la sezione annunci è stata rimossa.
+  if (body.kind !== "tournament"
     || title.length < 2 || title.length > 80 || message.length < 2 || message.length > 240) {
     return json(request, { error: "invalid_payload" }, 400);
   }
-  const allowed = profile.role === "admin"
-    || (kind === "tournament" && profile.role === "tournament_manager")
-    || (kind === "announcement" && profile.role === "staff");
-  if (!allowed) return json(request, { error: "not_authorized" }, 403);
+  if (profile.role !== "admin" && profile.role !== "tournament_manager") return json(request, { error: "not_authorized" }, 403);
 
   const {data:job,error:jobError} = await serviceClient.rpc("claim_push_broadcast", {
-    p_id:broadcastId,p_sender:authData.user.id,p_kind:kind,p_title:title,p_message:message,
+    p_id:broadcastId,p_sender:authData.user.id,p_kind:"tournament",p_title:title,p_message:message,
   });
   if(jobError || !job) return json(request,{error:jobError?.message ?? "broadcast_unavailable"},409);
   if(job.completed) return json(request,{...job,broadcast_id:broadcastId,removed:0});
@@ -113,8 +109,8 @@ Deno.serve(async (request) => {
   const payload = JSON.stringify({
     title,
     body: message,
-    section: kind === "announcement" ? "annunci" : "tornei",
-    tag: `lag-${kind}-${broadcastId}`,
+    section: "tornei",
+    tag: `lag-tournament-${broadcastId}`,
   });
   const deliveryResults = await mapConcurrent(subscriptions, SEND_CONCURRENCY, async (subscription): Promise<DeliveryResult> => {
     try {

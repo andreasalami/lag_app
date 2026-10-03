@@ -1907,8 +1907,8 @@ create or replace function public.claim_push_broadcast(p_id uuid,p_sender uuid,p
 returns jsonb language plpgsql security definer set search_path=public as $$
 declare job public.push_broadcasts%rowtype; batch jsonb; lease uuid:=gen_random_uuid();
 begin
- if not exists(select 1 from public.profiles where id=p_sender and
-  (role='admin' or (role='tournament_manager' and p_kind='tournament') or (role='staff' and p_kind='announcement'))) then
+ -- Solo notifiche del torneo: la sezione annunci è stata rimossa con le sue notifiche.
+ if p_kind<>'tournament' or not exists(select 1 from public.profiles where id=p_sender and role in ('admin','tournament_manager')) then
   raise exception 'not_authorized' using errcode='42501';
  end if;
  perform pg_advisory_xact_lock(hashtext('lag_push_job_creation'));

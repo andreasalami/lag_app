@@ -39,6 +39,9 @@ assert.equal(await rpc('has_push_subscription',['https://fcm.googleapis.com/fcm/
 await assert.rejects(rpc('claim_push_broadcast',[crypto.randomUUID(),admin,'tournament','Test','Messaggio']),/permission denied/);
 await db.exec('reset role');
 await db.exec('set role service_role');
+// Le notifiche "annuncio" non esistono più: né lo staff né un admin possono inviarle.
+const staff=crypto.randomUUID();await db.exec('reset role');await db.query('insert into auth.users values($1)',[staff]);await db.query("update profiles set role='staff' where id=$1",[staff]);await db.exec('set role service_role');
+for(const sender of [staff,admin]) await assert.rejects(rpc('claim_push_broadcast',[crypto.randomUUID(),sender,'announcement','Test','Messaggio']),/not_authorized/);
 const id=crypto.randomUUID();const first=await rpc('claim_push_broadcast',[id,admin,'tournament','Test','Messaggio']);assert.equal(first.batch.length,25);
 await assert.rejects(rpc('claim_push_broadcast',[id,admin,'tournament','Test','Messaggio']),/broadcast_busy/);
 const partial=await rpc('finish_push_batch',[id,first.lease,JSON.stringify(first.batch.map(row=>({id:row.id,delivered:true})))]);assert.equal(partial.completed,false);assert.equal(partial.sent,25);
