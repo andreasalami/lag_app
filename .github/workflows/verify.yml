@@ -26,11 +26,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Format check
+        run: npm run format:check
 
       - name: Type check
         run: npm run lint
@@ -85,4 +88,4 @@ jobs:
         if: inputs.pages-artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: "./dist"
