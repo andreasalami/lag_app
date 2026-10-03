@@ -1,29 +1,19 @@
-// Retired runner: preserving historical scenarios for migration, not a valid current benchmark.
-throw new Error(
-  "Runner obsoleto: usa RPC ritirate. Eseguire scripts/security/verify-*.mjs per le prove locali; collaudo concorrente ancora da aggiornare.",
-);
-
+// Stress test degli ordini: concorrenza reale su un PostgreSQL usa-e-getta.
+//
+// Il runner crea un cluster PostgreSQL in una cartella temporanea, raggiungibile solo
+// via socket Unix (nessuna porta di rete), installa supabase/schema.sql con i ruoli di
+// Supabase e lancia molte connessioni psql in parallelo. Alla fine spegne il cluster e
+// cancella la cartella. Non si collega mai a Supabase: non può toccare la produzione.
+//
+// Verifica le funzioni SQL sotto concorrenza (lock, limiti, idempotenza); il gateway
+// Turnstile, PostgREST e la rete restano fuori. Ogni chiamata apre un processo psql:
+// i tempi includono quell'avvio e servono a confrontare esecuzioni, non come latenza reale.
 import assert from "node:assert/strict";
+import { execFileSync, spawn } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { performance } from "node:perf_hooks";
-import { createClient } from "@supabase/supabase-js";
-
-const REQUIRED_CONFIRMATION = "LOCAL_SUPABASE_ONLY";
-const url = process.env.LOADTEST_SUPABASE_URL;
-const anonKey = process.env.LOADTEST_SUPABASE_ANON_KEY;
-const serviceRoleKey = process.env.LOADTEST_SUPABASE_SERVICE_ROLE_KEY;
-
-if (process.env.LOADTEST_CONFIRM !== REQUIRED_CONFIRMATION) {
-  throw new Error(`Imposta LOADTEST_CONFIRM=${REQUIRED_CONFIRMATION} per confermare il test locale.`);
-}
-if (!url || !anonKey || !serviceRoleKey) {
-  throw new Error("Mancano URL, anon key o service-role key del Supabase locale.");
-}
-
-const target = new URL(url);
-const localHosts = new Set(["127.0.0.1", "localhost", "[::1]"]);
-if (target.protocol !== "http:" || !localHosts.has(target.hostname)) {
-  throw new Error(`Target rifiutato: ${target.origin}. Lo stress test accetta soltanto Supabase locale via HTTP.`);
-}
 
 const integerEnv = (name, fallback) => {
   const value = Number(process.env[name] ?? fallback);
@@ -31,50 +21,84 @@ const integerEnv = (name, fallback) => {
   return value;
 };
 
-const capacity = integerEnv("LOADTEST_CAPACITY", 150);
+const capacity = integerEnv("LOADTEST_CAPACITY", 100);
 const capAttempts = integerEnv("LOADTEST_CAP_ATTEMPTS", capacity + 50);
 const readAttempts = integerEnv("LOADTEST_READ_ATTEMPTS", 200);
 const stockAttempts = integerEnv("LOADTEST_STOCK_ATTEMPTS", 50);
 const raceOrders = integerEnv("LOADTEST_CLOSE_RACE_ORDERS", 30);
 const raceRounds = integerEnv("LOADTEST_CLOSE_RACE_ROUNDS", 10);
+const knownScenarios = ["read", "idempotency", "stock", "capacity", "identities", "close-race"];
 const selectedScenarios = new Set(
-  (process.env.LOADTEST_SCENARIOS ?? "read,idempotency,stock,capacity,identities,close-race")
+  (process.env.LOADTEST_SCENARIOS ?? knownScenarios.join(","))
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean),
 );
-const knownScenarios = new Set(["read", "idempotency", "stock", "capacity", "identities", "close-race"]);
-
 for (const scenario of selectedScenarios) {
-  if (!knownScenarios.has(scenario)) throw new Error(`Scenario sconosciuto: ${scenario}`);
+  if (!knownScenarios.includes(scenario)) throw new Error(`Scenario sconosciuto: ${scenario}`);
 }
-
 if (capAttempts <= capacity) throw new Error("LOADTEST_CAP_ATTEMPTS deve superare LOADTEST_CAPACITY.");
 if (capacity < 10 || capacity > 1000) throw new Error("La capienza deve restare tra 10 e 1000.");
 
-const clientOptions = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
-const publicClient = createClient(url, anonKey, clientOptions);
-const serviceClient = createClient(url, serviceRoleKey, clientOptions);
-const runId = crypto.randomUUID().slice(0, 8);
-const fixtureIds = { unlimited: crypto.randomUUID(), limited: crypto.randomUUID() };
-const findings = [];
+// Binari PostgreSQL: dal PATH, oppure da LOADTEST_PG_BIN (per esempio /opt/homebrew/opt/postgresql@17/bin).
+const bin = (name) => (process.env.LOADTEST_PG_BIN ? join(process.env.LOADTEST_PG_BIN, name) : name);
+// Su macOS il postmaster si rifiuta di partire senza una LC_ALL valida.
+const pgEnv = { ...process.env, LC_ALL: "C" };
+const workDir = mkdtempSync(join(tmpdir(), "lag-stress-"));
+const dataDir = join(workDir, "data");
+const port = "55432"; // Solo il nome del socket: listen_addresses vuoto, nessuna porta TCP.
+const PSQL_ARGS = ["-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose"];
+const connection = ["-h", workDir, "-p", port, "-U", "postgres", "-d", "postgres"];
+
 const checks = [];
-let adminUserId = null;
-let savedEvent = null;
-let eventId = null;
+const findings = [];
+const fixtureIds = { unlimited: crypto.randomUUID(), limited: crypto.randomUUID() };
+const admin = crypto.randomUUID();
 
-function messageOf(error) {
-  return error?.message ?? String(error ?? "");
+// Letterali SQL: i valori sono generati qui (UUID, costanti), mai input esterno.
+const lit = (value) => (value === null || value === undefined ? "null" : `'${String(value).replaceAll("'", "''")}'`);
+const jsonb = (value) => `${lit(JSON.stringify(value))}::jsonb`;
+
+/** Esegue SQL in una connessione propria: come browser (anon), gateway (service_role) o utente autenticato. */
+function sql(query, { as = "postgres", user = null } = {}) {
+  const preamble = as === "postgres" ? "" : `set role ${as};\nset request.jwt.claim.sub = ${lit(user ?? "")};\n`;
+  return new Promise((resolve) => {
+    const started = performance.now();
+    const child = spawn(bin("psql"), [...PSQL_ARGS, ...connection]);
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (chunk) => (out += chunk));
+    child.stderr.on("data", (chunk) => (err += chunk));
+    child.on("close", (code) => {
+      const ms = performance.now() - started;
+      if (code === 0) {
+        const text = out.trim();
+        let data = text;
+        try {
+          data = text === "" ? null : JSON.parse(text);
+        } catch {
+          /* risultato non JSON: resta testo */
+        }
+        resolve({ data, error: null, ms });
+      } else {
+        const match = err.match(/ERROR:\s+([0-9A-Z]{5}):\s+([^\n]*)/);
+        resolve({ data: null, error: { code: match?.[1] ?? null, message: match?.[2] ?? err.trim() }, ms });
+      }
+    });
+    child.stdin.end(`${preamble}${query}\n`);
+  });
 }
 
-function errorDetails(error) {
-  return {
-    message: messageOf(error),
-    code: error?.code ?? null,
-    details: error?.details ?? null,
-    hint: error?.hint ?? null,
-  };
+async function admin_sql(query) {
+  const result = await sql(query);
+  if (result.error) throw new Error(`${query.slice(0, 80)}: ${result.error.message}`);
+  return result.data;
 }
+
+const rpc = (name, args, options) => sql(`select public.${name}(${args.join(", ")})`, options);
+const asAdmin = { as: "authenticated", user: admin };
+const asPublic = { as: "anon" };
+const messageOf = (error) => error?.message ?? "";
 
 function percentile(values, fraction) {
   if (values.length === 0) return 0;
@@ -87,7 +111,6 @@ function timingSummary(results) {
   return {
     p50_ms: Math.round(percentile(durations, 0.5)),
     p95_ms: Math.round(percentile(durations, 0.95)),
-    p99_ms: Math.round(percentile(durations, 0.99)),
     max_ms: Math.round(Math.max(0, ...durations)),
   };
 }
@@ -99,150 +122,95 @@ function pass(name, details = {}) {
 
 function finding(name, details = {}) {
   findings.push({ name, ...details, status: "FINDING" });
-  console.error(`FIND ${name}`, details);
+  console.error(`FIND  ${name}`, details);
 }
 
-async function timedRpc(client, name, args = undefined) {
-  const started = performance.now();
-  const { data, error } = await client.rpc(name, args);
-  return { data, error, ms: performance.now() - started };
-}
-
-async function requireQuery(promise, label) {
-  const result = await promise;
-  if (result.error) throw new Error(`${label}: ${result.error.message}`);
-  return result.data;
-}
-
-async function clearOrders() {
-  await requireQuery(serviceClient.from("orders").delete().eq("event_id", eventId), "pulizia ordini");
-}
-
-async function openEvent(limit = capacity) {
-  const now = Date.now();
-  await requireQuery(
-    serviceClient
-      .from("order_events")
-      .update({
-        name: `[LOADTEST] ${runId}`,
-        opens_at: new Date(now - 60_000).toISOString(),
-        closes_at: new Date(now + 3_600_000).toISOString(),
-        manual_closed: false,
-        permanently_closed_at: null,
-        final_report: null,
-        max_pending_orders: limit,
-      })
-      .eq("id", eventId),
-    "apertura evento locale",
+/** Ordine pubblico come lo inoltra il gateway dopo la verifica Turnstile (service_role). */
+function publicOrder(itemId, { requestId = crypto.randomUUID(), qrToken = crypto.randomUUID() } = {}) {
+  return rpc(
+    "submit_public_order",
+    [lit("Load test"), lit(""), jsonb([{ id: itemId, qty: 1 }]), lit(requestId), lit(qrToken), lit("")],
+    { as: "service_role" },
   );
 }
 
-async function setLimitedStock(value) {
-  await requireQuery(
-    serviceClient
-      .from("menu_items")
-      .update({
-        available_portions: value,
-        stock_capacity: value,
-      })
-      .eq("id", fixtureIds.limited),
-    "reset scorta fixture",
-  );
-}
+const stationCall = (name, orderId, device, station = "cassa_1") =>
+  rpc(name, [lit(orderId), lit(station), lit(device)], asAdmin);
+const publicStatus = (qrToken) => rpc("get_public_order_statuses", [`array[${lit(qrToken)}]`], asPublic);
+const stock = async () =>
+  (await admin_sql(`select available_portions from public.menu_items where id = ${lit(fixtureIds.limited)}`)) ?? null;
+const orderCount = async (where = "true") =>
+  Number(await admin_sql(`select count(*) from public.orders where ${where}`));
 
-function publicOrder(
-  itemId,
-  { requestId = crypto.randomUUID(), qrToken = crypto.randomUUID(), alias = "Load test" } = {},
-) {
-  return timedRpc(publicClient, "submit_public_order", {
-    p_alias: alias,
-    p_notes: "",
-    p_items: [{ id: itemId, qty: 1 }],
-    p_client_request_id: requestId,
-    p_qr_token: qrToken,
-    p_bot_field: "",
+async function startCluster() {
+  execFileSync(bin("initdb"), ["-D", dataDir, "-U", "postgres", "--auth=trust", "-E", "UTF8", "--locale=C"], {
+    stdio: "ignore",
+    env: pgEnv,
   });
+  try {
+    execFileSync(
+      bin("pg_ctl"),
+      [
+        "-D",
+        dataDir,
+        "-l",
+        join(workDir, "postgres.log"),
+        "-o",
+        `-k ${workDir} -p ${port} -c listen_addresses='' -c max_connections=${Math.max(capAttempts, readAttempts) + 50}`,
+        "-w",
+        "start",
+      ],
+      { stdio: "ignore", env: pgEnv },
+    );
+  } catch {
+    throw new Error(
+      `PostgreSQL temporaneo non avviato:\n${readFileSync(join(workDir, "postgres.log"), "utf8").slice(-1500)}`,
+    );
+  }
 }
 
 async function setup() {
-  const events = await requireQuery(
-    serviceClient.from("order_events").select("*").eq("is_current", true),
-    "lettura evento",
-  );
-  assert.equal(events.length, 1, "Serve esattamente un evento corrente nel database locale.");
-  savedEvent = events[0];
-  eventId = savedEvent.id;
+  // Ruoli, auth.uid() e pgcrypto come su Supabase.
+  await admin_sql(`create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
+create schema auth; create table auth.users(id uuid primary key);
+create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+create schema extensions; create extension pgcrypto with schema extensions;
+grant usage on schema public, auth, extensions to anon, authenticated, service_role;
+create publication supabase_realtime;`);
+  const schema = new URL("../../supabase/schema.sql", import.meta.url);
+  const install = spawn(bin("psql"), [...PSQL_ARGS, ...connection, "-f", schema.pathname]);
+  let err = "";
+  install.stderr.on("data", (chunk) => (err += chunk));
+  const code = await new Promise((resolve) => install.on("close", resolve));
+  if (code !== 0) throw new Error(`installazione schema.sql: ${err.trim()}`);
 
-  const { count, error: countError } = await serviceClient
-    .from("orders")
-    .select("id", { count: "exact", head: true })
-    .eq("event_id", eventId);
-  if (countError) throw new Error(`conteggio ordini iniziali: ${countError.message}`);
-  assert.equal(count, 0, "Il database locale deve partire senza ordini per l'evento corrente.");
+  await admin_sql(`insert into auth.users values (${lit(admin)});
+update public.profiles set role = 'admin' where id = ${lit(admin)};
+insert into public.menu_items (id, category, subcategory, name, price, available_portions, stock_capacity) values
+  (${lit(fixtureIds.unlimited)}, 'bevande', 'birre', '[LOADTEST] illimitato', 1, null, null),
+  (${lit(fixtureIds.limited)}, 'bevande', 'birre', '[LOADTEST] scorta limitata', 1, 1, 1);`);
+  assert.equal(Number(await admin_sql("select count(*) from public.order_events where is_current")), 1);
+}
 
-  await requireQuery(
-    serviceClient.from("menu_items").insert([
-      {
-        id: fixtureIds.unlimited,
-        category: "cibo",
-        name: `[LOADTEST] illimitato ${runId}`,
-        price: 1,
-        available_portions: null,
-        stock_capacity: null,
-        allergens: [],
-      },
-      {
-        id: fixtureIds.limited,
-        category: "cibo",
-        name: `[LOADTEST] ultima porzione ${runId}`,
-        price: 1,
-        available_portions: 1,
-        stock_capacity: 1,
-        allergens: [],
-      },
-    ]),
-    "creazione fixture menu",
-  );
-  await openEvent();
-
-  const email = `lag-loadtest-${runId}@example.invalid`;
-  const password = `Local-${crypto.randomUUID()}!`;
-  const { data: created, error: createError } = await serviceClient.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-  if (createError || !created.user) throw new Error(`creazione utente locale: ${messageOf(createError)}`);
-  adminUserId = created.user.id;
-  await requireQuery(
-    serviceClient.from("profiles").update({ role: "admin" }).eq("id", adminUserId),
-    "assegnazione ruolo admin locale",
-  );
-
-  const adminClient = createClient(url, anonKey, clientOptions);
-  const { error: signInError } = await adminClient.auth.signInWithPassword({ email, password });
-  if (signInError) throw new Error(`login admin locale: ${signInError.message}`);
-  return adminClient;
+async function resetEvent({ limit = capacity, portions = 1 } = {}) {
+  await admin_sql(`truncate public.orders cascade;
+update public.order_events set opens_at = now() - interval '1 minute', closes_at = now() + interval '1 hour',
+  manual_closed = false, permanently_closed_at = null, final_report = null, max_pending_orders = ${limit}
+  where is_current;
+update public.menu_items set available_portions = ${portions}, stock_capacity = ${portions} where id = ${lit(fixtureIds.limited)};`);
 }
 
 async function readBurst() {
   const results = await Promise.all(
-    Array.from({ length: readAttempts }, () => timedRpc(publicClient, "get_ordering_status")),
+    Array.from({ length: readAttempts }, () => rpc("get_ordering_status", [], asPublic)),
   );
   const errors = results.filter((result) => result.error);
   if (errors.length === 0) pass(`${readAttempts} letture concorrenti dello stato`, timingSummary(results));
-  else
-    finding("Errori nel burst di lettura", {
-      errors: errors.length,
-      first: errorDetails(errors[0].error),
-      ...timingSummary(results),
-    });
+  else finding("Errori nel burst di lettura", { errors: errors.length, first: errors[0].error });
 }
 
-async function idempotencyScenario(adminClient) {
-  await clearOrders();
-  await openEvent();
-  await setLimitedStock(10);
+async function idempotencyScenario() {
+  await resetEvent({ portions: 10 });
   const requestId = crypto.randomUUID();
   const qrToken = crypto.randomUUID();
   const results = await Promise.all(
@@ -250,468 +218,280 @@ async function idempotencyScenario(adminClient) {
   );
   const successes = results.filter((result) => !result.error);
   const ids = new Set(successes.map((result) => result.data?.order_id));
-  const rows = await requireQuery(
-    serviceClient.from("orders").select("id").eq("event_id", eventId),
-    "ordini idempotenza",
-  );
-  const stockRows = await requireQuery(
-    serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
-    "scorta idempotenza",
-  );
-  if (successes.length === 25 && ids.size === 1 && rows.length === 1 && stockRows[0]?.available_portions === 9) {
+  if (successes.length === 25 && ids.size === 1 && (await orderCount()) === 1 && (await stock()) === 9) {
     pass("25 retry simultanei producono un solo ordine", timingSummary(results));
   } else {
     finding("Idempotenza concorrente violata", {
       successes: successes.length,
       distinct_order_ids: ids.size,
-      database_rows: rows.length,
-      remaining_stock: stockRows[0]?.available_portions,
+      database_rows: await orderCount(),
+      remaining_stock: await stock(),
+      first_error: results.find((result) => result.error)?.error,
     });
   }
 
   const conflict = await publicOrder(fixtureIds.limited, { requestId, qrToken: crypto.randomUUID() });
   if (messageOf(conflict.error).includes("request_id_conflict"))
-    pass("Request ID riutilizzato con QR diverso viene respinto");
-  else finding("Request ID/QR conflict non respinto", { error: messageOf(conflict.error) });
+    pass("Request ID riutilizzato con QR diverso respinto");
+  else finding("Request ID/QR conflict non respinto", { error: conflict.error });
 
+  // Cassa, consegna al bar e stato pubblico, poi un retry tardivo dello stesso invio.
   const orderId = successes[0]?.data?.order_id;
-  const claimToken = crypto.randomUUID();
-  const pendingStatuses = await timedRpc(publicClient, "get_public_order_statuses", { p_qr_tokens: [qrToken] });
-  const claim = await timedRpc(adminClient, "claim_order", { p_order_id: orderId, p_claim_token: claimToken });
-  const payment = claim.error
-    ? { error: claim.error }
-    : await timedRpc(adminClient, "pay_claimed_order", { p_order_id: orderId, p_claim_token: claimToken });
-  const paidStatus = payment.error
-    ? { error: payment.error }
-    : await timedRpc(publicClient, "get_public_order_statuses", { p_qr_tokens: [qrToken] });
+  const device = crypto.randomUUID();
+  const pending = await publicStatus(qrToken);
+  const claim = await stationCall("claim_order_for_station", orderId, device);
+  const payment = claim.error ? claim : await stationCall("pay_order_for_station", orderId, device);
+  const paid = await publicStatus(qrToken);
   const delivery = payment.error
-    ? { error: payment.error }
-    : await timedRpc(adminClient, "deliver_order_by_qr", { p_qr_token: qrToken });
-  const deliveredStatus = delivery.error
-    ? { error: delivery.error }
-    : await timedRpc(publicClient, "get_public_order_statuses", { p_qr_tokens: [qrToken] });
+    ? payment
+    : await rpc(
+        "deliver_fulfillment_items",
+        [lit(orderId), lit("birre"), jsonb([{ id: fixtureIds.limited, qty: 1 }])],
+        asAdmin,
+      );
+  const delivered = await publicStatus(qrToken);
   const lateRetry = await publicOrder(fixtureIds.limited, { requestId, qrToken });
-  const finalRows = await requireQuery(
-    serviceClient.from("orders").select("id,status").eq("event_id", eventId),
-    "retry tardivo",
-  );
-  const finalStock = (
-    await requireQuery(
-      serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
-      "scorta retry tardivo",
-    )
-  )[0]?.available_portions;
   if (
     !claim.error &&
     !payment.error &&
     !delivery.error &&
-    pendingStatuses.data?.[0]?.status === "in_attesa_pagamento" &&
-    paidStatus.data?.[0]?.status === "pagato" &&
-    deliveredStatus.data?.[0]?.status === "consegnato" &&
-    messageOf(lateRetry.error).includes("request_already_processed") &&
-    finalRows.length === 1 &&
-    finalRows[0]?.status === "consegnato" &&
-    finalStock === 9
+    pending.data?.[0]?.status === "in_attesa_pagamento" &&
+    paid.data?.[0]?.status === "pagato" &&
+    delivered.data?.[0]?.status === "consegnato" &&
+    lateRetry.data?.order_id === orderId &&
+    lateRetry.data?.status === "consegnato" &&
+    (await orderCount()) === 1 &&
+    (await stock()) === 9
   ) {
-    pass("Un retry tardivo dopo pagamento e consegna non duplica l'ordine");
+    pass("Un retry tardivo dopo pagamento e consegna restituisce lo stesso ordine senza duplicarlo");
   } else {
-    finding("Retry tardivo non idempotente", {
-      claim_error: messageOf(claim.error),
-      payment_error: messageOf(payment.error),
-      delivery_error: messageOf(delivery.error),
-      pending_public_status: pendingStatuses.data?.[0]?.status,
-      paid_public_status: paidStatus.data?.[0]?.status,
-      delivered_public_status: deliveredStatus.data?.[0]?.status,
-      retry_error: messageOf(lateRetry.error),
-      database_rows: finalRows,
-      remaining_stock: finalStock,
+    finding("Flusso cassa/consegna o retry tardivo non coerente", {
+      claim_error: claim.error,
+      payment_error: payment.error,
+      delivery_error: delivery.error,
+      statuses: [pending.data?.[0]?.status, paid.data?.[0]?.status, delivered.data?.[0]?.status],
+      late_retry: lateRetry.data ?? lateRetry.error,
+      database_rows: await orderCount(),
+      remaining_stock: await stock(),
     });
   }
 }
 
 async function lastPortionScenario() {
-  await clearOrders();
-  await openEvent();
-  await setLimitedStock(1);
+  await resetEvent({ portions: 1 });
   const results = await Promise.all(Array.from({ length: stockAttempts }, () => publicOrder(fixtureIds.limited)));
   const successes = results.filter((result) => !result.error);
-  const expectedFailures = results.filter((result) => messageOf(result.error).includes("stock_unavailable"));
-  const stockRows = await requireQuery(
-    serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
-    "scorta finale",
-  );
-  if (
-    successes.length === 1 &&
-    expectedFailures.length === stockAttempts - 1 &&
-    stockRows[0]?.available_portions === 0
-  ) {
-    pass(`${stockAttempts} concorrenti sull'ultima porzione`, timingSummary(results));
+  const soldOut = results.filter((result) => messageOf(result.error).includes("stock_unavailable"));
+  if (successes.length === 1 && soldOut.length === stockAttempts - 1 && (await stock()) === 0) {
+    pass(`${stockAttempts} concorrenti sull'ultima porzione: una sola vendita`, timingSummary(results));
   } else {
     finding("Protezione ultima porzione violata", {
       successes: successes.length,
-      expected_failures: expectedFailures.length,
-      remaining_stock: stockRows[0]?.available_portions,
+      sold_out_errors: soldOut.length,
+      remaining_stock: await stock(),
+      other_error: results.find((result) => result.error && !soldOut.includes(result))?.error,
     });
   }
 }
 
 async function capacityScenario() {
-  await clearOrders();
-  await openEvent(capacity);
+  await resetEvent();
   const results = await Promise.all(Array.from({ length: capAttempts }, () => publicOrder(fixtureIds.unlimited)));
   const successes = results.filter((result) => !result.error);
   const capacityErrors = results.filter((result) => messageOf(result.error).includes("capacity_reached"));
-  const unexpectedErrors = results.filter(
-    (result) => result.error && !messageOf(result.error).includes("capacity_reached"),
-  );
-  const rows = await requireQuery(
-    serviceClient
-      .from("orders")
-      .select("id,display_number,status")
-      .eq("event_id", eventId)
-      .eq("status", "in_attesa_pagamento"),
-    "ordini al limite",
-  );
-  const uniqueIds = new Set(rows.map((row) => row.id));
-  const uniqueNumbers = new Set(rows.map((row) => row.display_number));
-  const status = await timedRpc(publicClient, "get_ordering_status");
-  const catalog = await timedRpc(publicClient, "get_ordering_catalog");
+  const unexpected = results.filter((result) => result.error && !messageOf(result.error).includes("capacity_reached"));
+  const rows = Number(await admin_sql("select count(*) from public.orders where status = 'in_attesa_pagamento'"));
+  const numbers = Number(await admin_sql("select count(distinct display_number) from public.orders"));
+  const status = await rpc("get_ordering_status", [], asPublic);
+  const catalog = await rpc("get_ordering_catalog", [], asPublic);
   if (
     successes.length === capacity &&
-    rows.length === capacity &&
-    uniqueIds.size === capacity &&
-    uniqueNumbers.size === capacity &&
+    rows === capacity &&
+    numbers === capacity &&
+    capacityErrors.length === capAttempts - capacity &&
+    unexpected.length === 0 &&
     status.data?.accepting === false &&
     status.data?.reason === "capacity_reached" &&
-    Array.isArray(catalog.data?.items) &&
-    catalog.data.items.length === 0
+    catalog.data?.items?.length === 0
   ) {
-    pass(`Il burst da ${capAttempts} invii non supera il limite ${capacity}`, {
-      accepted: successes.length,
-      rejected_for_capacity: capacityErrors.length,
-      ...timingSummary(results),
-    });
+    pass(`Il burst da ${capAttempts} invii non supera il limite ${capacity}`, timingSummary(results));
   } else {
     finding("Invariante del limite ordini violata", {
       accepted: successes.length,
       capacity_errors: capacityErrors.length,
-      unexpected_errors: unexpectedErrors.length,
-      pending_rows: rows.length,
-      unique_ids: uniqueIds.size,
-      unique_numbers: uniqueNumbers.size,
+      unexpected_errors: unexpected.length,
+      first_unexpected: unexpected[0]?.error,
+      pending_rows: rows,
+      unique_numbers: numbers,
       ordering_status: status.data,
-      catalog_items: catalog.data?.items?.length,
-    });
-  }
-
-  if (unexpectedErrors.length > 0) {
-    finding("Errori di trasporto durante il burst di ordini", {
-      errors: unexpectedErrors.length,
-      first: errorDetails(unexpectedErrors[0].error),
-      ...timingSummary(results),
-    });
-  } else if (capacityErrors.length !== capAttempts - capacity) {
-    finding("Numero inatteso di rifiuti per capienza", {
-      expected: capAttempts - capacity,
-      actual: capacityErrors.length,
     });
   }
 }
 
-async function malformedIdentityScenarios(adminClient) {
-  await clearOrders();
-  await openEvent();
-  const protectedOrder = await publicOrder(fixtureIds.unlimited);
-  if (protectedOrder.error) throw new Error(`setup token NULL: ${protectedOrder.error.message}`);
-  const validToken = crypto.randomUUID();
-  const validClaim = await timedRpc(adminClient, "claim_order", {
-    p_order_id: protectedOrder.data.order_id,
-    p_claim_token: validToken,
-  });
-  if (validClaim.error) throw new Error(`claim valido: ${validClaim.error.message}`);
+async function identityScenarios() {
+  await resetEvent({ portions: 2 });
+  const order = await publicOrder(fixtureIds.unlimited);
+  if (order.error) throw new Error(`setup identità: ${order.error.message}`);
+  const orderId = order.data.order_id;
+  const owner = crypto.randomUUID();
 
-  const nullTokenCalls = await Promise.all([
-    timedRpc(adminClient, "claim_order", {
-      p_order_id: protectedOrder.data.order_id,
-      p_claim_token: null,
-    }),
-    timedRpc(adminClient, "claim_order_by_qr", {
-      p_qr_token: protectedOrder.data.qr_token,
-      p_claim_token: null,
-    }),
-    timedRpc(adminClient, "release_order_claim", {
-      p_order_id: protectedOrder.data.order_id,
-      p_claim_token: null,
-    }),
-    timedRpc(adminClient, "update_claimed_order", {
-      p_order_id: protectedOrder.data.order_id,
-      p_claim_token: null,
-      p_alias: "Load test",
-      p_notes: "",
-      p_items: [{ id: fixtureIds.unlimited, qty: 1 }],
-    }),
-    timedRpc(adminClient, "cancel_claimed_order", {
-      p_order_id: protectedOrder.data.order_id,
-      p_claim_token: null,
-    }),
-    timedRpc(adminClient, "pay_claimed_order", {
-      p_order_id: protectedOrder.data.order_id,
-      p_claim_token: null,
-    }),
+  // Postazione o dispositivo non validi, operazioni senza presa in carico o da un altro dispositivo.
+  const rejected = await Promise.all([
+    stationCall("claim_order_for_station", orderId, null).then((result) => ["invalid_device", result]),
+    stationCall("claim_order_for_station", orderId, owner, "cassa_9").then((result) => ["invalid_station", result]),
+    stationCall("pay_order_for_station", orderId, owner).then((result) => ["claim_lost", result]),
+    stationCall("cancel_order_for_station", orderId, owner).then((result) => ["claim_lost", result]),
   ]);
-  const protectedRow = (
-    await requireQuery(
-      serviceClient
-        .from("orders")
-        .select("status,claimed_token_hash,claim_expires_at")
-        .eq("id", protectedOrder.data.order_id),
-      "stato dopo token NULL",
-    )
-  )[0];
-  const nullErrors = nullTokenCalls.filter((result) => messageOf(result.error).includes("invalid_claim_token"));
-  const validPay = await timedRpc(adminClient, "pay_claimed_order", {
-    p_order_id: protectedOrder.data.order_id,
-    p_claim_token: validToken,
-  });
+  const claim = await stationCall("claim_order_for_station", orderId, owner);
+  const stranger = await Promise.all([
+    stationCall("pay_order_for_station", orderId, crypto.randomUUID()),
+    stationCall("cancel_order_for_station", orderId, crypto.randomUUID()),
+  ]);
+  const statusBefore = await admin_sql(`select status from public.orders where id = ${lit(orderId)}`);
+  const ownerPay = await stationCall("pay_order_for_station", orderId, owner);
   if (
-    nullErrors.length === nullTokenCalls.length &&
-    protectedRow?.status === "in_attesa_pagamento" &&
-    protectedRow?.claimed_token_hash &&
-    protectedRow?.claim_expires_at &&
-    !validPay.error
+    rejected.every(([expected, result]) => messageOf(result.error).includes(expected)) &&
+    !claim.error &&
+    stranger.every((result) => messageOf(result.error).includes("claim_lost")) &&
+    statusBefore === "in_attesa_pagamento" &&
+    !ownerPay.error
   ) {
-    pass("Token claim NULL respinto da tutte le RPC senza alterare il claim valido");
+    pass("Solo il dispositivo che ha preso l'ordine in carico può incassarlo o annullarlo");
   } else {
-    finding("Protezione token claim NULL incompleta", {
-      expected_errors: nullTokenCalls.length,
-      actual_errors: nullErrors.length,
-      errors: nullTokenCalls.map((result) => errorDetails(result.error)),
-      status_before_valid_pay: protectedRow?.status,
-      claim_preserved: Boolean(protectedRow?.claimed_token_hash),
-      valid_pay_error: messageOf(validPay.error),
+    finding("Protezione della presa in carico incompleta", {
+      rejected: rejected.map(([expected, result]) => ({ expected, error: result.error })),
+      claim_error: claim.error,
+      stranger: stranger.map((result) => result.error),
+      status_before_owner_pay: statusBefore,
+      owner_pay_error: ownerPay.error,
     });
   }
 
-  const unclaimedOperations = [
-    {
-      rpc: "update_claimed_order",
-      args: (orderId, token) => ({
-        p_order_id: orderId,
-        p_claim_token: token,
-        p_alias: "Load test",
-        p_notes: "",
-        p_items: [{ id: fixtureIds.unlimited, qty: 1 }],
-      }),
-    },
-    {
-      rpc: "cancel_claimed_order",
-      args: (orderId, token) => ({ p_order_id: orderId, p_claim_token: token }),
-    },
-    {
-      rpc: "pay_claimed_order",
-      args: (orderId, token) => ({ p_order_id: orderId, p_claim_token: token }),
-    },
-  ];
-  const unclaimedResults = [];
-  for (const operation of unclaimedOperations) {
-    const order = await publicOrder(fixtureIds.unlimited);
-    if (order.error) throw new Error(`setup ${operation.rpc} non claimato: ${order.error.message}`);
-    const result = await timedRpc(adminClient, operation.rpc, operation.args(order.data.order_id, crypto.randomUUID()));
-    const row = (
-      await requireQuery(
-        serviceClient.from("orders").select("status").eq("id", order.data.order_id),
-        `stato dopo ${operation.rpc} non claimato`,
-      )
-    )[0];
-    unclaimedResults.push({ rpc: operation.rpc, error: messageOf(result.error), status: row?.status });
-  }
-  if (
-    unclaimedResults.every((result) => result.error.includes("claim_lost") && result.status === "in_attesa_pagamento")
-  ) {
-    pass("Ordini mai claimati resistono a update, annullamento e pagamento con token casuali");
-  } else {
-    finding("Un ordine non claimato accetta una mutazione", { results: unclaimedResults });
-  }
-
-  await clearOrders();
-  await openEvent();
-  await setLimitedStock(2);
+  await resetEvent({ portions: 2 });
   const sharedQr = crypto.randomUUID();
   const duplicateQr = await Promise.all([
     publicOrder(fixtureIds.limited, { qrToken: sharedQr }),
     publicOrder(fixtureIds.limited, { qrToken: sharedQr }),
   ]);
-  const duplicateQrSuccesses = duplicateQr.filter((result) => !result.error);
-  const duplicateQrFailures = duplicateQr.filter((result) => result.error);
-  const qrRows = await requireQuery(
-    serviceClient.from("orders").select("id").eq("event_id", eventId),
-    "ordini QR duplicato",
-  );
-  const qrStock = (
-    await requireQuery(
-      serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
-      "scorta QR duplicato",
-    )
-  )[0]?.available_portions;
+  const accepted = duplicateQr.filter((result) => !result.error);
+  const refused = duplicateQr.filter((result) => result.error);
   if (
-    duplicateQrSuccesses.length === 1 &&
-    duplicateQrFailures.length === 1 &&
-    duplicateQrFailures[0].error?.code === "23505" &&
-    qrRows.length === 1 &&
-    qrRows[0]?.id === duplicateQrSuccesses[0].data?.order_id &&
-    qrStock === 1
+    accepted.length === 1 &&
+    refused[0]?.error?.code === "23505" &&
+    (await orderCount()) === 1 &&
+    (await stock()) === 1
   ) {
     pass("QR duplicato respinto senza consumare due volte la scorta");
   } else {
     finding("Lo stesso QR non è protetto da unicità", {
-      accepted: duplicateQrSuccesses.length,
-      errors: duplicateQrFailures.map((result) => errorDetails(result.error)),
-      database_rows: qrRows.length,
-      remaining_stock: qrStock,
+      accepted: accepted.length,
+      errors: refused.map((result) => result.error),
+      database_rows: await orderCount(),
+      remaining_stock: await stock(),
     });
   }
 
-  await clearOrders();
-  await openEvent();
-  await setLimitedStock(2);
+  await resetEvent({ portions: 2 });
   const nullRequest = await Promise.all([
     publicOrder(fixtureIds.limited, { requestId: null }),
     publicOrder(fixtureIds.limited, { requestId: null }),
   ]);
-  const nullRequestSuccesses = nullRequest.filter((result) => !result.error);
-  const nullRequestErrors = nullRequest.filter((result) =>
-    messageOf(result.error).includes("invalid_client_request_id"),
-  );
-  const nullRows = await requireQuery(
-    serviceClient.from("orders").select("id").eq("event_id", eventId),
-    "ordini request ID NULL",
-  );
-  const nullStock = (
-    await requireQuery(
-      serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
-      "scorta request ID NULL",
-    )
-  )[0]?.available_portions;
-  if (nullRequestSuccesses.length === 0 && nullRequestErrors.length === 2 && nullRows.length === 0 && nullStock === 2) {
+  if (
+    nullRequest.every((result) => messageOf(result.error).includes("invalid_client_request_id")) &&
+    (await orderCount()) === 0 &&
+    (await stock()) === 2
+  ) {
     pass("Client request ID NULL respinto senza creare ordini o consumare scorte");
   } else {
     finding("Client request ID NULL non è protetto", {
-      accepted: nullRequestSuccesses.length,
-      expected_errors: nullRequestErrors.length,
-      database_rows: nullRows.length,
-      remaining_stock: nullStock,
+      errors: nullRequest.map((result) => result.error),
+      database_rows: await orderCount(),
+      remaining_stock: await stock(),
     });
   }
 }
 
-async function closeRaceScenario(adminClient) {
+async function closeRaceScenario() {
   let inconsistentRounds = 0;
   let deadlocks = 0;
   const samples = [];
   for (let round = 0; round < raceRounds; round += 1) {
-    await clearOrders();
-    await openEvent();
-    await setLimitedStock(raceOrders);
+    await resetEvent({ portions: raceOrders });
     const submitted = await Promise.all(Array.from({ length: raceOrders }, () => publicOrder(fixtureIds.limited)));
     const orders = submitted.filter((result) => !result.error).map((result) => result.data);
-    assert.equal(orders.length, raceOrders, `Setup race chiusura incompleto al round ${round + 1}.`);
+    assert.equal(orders.length, raceOrders, `Setup gara di chiusura incompleto al round ${round + 1}.`);
     const claims = await Promise.all(
       orders.map(async (order) => {
-        const token = crypto.randomUUID();
-        const result = await timedRpc(adminClient, "claim_order", { p_order_id: order.order_id, p_claim_token: token });
-        return { order, token, result };
+        const device = crypto.randomUUID();
+        return { order, device, result: await stationCall("claim_order_for_station", order.order_id, device) };
       }),
     );
-    assert.equal(
-      claims.filter(({ result }) => !result.error).length,
-      raceOrders,
-      "Non tutti gli ordini sono stati presi in carico.",
-    );
+    assert.equal(claims.filter(({ result }) => !result.error).length, raceOrders, "Prese in carico incomplete.");
 
-    const seedClaim = claims[0];
-    const seedPayment = await timedRpc(adminClient, "pay_claimed_order", {
-      p_order_id: seedClaim.order.order_id,
-      p_claim_token: seedClaim.token,
-    });
-    if (seedPayment.error) throw new Error(`Pagamento seed race: ${seedPayment.error.message}`);
-    const raceClaims = claims.slice(1);
+    const [seed, ...racing] = claims;
+    const seedPayment = await stationCall("pay_order_for_station", seed.order.order_id, seed.device);
+    if (seedPayment.error) throw new Error(`Pagamento iniziale: ${seedPayment.error.message}`);
     const startPayments = () =>
-      raceClaims.map(({ order, token }) => ({
+      racing.map(({ order, device }) => ({
         orderId: order.order_id,
-        promise: timedRpc(adminClient, "pay_claimed_order", {
-          p_order_id: order.order_id,
-          p_claim_token: token,
-        }),
+        promise: stationCall("pay_order_for_station", order.order_id, device),
       }));
 
+    // Turni alterni: chiusura prima dei pagamenti, poi pagamenti prima della chiusura.
     let closePromise;
-    let pendingPayments;
+    let payments;
     if (round % 2 === 0) {
-      closePromise = timedRpc(adminClient, "close_order_event");
+      closePromise = rpc("close_order_event", [], asAdmin);
       await new Promise((resolve) => setTimeout(resolve, 5));
-      pendingPayments = startPayments();
+      payments = startPayments();
     } else {
-      pendingPayments = startPayments();
+      payments = startPayments();
       await new Promise((resolve) => setTimeout(resolve, 5));
-      closePromise = timedRpc(adminClient, "close_order_event");
+      closePromise = rpc("close_order_event", [], asAdmin);
     }
-    const [closeResult, payResults] = await Promise.all([
+    const [close, payResults] = await Promise.all([
       closePromise,
-      Promise.all(pendingPayments.map(async ({ orderId, promise }) => ({ orderId, result: await promise }))),
+      Promise.all(payments.map(async ({ orderId, promise }) => ({ orderId, result: await promise }))),
     ]);
-    const rawPayResults = payResults.map(({ result }) => result);
-    deadlocks += [closeResult, ...rawPayResults].filter((result) =>
-      /deadlock|40P01/i.test(messageOf(result.error)),
+    deadlocks += [close, ...payResults.map(({ result }) => result)].filter(
+      (result) => result.error?.code === "40P01",
     ).length;
 
-    const finalOrders = await requireQuery(
-      serviceClient.from("orders").select("id,status").eq("event_id", eventId),
-      "stati dopo race chiusura",
+    const finalById = new Map(
+      (
+        (await admin_sql(
+          "select coalesce(json_agg(json_build_object('id', id, 'status', status)), '[]') from public.orders",
+        )) ?? []
+      ).map((row) => [row.id, row.status]),
     );
-    const finalById = new Map(finalOrders.map((order) => [order.id, order.status]));
-    const delivered = finalOrders.filter((order) => order.status === "consegnato").length;
-    const cancelled = finalOrders.filter((order) => order.status === "annullato").length;
-    const successfulRacePayments = payResults.filter(({ result }) => !result.error);
-    const paySuccesses = 1 + successfulRacePayments.length;
-    const expectedPayErrors = payResults.filter(({ result }) =>
-      messageOf(result.error).includes("event_closed"),
-    ).length;
-    const unexpectedPayErrors = payResults.length - successfulRacePayments.length - expectedPayErrors;
+    const paidInRace = payResults.filter(({ result }) => !result.error);
+    const closedErrors = payResults.filter(({ result }) => messageOf(result.error).includes("event_closed")).length;
+    const unexpectedPayErrors = payResults.length - paidInRace.length - closedErrors;
+    const paySuccesses = 1 + paidInRace.length;
+    const statuses = [...finalById.values()];
     const resultMappingValid =
-      finalById.get(seedClaim.order.order_id) === "consegnato" &&
-      payResults.every(
-        ({ orderId, result }) => finalById.get(orderId) === (!result.error ? "consegnato" : "annullato"),
-      );
-    const stockRows = await requireQuery(
-      serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
-      "scorta dopo race chiusura",
-    );
-    const actualStock = stockRows[0]?.available_portions;
-    const expectedStock = raceOrders - paySuccesses;
-    const reportPaid = Number(closeResult.data?.summary?.orders_paid ?? 0);
-    const reportAbandoned = Number(closeResult.data?.summary?.orders_abandoned ?? -1);
-    const reportTotal = Number(closeResult.data?.summary?.orders_total ?? -1);
-    const reportRevenue = Number(closeResult.data?.summary?.revenue_total ?? -1);
-    const reportProductQuantity = Array.isArray(closeResult.data?.products)
-      ? closeResult.data.products.reduce((sum, product) => sum + Number(product.quantity ?? 0), 0)
+      finalById.get(seed.order.order_id) === "consegnato" &&
+      payResults.every(({ orderId, result }) => finalById.get(orderId) === (result.error ? "annullato" : "consegnato"));
+    const summary = close.data?.summary ?? {};
+    const productQuantity = Array.isArray(close.data?.products)
+      ? close.data.products.reduce((sum, product) => sum + Number(product.quantity ?? 0), 0)
       : -1;
-    const eventRows = await requireQuery(
-      serviceClient.from("order_events").select("permanently_closed_at,final_report").eq("id", eventId),
-      "evento dopo race chiusura",
+    const closedAt = await admin_sql(
+      "select permanently_closed_at is not null from public.order_events where is_current",
     );
+    const actualStock = await stock();
     const coherent =
-      !closeResult.error &&
-      eventRows[0]?.permanently_closed_at &&
-      eventRows[0]?.final_report &&
-      delivered === paySuccesses &&
-      cancelled === raceOrders - paySuccesses &&
+      !close.error &&
+      closedAt === "t" &&
+      statuses.filter((status) => status === "consegnato").length === paySuccesses &&
+      statuses.filter((status) => status === "annullato").length === raceOrders - paySuccesses &&
       resultMappingValid &&
-      actualStock === expectedStock &&
-      reportTotal === raceOrders &&
-      reportPaid === paySuccesses &&
-      reportAbandoned === raceOrders - paySuccesses &&
-      reportRevenue === paySuccesses &&
-      reportProductQuantity === paySuccesses &&
+      actualStock === raceOrders - paySuccesses &&
+      Number(summary.orders_total) === raceOrders &&
+      Number(summary.orders_paid) === paySuccesses &&
+      Number(summary.orders_abandoned) === raceOrders - paySuccesses &&
+      Number(summary.revenue_total) === paySuccesses &&
+      productQuantity === paySuccesses &&
       unexpectedPayErrors === 0;
     if (!coherent) {
       inconsistentRounds += 1;
@@ -719,31 +499,23 @@ async function closeRaceScenario(adminClient) {
         samples.push({
           round: round + 1,
           pay_successes: paySuccesses,
-          expected_pay_errors: expectedPayErrors,
           unexpected_pay_errors: unexpectedPayErrors,
-          delivered,
-          cancelled,
+          first_unexpected: payResults.find(
+            ({ result }) => result.error && !messageOf(result.error).includes("event_closed"),
+          )?.result.error,
           actual_stock: actualStock,
-          expected_stock: expectedStock,
-          report_paid: reportPaid,
-          report_abandoned: reportAbandoned,
-          report_total: reportTotal,
-          report_revenue: reportRevenue,
-          report_product_quantity: reportProductQuantity,
-          close_error: messageOf(closeResult.error),
-          event_closed: Boolean(eventRows[0]?.permanently_closed_at),
+          summary,
+          product_quantity: productQuantity,
+          close_error: close.error,
           result_mapping_valid: resultMappingValid,
         });
       }
     }
   }
-
   if (inconsistentRounds === 0 && deadlocks === 0) {
-    pass(`${raceRounds} race chiusura/pagamento coerenti`, { orders_per_round: raceOrders });
+    pass(`${raceRounds} gare chiusura/pagamento coerenti`, { orders_per_round: raceOrders });
   } else {
-    finding("Race chiusura/pagamento altera scorte o report", {
-      rounds: raceRounds,
-      orders_per_round: raceOrders,
+    finding("La gara chiusura/pagamento altera scorte o report", {
       inconsistent_rounds: inconsistentRounds,
       deadlocks,
       samples,
@@ -751,40 +523,24 @@ async function closeRaceScenario(adminClient) {
   }
 }
 
-async function cleanup() {
-  if (eventId) {
-    await serviceClient.from("orders").delete().eq("event_id", eventId);
-  }
-  await serviceClient.from("menu_items").delete().in("id", Object.values(fixtureIds));
-  if (savedEvent) {
-    await serviceClient
-      .from("order_events")
-      .update({
-        name: savedEvent.name,
-        opens_at: savedEvent.opens_at,
-        closes_at: savedEvent.closes_at,
-        manual_closed: savedEvent.manual_closed,
-        permanently_closed_at: savedEvent.permanently_closed_at,
-        max_pending_orders: savedEvent.max_pending_orders,
-        final_report: savedEvent.final_report,
-      })
-      .eq("id", savedEvent.id);
-  }
-  if (adminUserId) await serviceClient.auth.admin.deleteUser(adminUserId);
-}
-
-console.log(`Stress test ordini LAG su ${target.origin} (run ${runId})`);
+console.log(`Stress test ordini LAG su PostgreSQL temporaneo (${workDir})`);
 try {
-  const adminClient = await setup();
+  await startCluster();
+  await setup();
   if (selectedScenarios.has("read")) await readBurst();
-  if (selectedScenarios.has("idempotency")) await idempotencyScenario(adminClient);
+  if (selectedScenarios.has("idempotency")) await idempotencyScenario();
   if (selectedScenarios.has("stock")) await lastPortionScenario();
   if (selectedScenarios.has("capacity")) await capacityScenario();
-  if (selectedScenarios.has("identities")) await malformedIdentityScenarios(adminClient);
-  if (selectedScenarios.has("close-race")) await closeRaceScenario(adminClient);
+  if (selectedScenarios.has("identities")) await identityScenarios();
+  if (selectedScenarios.has("close-race")) await closeRaceScenario();
 } finally {
-  await cleanup();
+  try {
+    execFileSync(bin("pg_ctl"), ["-D", dataDir, "-m", "fast", "-w", "stop"], { stdio: "ignore", env: pgEnv });
+  } catch {
+    /* cluster mai avviato */
+  }
+  rmSync(workDir, { recursive: true, force: true });
 }
 
-console.log(JSON.stringify({ target: target.origin, checks, findings }, null, 2));
+console.log(JSON.stringify({ checks: checks.length, findings }, null, 2));
 if (findings.length > 0) process.exitCode = 2;
