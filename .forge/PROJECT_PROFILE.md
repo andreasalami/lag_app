@@ -18,13 +18,15 @@ l'app restano nel [README](../README.md).
   del "Capitolo Bug", conferma implicita registrata e dichiarata in chat.
 - 2026-10-02 — Piano: approvato con "Sì, procedi" (PR bug + sezione Gestione evento con PDF),
   poi "Prosegue solo questa" per riprendere il lavoro della sessione fork nella stessa cartella.
+- 2026-10-03 — Decisioni ruoli: cucina gestisce tutto il menu, bar le bevande, chiusura evento a
+  cassa e admin, staff senza storico notifiche. Approvati anche M7, script di stress e Tailwind 4.
 - 2026-10-03 — Revisione profonda presentata in chat; approvati S1, S2, M1, M2, M3, M5, M8 e la
   verifica di M6. M4 (schema ruoli) e M7 (OrderPage) solo come spiegazione.
 - Fuori dall'approvazione: migrazioni sul database di produzione, merge su `main`, deploy.
 
 ## Architettura in breve
 
-- SPA React 18 + TypeScript + Vite + Tailwind, pubblicata su GitHub Pages (`/lag_app/`).
+- SPA React 18 + TypeScript + Vite + Tailwind CSS 4 (plugin Vite), pubblicata su GitHub Pages (`/lag_app/`).
 - Backend Supabase: logica di business in RPC Postgres `security definer` con RLS; gli ordini
   pubblici passano dalla Edge Function `submit-order` dopo la verifica Turnstile.
 - Routing a hash in `src/App.tsx`; le pagine riservate passano da `ProtectedOperationalPage`.
@@ -47,10 +49,8 @@ l'app restano nel [README](../README.md).
 - D17: ESLint (Prettier aggiunto il 2026-10-03).
 - Produzione: applicare `schema.sql` del 2026-10-03, ridistribuire `send-push-broadcast`, verificare la
   vecchia `submit_public_order` (vedi l'intervento del 2026-10-03).
-- Ruoli e permessi da rivedere con Andrea (M4): `cucina` può modificare prezzi, `cassa` chiude
-  l'evento, `staff` legge ancora lo storico notifiche.
-- `scripts/stress/orders.mjs` usa le API di cassa eliminate: va riscritto o rimosso.
-- `npm audit`: 5 high da `braces` in Tailwind 3 (solo build), risolte da Tailwind 4.
+- Produzione: applicare anche la migrazione `20261003100000` (bar sulle bevande, storico notifiche).
+- `npm audit`: restano 2 moderate (vitest) e 1 bassa (dompurify, via jsPDF).
 - `docs/RISCRITTURA_DA_ZERO_2026-10-03.md` non versionato, di un'altra sessione: da valutare.
 - Lavoro pubblicato nella PR #6 verso `main`, che include anche la PR #4: dopo il merge la #4 si può chiudere.
 

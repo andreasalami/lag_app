@@ -15,6 +15,10 @@
 - **M3** (`4b8999d`): `pollWhileVisible` sostituisce cinque copie di intervallo + `visibilitychange`.
 - **M8** (`13b2d55`): `verify.yml` riutilizzabile per CI e deploy; il deploy ora esegue anche il type check, che prima mancava.
 - **M5** (`c28fa40`, `572c373`, `c207684`): Prettier 3.9.9, riformattazione separata e ignorata da `git blame`, controllo in CI.
+- **Ruoli** (`53090f5`, `5fadab6`): il bar gestisce le bevande (RLS su `category = 'bevande'`), lo staff non legge più lo storico notifiche; pagine e ruoli dell'interfaccia in `staffPages.ts`; test `verify-roles.mjs`.
+- **M7** (`6aba2a3`): `OrderPage` da 1.058 a 553 righe, con cinque viste in file propri; provato nel browser contro un finto backend locale.
+- **Stress** (`faffd3f`): il runner usa un PostgreSQL usa-e-getta via socket Unix e le API attuali; 10 controlli su 10 superati.
+- **Tailwind 4** (`403a909`): migrazione verificata confrontando gli stili calcolati di ogni elemento su 9 schermate; tre regressioni trovate e corrette.
 - **M6**: le anteprime (`anteprima.html`, `src/previews/`) sono documentate e usate nei test di usabilità del 2026-10-02: restano.
 
 ## Scelte e alternative
@@ -29,7 +33,7 @@ Eseguito il 2026-10-03: `format:check`, `lint` (tsc), 76 test Vitest, build, tut
 
 ## Azioni manuali in produzione (non eseguite)
 
-1. Applicare `schema.sql` (o le migrazioni `20261003090000` e `20261003091000`).
+1. Applicare `schema.sql` (o le migrazioni `20261003090000`, `20261003091000` e `20261003100000`).
 2. Ridistribuire la Edge Function `send-push-broadcast`.
 3. Prima, in sola lettura, controllare se la vecchia funzione esiste:
    `select oid::regprocedure from pg_proc where proname = 'submit_public_order';`
