@@ -33,6 +33,14 @@ export function defaultTeams(size: BracketSize): string[] {
   return Array.from({ length: size }, (_, i) => `Squadra ${i + 1}`);
 }
 
+/** Vero se nel tabellone non c'è ancora niente da perdere: nomi predefiniti o vuoti, nessun risultato, nessun ripescaggio. */
+export function isUntouchedBracket(size: BracketSize, teams: string[], matches: MatchesMap, overrides: OverridesMap): boolean {
+  const defaults = defaultTeams(size);
+  return teams.every((name, i) => name.trim() === "" || name === defaults[i])
+    && Object.values(matches).every((match) => match.winner === null && match.scoreA === null && match.scoreB === null)
+    && Object.values(overrides).every((name) => name.trim() === "");
+}
+
 export function roundLabel(size: BracketSize, round: number): string {
   const teamsEnteringRound = matchesInRound(size, round) * 2;
   if (teamsEnteringRound === 2) return "Finale";

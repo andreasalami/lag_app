@@ -17,6 +17,7 @@ import {
   totalRounds,
   matchesInRound,
   defaultTeams,
+  isUntouchedBracket,
   roundLabel,
   resolveSlot,
   slotKey,
@@ -316,7 +317,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
     targetSize: BracketSize,
   ): Promise<TournamentArchive | null> {
     if (!isSupabaseConfigured) {
-      setArchiveError("Archivio non disponibile: collega Supabase prima di cambiare il tabellone.");
+      setArchiveError("Archivio non disponibile: la copia non può essere salvata. Il tabellone non è stato modificato.");
       return null;
     }
     setArchiveLoading(true);
@@ -346,14 +347,19 @@ export function TournamentBracket({ management = false }: { management?: boolean
   function requestSizeChange(newSize: BracketSize) {
     if (newSize === size) return;
     setArchiveError(null);
-    setPendingSize(newSize);
+    // Senza nomi né risultati non c'è niente da perdere: si cambia subito, senza domande.
+    if (isUntouchedBracket(size, teams, matches, overrides)) applySizeChange(newSize);
+    else setPendingSize(newSize);
   }
 
-  async function confirmSizeChange() {
+  // La copia si crea solo se il gestore la chiede.
+  async function confirmSizeChange(saveCopy: boolean) {
     if (!pendingSize) return;
-    const nextSize = pendingSize;
-    const archived = await archiveCurrentState("size_change", nextSize);
-    if (!archived) return;
+    if (saveCopy && !(await archiveCurrentState("size_change", pendingSize))) return;
+    applySizeChange(pendingSize);
+  }
+
+  function applySizeChange(nextSize: BracketSize) {
     setSize(nextSize);
     setTeams(defaultTeams(nextSize));
     setMatches({});
@@ -577,17 +583,18 @@ export function TournamentBracket({ management = false }: { management?: boolean
         actions={(
           <>
             <Button variant="staff-secondary" onClick={() => { setPendingSize(null); setArchiveError(null); }} disabled={archiveLoading}>Annulla</Button>
-            <Button variant="staff-primary" onClick={() => void confirmSizeChange()} disabled={archiveLoading}>
-              {archiveLoading ? "Creo la copia…" : "Crea copia e cambia"}
+            <Button variant="staff-secondary" onClick={() => void confirmSizeChange(false)} disabled={archiveLoading}>Cambia senza salvare</Button>
+            <Button variant="staff-primary" onClick={() => void confirmSizeChange(true)} disabled={archiveLoading}>
+              {archiveLoading ? "Salvo la copia…" : "Salva una copia e cambia"}
             </Button>
           </>
         )}
       >
         <p>
-          Passando da <strong>{size}</strong> a <strong>{pendingSize ?? size}</strong> squadre, nomi, risultati e avanzamento del tabellone corrente verranno azzerati nella nuova bozza.
+          Passando da <strong>{size}</strong> a <strong>{pendingSize ?? size}</strong> squadre, nomi e risultati attuali spariscono dall’editor.
         </p>
         <p className="mt-2">
-          Prima del cambio verrà salvata automaticamente una copia completa su Supabase. Il tabellone pubblico resterà invariato finché non premi Salva.
+          Vuoi salvare prima una copia del torneo attuale? Potrai riaverlo con <strong>Ripristina ultima copia</strong>. Il tabellone pubblico non cambia finché non premi Salva.
         </p>
         {archiveError && <p className="mt-3 text-[var(--state-error)]">{archiveError}</p>}
       </Modal>
