@@ -76,6 +76,9 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [challengeAttempt, setChallengeAttempt] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Limiti del carrello: restano vicino al carrello, separati dagli errori di invio
+  // che con una richiesta in sospeso compaiono nel pannello in cima.
+  const [cartError, setCartError] = useState<string | null>(null);
   const [submittedOrder, setSubmittedOrder] = useState<StoredOrder | null>(() => startFresh ? null : readOrderHistory()[0] ?? null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrError, setQrError] = useState(false);
@@ -183,23 +186,25 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     const result = addToCart(cart, item, { maxItem, maxOrder });
     setCartExpanded(true);
     if (result.blocked === "stock") {
-      setSubmitError(`Hai già nel carrello tutte le porzioni rimaste di ${item.name}.`);
+      setCartError(`Hai già nel carrello tutte le porzioni rimaste di ${item.name}.`);
       return;
     }
     if (result.blocked) {
-      setSubmitError(`Puoi ordinare al massimo ${maxItem} pezzi per prodotto e ${maxOrder} articoli in totale. Per ordini più grandi rivolgiti alla cassa.`);
+      setCartError(`Puoi ordinare al massimo ${maxItem} pezzi per prodotto e ${maxOrder} articoli in totale. Per ordini più grandi rivolgiti alla cassa.`);
       return;
     }
-    setSubmitError(null);
+    setCartError(null);
     setCart(result.cart);
   }
 
   function decrementItem(id: string) {
+    setCartError(null);
     setCart((current) => removeOneFromCart(current, id));
   }
 
   function requestSubmit() {
     setSubmitError(null);
+    setCartError(null);
     // L'invio riprenderebbe la richiesta in sospeso, non il carrello attuale.
     if (pendingRequest) {
       setSubmitError("C’è una richiesta in sospeso in cima alla pagina: recuperala o rinunciaci prima di inviare un nuovo ordine.");
@@ -222,6 +227,12 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     if (submitBusy.current || !challengeToken) return;
     submitBusy.current = true;
     setSubmitting(true);
+    let sentCart = false;
+    const releaseCart = () => {
+      if (!sentCart) return;
+      setCart({});
+      setNotes("");
+    };
     try {
     setSubmitError(null);
     const pending: PendingOrderRequest = pendingRequest ?? {
@@ -231,7 +242,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     const activeCatalog = catalog ?? await loadCatalog();
     if(!activeCatalog) {setSubmitError("Non riesco a verificare l’evento. Controlla la rete e riprova."); return;}
     if(pending.eventId !== activeCatalog.event_id) {
-      setSubmitError("Questa richiesta appartiene a un evento precedente. Non verrà inviata al nuovo evento; rivolgiti alla cassa per verificarla."); return;
+      setSubmitError("Questa richiesta è di un evento precedente e non può più essere inviata. Non hai pagato nulla: puoi eliminarla."); return;
     }
     if (!pendingRequest) {
       try {
@@ -243,6 +254,10 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       setSubmitError("Il browser non consente di salvare l’ordine in sicurezza. Libera spazio o rivolgiti alla cassa: nessun nuovo ordine è stato inviato.");
       return;
     }
+    // Se si sta inviando il carrello, da qui il suo contenuto vive nella richiesta salvata:
+    // va svuotato quando l'ordine è registrato o resta in sospeso, così non può essere
+    // reinviato come doppione. Un recupero dal pannello invece non tocca il carrello in corso.
+    sentCart = !pendingRequest;
     setPendingRequest(pending);
     setSubmitting(true);
     const { requestId, qrToken } = pending;
@@ -271,6 +286,9 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       if (/stock_unavailable|capacity_reached|public_order_quantity_limit|order_total_too_high|invalid_|notes_too_long|ordering_|event_closed|event_changed|not_open_yet|no_event|request_id_conflict/.test(message)) {
         clearPendingOrder(requestId); setPendingRequest(null);
         requestIdentityRef.current = { requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() };
+      } else {
+        // Esito incerto: il contenuto resta nella richiesta in sospeso mostrata in cima.
+        releaseCart();
       }
       if (message.includes("public_order_rate_limit")) {
         setSubmitError("Hai inviato più ordini ravvicinati. Attendi un minuto, poi premi Recupera ordine.");
@@ -315,11 +333,12 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     historyRef.current = next;
     setOrderHistory(next);
     setSubmittedOrder(storedOrder);
-    setCart({});
+    releaseCart();
     setShowCopyPrompt(true);
     } catch {
       setSubmitError("Connessione interrotta. La richiesta resta salvata: premi Recupera ordine per verificarla senza duplicati.");
       setShowConfirmation(false);
+      releaseCart();
     } finally {
       submitBusy.current = false;
       setSubmitting(false);
@@ -350,10 +369,11 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       return;
     }
     setAlias(historyRef.current[0]?.alias ?? submittedOrder?.alias ?? "");
-    setNotes("");
-    setCart({});
+    // Carrello e note non si toccano: dopo un invio sono già vuoti, mentre un carrello
+    // lasciato a metà (per vedere un ordine o recuperarne uno) resta com'era.
     setCartExpanded(false);
     setSubmitError(null);
+    setCartError(null);
     setBotField("");
     setShowIntro(false);
     setShowCopyPrompt(false);
@@ -421,18 +441,32 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
 
   // Una richiesta interrotta (per esempio rete caduta) non blocca più la pagina: resta in
   // evidenza in cima, mentre ordini già fatti, QR e carrello restano utilizzabili.
-  const pendingPanel = pendingRequest && (
+  // Durante la conferma resta nascosto: la richiesta viene salvata prima dell'invio e il
+  // pannello avvierebbe una seconda verifica di sicurezza dietro la finestra.
+  // Una richiesta di un evento precedente non si può più recuperare: l'invio la rifiuta sempre
+  // e, se era arrivata, non è stata pagata ed è scaduta. Resta solo da eliminarla.
+  const pendingFromOldEvent = Boolean(pendingRequest && catalog?.event_id && pendingRequest.eventId !== catalog.event_id);
+  const pendingPanel = pendingRequest && !showConfirmation && (
     <section role="region" aria-labelledby="pending-request-title" className="mt-4 rounded-[var(--radius-md)] border-2 border-[var(--state-warning)] p-4 text-left">
       <h2 id="pending-request-title" className="text-lg">Un ordine non è stato confermato</h2>
-      <p className="mt-1 text-sm text-[var(--text-secondary)]">La connessione si è interrotta durante l’invio. Verifichiamo se è arrivato in cassa, senza crearne un doppione.</p>
+      <p className="mt-1 text-sm text-[var(--text-secondary)]">
+        {pendingFromOldEvent
+          ? "Questa richiesta è di un evento precedente e non può più essere inviata. Non hai pagato nulla: puoi eliminarla."
+          : "La connessione si è interrotta durante l’invio. Verifichiamo se è arrivato in cassa, senza crearne un doppione."}
+      </p>
       <ul className="my-3 space-y-1 text-sm">{pendingRequest.items.map((line) => <li key={line.id}>{line.qty} × {line.name}</li>)}</ul>
-      {submitError && <p role="alert" className="mb-3 text-sm text-[var(--state-warning)]">{submitError}</p>}
-      {catalog?.event_id && pendingRequest.eventId !== catalog.event_id && <p className="mb-3 text-sm">Questa richiesta appartiene a un evento precedente: puoi rinunciarci.</p>}
-      <TurnstileChallenge key={challengeAttempt} onToken={setChallengeToken} />
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <Button className="w-full" disabled={submitting || !challengeToken} onClick={() => void submitOrder()}>{submitting ? "Verifico l’ordine…" : "Recupera ordine"}</Button>
-        <Button variant="ghost" className="w-full" disabled={submitting} onClick={() => setShowAbandonConfirmation(true)}>Rinuncia a questa richiesta</Button>
-      </div>
+      {submitError && !pendingFromOldEvent && <p role="alert" className="mb-3 text-sm text-[var(--state-warning)]">{submitError}</p>}
+      {pendingFromOldEvent ? (
+        <Button variant="ghost" className="w-full" onClick={abandonPendingRequest}>Elimina questa richiesta</Button>
+      ) : (
+        <>
+          <TurnstileChallenge key={challengeAttempt} onToken={setChallengeToken} />
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <Button className="w-full" disabled={submitting || !challengeToken} onClick={() => void submitOrder()}>{submitting ? "Verifico l’ordine…" : "Recupera ordine"}</Button>
+            <Button variant="ghost" className="w-full" disabled={submitting} onClick={() => setShowAbandonConfirmation(true)}>Rinuncia a questa richiesta</Button>
+          </div>
+        </>
+      )}
       <Modal
         open={showAbandonConfirmation}
         title="Rinunciare alla richiesta?"
@@ -740,7 +774,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
                   className="field mt-1 w-full resize-none"
                 />
               </label>
-              {submitError && !pendingRequest && <p className="mt-2 text-xs text-[var(--state-error)]">{submitError}</p>}
+              {(cartError ?? (pendingRequest ? null : submitError)) && <p className="mt-2 text-xs text-[var(--state-error)]">{cartError ?? submitError}</p>}
               <Button variant="primary" className="mt-3 w-full" onClick={requestSubmit}>Invia ordine</Button>
             </div>
           )}
