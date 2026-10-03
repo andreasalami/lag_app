@@ -9,6 +9,7 @@ import {
   downloadOrderPdf,
   orderingReasonMessage,
   priceFormatter,
+  submitFailure,
 } from "./orderUtils";
 import { addToCart, cartItemCount, cartTotal, lineTotal, remainingStock, removeOneFromCart, type Cart } from "./cart";
 import {
@@ -279,40 +280,18 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     setSubmitting(false);
     setShowConfirmation(false);
     if (error || !data) {
-      const message = error?.message ?? "";
-      // Errori definitivi: il server ha rifiutato la richiesta senza creare l'ordine, quindi
-      // "Recupera ordine" darebbe sempre lo stesso errore. Si libera la richiesta salvata e
-      // il prossimo invio usa una richiesta nuova.
-      if (/stock_unavailable|capacity_reached|public_order_quantity_limit|order_total_too_high|invalid_|notes_too_long|ordering_|event_closed|event_changed|not_open_yet|no_event|request_id_conflict/.test(message)) {
+      const failure = submitFailure(error?.message ?? "", { maxItem: catalog?.max_item_quantity ?? 25, maxOrder: catalog?.max_order_quantity ?? 60 });
+      if (failure.definitive) {
+        // Il server non ha creato l'ordine: "Recupera ordine" darebbe sempre lo stesso errore.
+        // Si libera la richiesta salvata e il prossimo invio usa una richiesta nuova.
         clearPendingOrder(requestId); setPendingRequest(null);
         requestIdentityRef.current = { requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() };
       } else {
         // Esito incerto: il contenuto resta nella richiesta in sospeso mostrata in cima.
         releaseCart();
       }
-      if (message.includes("public_order_rate_limit")) {
-        setSubmitError("Hai inviato più ordini ravvicinati. Attendi un minuto, poi premi Recupera ordine.");
-      } else if (message.includes("challenge_")) {
-        setSubmitError("Ripeti la verifica di sicurezza e premi Recupera ordine. La richiesta salvata resta la stessa.");
-      } else if (message.includes("stock_unavailable:")) {
-        setSubmitError(`Disponibilità cambiata: ${message.split("stock_unavailable:")[1]}. Aggiorna il carrello e riprova.`);
-        await loadCatalog();
-      } else if (message.includes("public_order_quantity_limit")) {
-        setSubmitError(`L’ordine supera il limite di ${catalog?.max_item_quantity ?? 25} pezzi per prodotto o ${catalog?.max_order_quantity ?? 60} articoli totali. Riduci le quantità o rivolgiti alla cassa.`);
-      } else if (message.includes("order_total_too_high")) {
-        setSubmitError("L’importo dell’ordine è troppo alto per l’app. Riduci le quantità o rivolgiti alla cassa.");
-      } else if (message.includes("event_changed")) {
-        setSubmitError("Nel frattempo è iniziato un nuovo evento: l’ordine non è stato inviato. Controlla il carrello e invialo di nuovo.");
-        await loadCatalog();
-      } else if (message.includes("request_id_conflict")) {
-        setSubmitError("L’ordine non è stato inviato. Premi di nuovo Invia ordine: verrà creata una richiesta nuova.");
-      } else if (message.includes("capacity_reached")) {
-        setSubmitError(orderingReasonMessage("capacity_reached"));
-      } else if (/ordering_|event_closed|not_open_yet/.test(message)) {
-        setSubmitError("Le ordinazioni sono state chiuse prima dell’invio. Rivolgiti alla cassa.");
-      } else {
-        setSubmitError("Non riesco a verificare l’esito. Premi Recupera ordine: useremo la stessa richiesta, senza creare un duplicato.");
-      }
+      setSubmitError(failure.message);
+      if (failure.reloadCatalog) await loadCatalog();
       return;
     }
     const order = data as SubmittedOrder;

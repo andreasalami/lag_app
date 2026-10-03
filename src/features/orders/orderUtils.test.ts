@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventReportToCsv, orderingReasonMessage, parseQrPayload, type EventReport } from "./orderUtils";
+import { eventReportToCsv, orderingReasonMessage, parseQrPayload, submitFailure, type EventReport } from "./orderUtils";
 
 describe("parseQrPayload", () => {
   it("estrae il token dal QR LAG", () => {
@@ -49,5 +49,30 @@ describe("CSV formula safety", () => {
     const csv=eventReportToCsv(report);
     expect(csv).toContain("REPORT EVENTO;'"+name);
     expect(csv).toContain("'"+name+";cibo;1;5.00");
+  });
+});
+
+describe("submitFailure", () => {
+  const limits = { maxItem: 25, maxOrder: 60 };
+
+  it("lascia la richiesta salvata quando l'esito è incerto", () => {
+    for (const code of ["", "order_outcome_unknown", "public_order_rate_limit", "challenge_failed"]) {
+      const failure = submitFailure(code, limits);
+      expect(failure.definitive).toBe(false);
+      expect(failure.message).toContain("Recupera ordine");
+    }
+  });
+
+  it("scarta la richiesta sui rifiuti definitivi e non invita a recuperarla", () => {
+    for (const code of ["stock_unavailable:Birra", "public_order_quantity_limit", "order_total_too_high", "event_changed", "request_id_conflict", "capacity_reached", "ordering_paused", "event_closed", "not_open_yet", "no_event", "invalid_alias", "notes_too_long"]) {
+      const failure = submitFailure(code, limits);
+      expect(failure.definitive, code).toBe(true);
+      expect(failure.message, code).not.toContain("Recupera ordine");
+    }
+  });
+
+  it("riporta i dettagli utili e chiede di ricaricare il menu quando serve", () => {
+    expect(submitFailure("stock_unavailable:Birra, Panino", limits)).toMatchObject({ reloadCatalog: true, message: expect.stringContaining("Birra, Panino") });
+    expect(submitFailure("public_order_quantity_limit", { maxItem: 10, maxOrder: 30 }).message).toContain("10 pezzi per prodotto o 30 articoli");
   });
 });
