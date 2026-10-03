@@ -52,23 +52,74 @@ type Limits = { maxItem: number; maxOrder: number };
 
 // Errori di submit-order, nell'ordine in cui vanno riconosciuti. Ogni riga dice se il
 // rifiuto è definitivo e cosa leggere: le due cose non possono più divergere.
-const SUBMIT_FAILURES: { match: RegExp; definitive: boolean; message: (code: string, limits: Limits) => string; reloadCatalog?: boolean }[] = [
-  { match: /public_order_rate_limit/, definitive: false, message: () => "Hai inviato più ordini ravvicinati. Attendi un minuto, poi premi Recupera ordine." },
-  { match: /challenge_/, definitive: false, message: () => "Ripeti la verifica di sicurezza e premi Recupera ordine. La richiesta salvata resta la stessa." },
-  { match: /stock_unavailable/, definitive: true, reloadCatalog: true, message: (code) => `Disponibilità cambiata: ${code.split("stock_unavailable:")[1] ?? "un prodotto è terminato"}. Aggiorna il carrello e riprova.` },
-  { match: /public_order_quantity_limit/, definitive: true, message: (_, limits) => `L’ordine supera il limite di ${limits.maxItem} pezzi per prodotto o ${limits.maxOrder} articoli totali. Riduci le quantità o rivolgiti alla cassa.` },
-  { match: /order_total_too_high/, definitive: true, message: () => "L’importo dell’ordine è troppo alto per l’app. Riduci le quantità o rivolgiti alla cassa." },
-  { match: /event_changed/, definitive: true, reloadCatalog: true, message: () => "Nel frattempo è iniziato un nuovo evento: l’ordine non è stato inviato. Controlla il carrello e invialo di nuovo." },
-  { match: /request_id_conflict/, definitive: true, message: () => "L’ordine non è stato inviato. Premi di nuovo Invia ordine: verrà creata una richiesta nuova." },
+const SUBMIT_FAILURES: {
+  match: RegExp;
+  definitive: boolean;
+  message: (code: string, limits: Limits) => string;
+  reloadCatalog?: boolean;
+}[] = [
+  {
+    match: /public_order_rate_limit/,
+    definitive: false,
+    message: () => "Hai inviato più ordini ravvicinati. Attendi un minuto, poi premi Recupera ordine.",
+  },
+  {
+    match: /challenge_/,
+    definitive: false,
+    message: () => "Ripeti la verifica di sicurezza e premi Recupera ordine. La richiesta salvata resta la stessa.",
+  },
+  {
+    match: /stock_unavailable/,
+    definitive: true,
+    reloadCatalog: true,
+    message: (code) =>
+      `Disponibilità cambiata: ${code.split("stock_unavailable:")[1] ?? "un prodotto è terminato"}. Aggiorna il carrello e riprova.`,
+  },
+  {
+    match: /public_order_quantity_limit/,
+    definitive: true,
+    message: (_, limits) =>
+      `L’ordine supera il limite di ${limits.maxItem} pezzi per prodotto o ${limits.maxOrder} articoli totali. Riduci le quantità o rivolgiti alla cassa.`,
+  },
+  {
+    match: /order_total_too_high/,
+    definitive: true,
+    message: () => "L’importo dell’ordine è troppo alto per l’app. Riduci le quantità o rivolgiti alla cassa.",
+  },
+  {
+    match: /event_changed/,
+    definitive: true,
+    reloadCatalog: true,
+    message: () =>
+      "Nel frattempo è iniziato un nuovo evento: l’ordine non è stato inviato. Controlla il carrello e invialo di nuovo.",
+  },
+  {
+    match: /request_id_conflict/,
+    definitive: true,
+    message: () => "L’ordine non è stato inviato. Premi di nuovo Invia ordine: verrà creata una richiesta nuova.",
+  },
   { match: /capacity_reached/, definitive: true, message: () => orderingReasonMessage("capacity_reached") },
-  { match: /ordering_|event_closed|not_open_yet|no_event/, definitive: true, message: () => "Le ordinazioni sono state chiuse prima dell’invio. Rivolgiti alla cassa." },
-  { match: /invalid_|notes_too_long/, definitive: true, message: () => "L’ordine non è stato inviato: controlla nome, prodotti e note, poi invialo di nuovo." },
+  {
+    match: /ordering_|event_closed|not_open_yet|no_event/,
+    definitive: true,
+    message: () => "Le ordinazioni sono state chiuse prima dell’invio. Rivolgiti alla cassa.",
+  },
+  {
+    match: /invalid_|notes_too_long/,
+    definitive: true,
+    message: () => "L’ordine non è stato inviato: controlla nome, prodotti e note, poi invialo di nuovo.",
+  },
 ];
 
 /** Traduce l'errore di submit-order; un errore sconosciuto lascia l'esito incerto e la richiesta salvata. */
 export function submitFailure(code: string, limits: Limits): SubmitFailure {
   const rule = SUBMIT_FAILURES.find((item) => item.match.test(code));
-  if (!rule) return { definitive: false, message: "Non riesco a verificare l’esito. Premi Recupera ordine: useremo la stessa richiesta, senza creare un duplicato." };
+  if (!rule)
+    return {
+      definitive: false,
+      message:
+        "Non riesco a verificare l’esito. Premi Recupera ordine: useremo la stessa richiesta, senza creare un duplicato.",
+    };
   return { definitive: rule.definitive, message: rule.message(code, limits), reloadCatalog: rule.reloadCatalog };
 }
 
@@ -154,7 +205,10 @@ export async function downloadOrderPdf(order: SubmittedOrder, qrDataUrl: string)
 
   let y = 65;
   const ensureSpace = (height: number) => {
-    if (y + height > 280) { pdf.addPage(); y = 20; }
+    if (y + height > 280) {
+      pdf.addPage();
+      y = 20;
+    }
   };
   pdf.setFontSize(11);
   for (const line of order.items) {

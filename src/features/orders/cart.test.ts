@@ -3,8 +3,14 @@ import { addToCart, cartItemCount, cartTotal, removeOneFromCart, type Cart } fro
 import type { OrderMenuItem } from "./types";
 
 const beer: OrderMenuItem = {
-  id: "beer", category: "bevande", subcategory: "birre", name: "Birra", price: 4.5,
-  available_portions: 2, stock_capacity: 10, allergens: [1],
+  id: "beer",
+  category: "bevande",
+  subcategory: "birre",
+  name: "Birra",
+  price: 4.5,
+  available_portions: 2,
+  stock_capacity: 10,
+  allergens: [1],
 };
 
 describe("cart", () => {

@@ -1,7 +1,11 @@
 type StationOption<T extends string> = { key: T; label: string; description?: string };
 
 /** Griglia per scegliere la postazione del dispositivo (cassa, cucina, bar). */
-export function StationPicker<T extends string>({ options, onPick, hint }: {
+export function StationPicker<T extends string>({
+  options,
+  onPick,
+  hint,
+}: {
   options: StationOption<T>[];
   onPick: (key: T) => void;
   hint?: string;

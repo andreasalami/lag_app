@@ -41,11 +41,13 @@ export function EventbriteCheckoutButton({ label = "Acquista su Eventbrite" }: {
   useEffect(() => {
     if (!EVENT_ID) return;
     let cancelled = false;
-    loadScriptOnce(WIDGET_SCRIPT_SRC, () => Boolean(window.EBWidgets)).then(() => {
-      if (!cancelled) setScriptReady(true);
-    }).catch(() => {
-      if (!cancelled) setScriptError(true);
-    });
+    loadScriptOnce(WIDGET_SCRIPT_SRC, () => Boolean(window.EBWidgets))
+      .then(() => {
+        if (!cancelled) setScriptReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setScriptError(true);
+      });
     return () => {
       cancelled = true;
     };

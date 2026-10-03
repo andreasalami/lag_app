@@ -40,7 +40,13 @@ export function Program({ management = false }: { management?: boolean }) {
   const canEdit = management && canManage;
   const [days, setDays] = useState(1);
   const [savedDays, setSavedDays] = useState(1);
-  const { rows: slots, setRows: setSlots, loading, error: loadError, refetch } = useSupabaseRows<ProgramSlotData>({
+  const {
+    rows: slots,
+    setRows: setSlots,
+    loading,
+    error: loadError,
+    refetch,
+  } = useSupabaseRows<ProgramSlotData>({
     table: "program_slots",
     select: "id, day, stage, title, start_time, end_time",
     orderBy: [{ column: "day" }, { column: "start_time" }],
@@ -93,13 +99,14 @@ export function Program({ management = false }: { management?: boolean }) {
     setSaving(true);
     setSaveError(null);
 
-    const invalidSlot = slots.some((slot) =>
-      !slot.title.trim()
-      || slot.title.length > 200
-      || slot.day < 1
-      || slot.day > days
-      || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.start_time)
-      || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.end_time)
+    const invalidSlot = slots.some(
+      (slot) =>
+        !slot.title.trim() ||
+        slot.title.length > 200 ||
+        slot.day < 1 ||
+        slot.day > days ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.start_time) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.end_time),
     );
     if (invalidSlot) {
       setSaveError("Controlla titoli, giorni e orari. Ogni evento deve rientrare nei giorni pubblicati.");
@@ -107,7 +114,13 @@ export function Program({ management = false }: { management?: boolean }) {
       return;
     }
 
-    const created = draft.created.map(({ day, stage, title, start_time, end_time }) => ({ day, stage, title, start_time, end_time }));
+    const created = draft.created.map(({ day, stage, title, start_time, end_time }) => ({
+      day,
+      stage,
+      title,
+      start_time,
+      end_time,
+    }));
 
     const { error } = await supabase.rpc("save_program", {
       p_days: days,
@@ -145,12 +158,20 @@ export function Program({ management = false }: { management?: boolean }) {
       </div>
 
       {canEdit && (
-        <StaffPanel className="mx-4 mb-6 sm:mx-0" eyebrow="Programmazione evento" title="Giorni, palchi e orari" description="Le modifiche restano in bozza finché non premi Salva." contentClassName="flex flex-col gap-3">
+        <StaffPanel
+          className="mx-4 mb-6 sm:mx-0"
+          eyebrow="Programmazione evento"
+          title="Giorni, palchi e orari"
+          description="Le modifiche restano in bozza finché non premi Salva."
+          contentClassName="flex flex-col gap-3"
+        >
           <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
             Giorni dell’evento
             <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="field text-xs">
               {Array.from({ length: MAX_DAYS }, (_, index) => index + 1).map((dayCount) => (
-                <option key={dayCount} value={dayCount}>{dayCount}</option>
+                <option key={dayCount} value={dayCount}>
+                  {dayCount}
+                </option>
               ))}
             </select>
           </label>
@@ -161,16 +182,22 @@ export function Program({ management = false }: { management?: boolean }) {
             >
               <select
                 value={slot.day}
-                onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, day: Number(e.target.value) } : s)))}
+                onChange={(e) =>
+                  setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, day: Number(e.target.value) } : s)))
+                }
                 className="field min-w-0 text-xs sm:w-auto"
               >
                 {Array.from({ length: displayDays }, (_, index) => index + 1).map((day) => (
-                  <option key={day} value={day}>Giorno {day}</option>
+                  <option key={day} value={day}>
+                    Giorno {day}
+                  </option>
                 ))}
               </select>
               <select
                 value={slot.stage}
-                onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, stage: e.target.value } : s)))}
+                onChange={(e) =>
+                  setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, stage: e.target.value } : s)))
+                }
                 className="field min-w-0 text-xs sm:w-auto"
               >
                 {STAGES.map((s) => (
@@ -183,21 +210,27 @@ export function Program({ management = false }: { management?: boolean }) {
                 required
                 maxLength={200}
                 value={slot.title}
-                onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, title: e.target.value } : s)))}
+                onChange={(e) =>
+                  setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, title: e.target.value } : s)))
+                }
                 className="field col-span-2 min-w-0 w-full sm:col-span-auto sm:min-w-[140px] sm:flex-1"
               />
               <div className="col-span-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:contents">
                 <input
                   type="time"
                   value={slot.start_time}
-                  onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, start_time: e.target.value } : s)))}
+                  onChange={(e) =>
+                    setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, start_time: e.target.value } : s)))
+                  }
                   className="field min-w-0 w-full text-xs"
                 />
                 <span className="text-center text-xs text-[var(--text-secondary)]">–</span>
                 <input
                   type="time"
                   value={slot.end_time}
-                  onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, end_time: e.target.value } : s)))}
+                  onChange={(e) =>
+                    setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, end_time: e.target.value } : s)))
+                  }
                   className="field min-w-0 w-full text-xs"
                 />
               </div>

@@ -11,7 +11,11 @@ export const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
  * nel browser finché non si preme Salva, che invia tutto in una sola RPC atomica.
  * `saved` è l'ultimo stato certo del database: serve a capire se c'è qualcosa da salvare.
  */
-export function useDraftRows<T extends { id: string }>(rows: T[], setRows: Dispatch<SetStateAction<T[]>>, loading: boolean) {
+export function useDraftRows<T extends { id: string }>(
+  rows: T[],
+  setRows: Dispatch<SetStateAction<T[]>>,
+  loading: boolean,
+) {
   const [saved, setSaved] = useState<T[]>([]);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const syncedRef = useRef(false);

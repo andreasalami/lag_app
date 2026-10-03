@@ -38,7 +38,11 @@ export function OrderEntryButton() {
         title="Ordinazioni non disponibili"
         dismissible
         onClose={() => setMessage(null)}
-        actions={<Button variant="primary" onClick={() => setMessage(null)}>Ho capito</Button>}
+        actions={
+          <Button variant="primary" onClick={() => setMessage(null)}>
+            Ho capito
+          </Button>
+        }
       >
         <p>{message}</p>
       </Modal>

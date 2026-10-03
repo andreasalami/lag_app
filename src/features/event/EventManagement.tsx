@@ -66,10 +66,17 @@ export function EventManagement() {
     const closes = new Date(eventCloses);
     const limit = Number(eventLimit);
     if (!eventName.trim()) return fail("Inserisci il nome dell’evento.");
-    if (Number.isNaN(opens.getTime()) || Number.isNaN(closes.getTime())) return fail("Inserisci data e ora sia per l’apertura sia per la chiusura degli ordini.");
+    if (Number.isNaN(opens.getTime()) || Number.isNaN(closes.getTime()))
+      return fail("Inserisci data e ora sia per l’apertura sia per la chiusura degli ordini.");
     if (closes <= opens) return fail("La chiusura degli ordini deve essere dopo l’apertura.");
-    if (!Number.isInteger(limit) || limit < 10 || limit > 1000) return fail("Il massimo di ordini in attesa deve essere un numero intero tra 10 e 1000.");
-    return { p_name: eventName.trim(), p_opens_at: opens.toISOString(), p_closes_at: closes.toISOString(), p_max_pending_orders: limit };
+    if (!Number.isInteger(limit) || limit < 10 || limit > 1000)
+      return fail("Il massimo di ordini in attesa deve essere un numero intero tra 10 e 1000.");
+    return {
+      p_name: eventName.trim(),
+      p_opens_at: opens.toISOString(),
+      p_closes_at: closes.toISOString(),
+      p_max_pending_orders: limit,
+    };
   }
 
   function fail(text: string) {
@@ -91,7 +98,10 @@ export function EventManagement() {
     if (!settings) return;
     void run(async () => {
       const { error } = await supabase.rpc("update_order_event", settings);
-      if (error) { setMessage("Impostazioni evento non salvate. Controlla date e limite."); return; }
+      if (error) {
+        setMessage("Impostazioni evento non salvate. Controlla date e limite.");
+        return;
+      }
       setMessage("Impostazioni evento salvate.");
       await loadEventState();
     });
@@ -102,7 +112,10 @@ export function EventManagement() {
     if (!settings) return;
     void run(async () => {
       const { error } = await supabase.rpc("create_next_order_event", settings);
-      if (error) { setMessage("Nuovo evento non creato. Controlla nome e date future."); return; }
+      if (error) {
+        setMessage("Nuovo evento non creato. Controlla nome e date future.");
+        return;
+      }
       setMessage("Nuovo evento creato: la numerazione ripartirà da 1.");
       await loadEventState();
     });
@@ -112,7 +125,10 @@ export function EventManagement() {
     if (!eventState) return;
     void run(async () => {
       const { error } = await supabase.rpc("set_ordering_paused", { p_paused: !eventState.manual_closed });
-      if (error) { setMessage("Stato ordinazioni non aggiornato. Riprova."); return; }
+      if (error) {
+        setMessage("Stato ordinazioni non aggiornato. Riprova.");
+        return;
+      }
       await loadEventState();
     });
   }
@@ -122,7 +138,10 @@ export function EventManagement() {
       const { data, error } = await supabase.rpc("close_order_event");
       setCloseEventModal(false);
       setCloseEventText("");
-      if (error || !data) { setMessage("Evento non chiuso. Riprova."); return; }
+      if (error || !data) {
+        setMessage("Evento non chiuso. Riprova.");
+        return;
+      }
       downloadCsv(data as EventReport);
       setMessage("Evento chiuso e report anonimo scaricato.");
       await loadEventState();
@@ -140,7 +159,10 @@ export function EventManagement() {
     try {
       const { data, error } = await supabase.rpc("get_order_event_snapshot");
       const snapshot = error ? null : parseIncomeSnapshot(data);
-      if (!snapshot) { setMessage("Situazione incassi non disponibile. Controlla la connessione e riprova."); return; }
+      if (!snapshot) {
+        setMessage("Situazione incassi non disponibile. Controlla la connessione e riprova.");
+        return;
+      }
       await downloadIncomeSnapshotPdf(snapshot);
     } catch {
       setMessage("PDF non creato. Riprova tra qualche secondo.");
@@ -153,11 +175,16 @@ export function EventManagement() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-28 pt-8">
-      <StaffPageHeading title="Gestione evento" description="Apertura e chiusura delle ordinazioni, situazione incassi e report finale." />
+      <StaffPageHeading
+        title="Gestione evento"
+        description="Apertura e chiusura delle ordinazioni, situazione incassi e report finale."
+      />
       {/* Fisso in basso: su telefono i pulsanti sono in fondo alla pagina e un avviso in cima resterebbe fuori schermo. */}
       {message && (
         <div className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-3xl">
-          <Notice className="surface-solid shadow-lg" onDismiss={() => setMessage(null)}>{message}</Notice>
+          <Notice className="surface-solid shadow-lg" onDismiss={() => setMessage(null)}>
+            {message}
+          </Notice>
         </div>
       )}
 
@@ -173,7 +200,11 @@ export function EventManagement() {
       </StaffPanel>
 
       {!eventState ? (
-        <StaffPanel eyebrow="Configurazione ordini" title="Carico l’evento…" description="Recupero apertura, chiusura e limite degli ordini.">
+        <StaffPanel
+          eyebrow="Configurazione ordini"
+          title="Carico l’evento…"
+          description="Recupero apertura, chiusura e limite degli ordini."
+        >
           <p className="text-sm text-[var(--text-secondary)]">Attendi un momento.</p>
         </StaffPanel>
       ) : (
@@ -181,50 +212,98 @@ export function EventManagement() {
           eyebrow="Configurazione ordini"
           title={eventState.name}
           description={`${eventState.pending_count} ordini in attesa su ${eventState.max_pending_orders}`}
-          action={closed ? (
-            <span className="text-sm text-[var(--state-error)]">Evento chiuso definitivamente</span>
-          ) : (
-            <span className={`text-sm ${eventState.manual_closed ? "text-[var(--state-warning)]" : "text-[var(--state-success)]"}`}>
-              {eventState.manual_closed ? "Ordinazioni sospese" : "Gestione automatica attiva"}
-            </span>
-          )}
+          action={
+            closed ? (
+              <span className="text-sm text-[var(--state-error)]">Evento chiuso definitivamente</span>
+            ) : (
+              <span
+                className={`text-sm ${eventState.manual_closed ? "text-[var(--state-warning)]" : "text-[var(--state-success)]"}`}
+              >
+                {eventState.manual_closed ? "Ordinazioni sospese" : "Gestione automatica attiva"}
+              </span>
+            )
+          }
         >
           <div className="flex flex-col gap-3">
             <label>
               <span className="mb-1 block text-xs">Nome evento</span>
-              <input value={eventName} onChange={(event) => setEventName(event.target.value)} className="field w-full py-2" />
+              <input
+                value={eventName}
+                onChange={(event) => setEventName(event.target.value)}
+                className="field w-full py-2"
+              />
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label>
                 <span className="mb-1 block text-xs">Apertura ordini</span>
-                <input type="datetime-local" required value={eventOpens} onChange={(event) => setEventOpens(event.target.value)} className="field w-full py-2" />
+                <input
+                  type="datetime-local"
+                  required
+                  value={eventOpens}
+                  onChange={(event) => setEventOpens(event.target.value)}
+                  className="field w-full py-2"
+                />
               </label>
               <label>
                 <span className="mb-1 block text-xs">Chiusura ordini</span>
-                <input type="datetime-local" required value={eventCloses} onChange={(event) => setEventCloses(event.target.value)} className="field w-full py-2" />
+                <input
+                  type="datetime-local"
+                  required
+                  value={eventCloses}
+                  onChange={(event) => setEventCloses(event.target.value)}
+                  className="field w-full py-2"
+                />
               </label>
             </div>
             <label>
               <span className="mb-1 block text-xs">Massimo ordini contemporaneamente in attesa</span>
-              <input type="number" inputMode="numeric" min={10} max={1000} step={1} value={eventLimit} onChange={(event) => setEventLimit(event.target.value)} className="field w-full py-2 sm:w-40" />
+              <input
+                type="number"
+                inputMode="numeric"
+                min={10}
+                max={1000}
+                step={1}
+                value={eventLimit}
+                onChange={(event) => setEventLimit(event.target.value)}
+                className="field w-full py-2 sm:w-40"
+              />
             </label>
 
             {closed ? (
               <div className="flex flex-wrap gap-2">
-                <Button variant="staff-secondary" onClick={() => void downloadExistingReport()}>Scarica di nuovo il CSV</Button>
-                <Button variant="staff-primary" onClick={createNextEvent} disabled={busy}>Crea nuovo evento</Button>
+                <Button variant="staff-secondary" onClick={() => void downloadExistingReport()}>
+                  Scarica di nuovo il CSV
+                </Button>
+                <Button variant="staff-primary" onClick={createNextEvent} disabled={busy}>
+                  Crea nuovo evento
+                </Button>
               </div>
             ) : (
               <>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="staff-primary" onClick={saveEventSettings} disabled={busy}>Salva orari e limite</Button>
-                  <Button variant={eventState.manual_closed ? "staff-primary" : "staff-secondary"} onClick={toggleOrderingPaused} disabled={busy}>
+                  <Button variant="staff-primary" onClick={saveEventSettings} disabled={busy}>
+                    Salva orari e limite
+                  </Button>
+                  <Button
+                    variant={eventState.manual_closed ? "staff-primary" : "staff-secondary"}
+                    onClick={toggleOrderingPaused}
+                    disabled={busy}
+                  >
                     {eventState.manual_closed ? "Riapri ordinazioni" : "Chiudi ordinazioni ora"}
                   </Button>
                 </div>
                 <div className="mt-3 border-t border-[var(--surface-border)] pt-3">
-                  <p className="text-xs text-[var(--state-error)]">La chiusura definitiva annulla gli ordini non pagati, anonimizza i dati e produce il CSV finale.</p>
-                  <Button variant="staff-danger" className="mt-2" onClick={() => setCloseEventModal(true)} disabled={busy}>Chiudi definitivamente l’evento</Button>
+                  <p className="text-xs text-[var(--state-error)]">
+                    La chiusura definitiva annulla gli ordini non pagati, anonimizza i dati e produce il CSV finale.
+                  </p>
+                  <Button
+                    variant="staff-danger"
+                    className="mt-2"
+                    onClick={() => setCloseEventModal(true)}
+                    disabled={busy}
+                  >
+                    Chiudi definitivamente l’evento
+                  </Button>
                 </div>
               </>
             )}
@@ -237,17 +316,31 @@ export function EventManagement() {
         title="Chiusura definitiva evento"
         dismissible={!busy}
         onClose={() => setCloseEventModal(false)}
-        actions={(
+        actions={
           <>
-            <Button variant="staff-secondary" onClick={() => setCloseEventModal(false)} disabled={busy}>Annulla</Button>
-            <Button variant="staff-danger" onClick={closeEventPermanently} disabled={closeEventText !== CLOSE_CONFIRMATION || busy}>
+            <Button variant="staff-secondary" onClick={() => setCloseEventModal(false)} disabled={busy}>
+              Annulla
+            </Button>
+            <Button
+              variant="staff-danger"
+              onClick={closeEventPermanently}
+              disabled={closeEventText !== CLOSE_CONFIRMATION || busy}
+            >
               Chiudi e scarica CSV
             </Button>
           </>
-        )}
+        }
       >
-        <p>L’operazione è irreversibile. Digita <strong className="text-[var(--text-primary)]">{CLOSE_CONFIRMATION}</strong> per confermare.</p>
-        <input aria-label={`Digita ${CLOSE_CONFIRMATION}`} value={closeEventText} onChange={(event) => setCloseEventText(event.target.value)} className="field mt-3 w-full py-2" />
+        <p>
+          L’operazione è irreversibile. Digita{" "}
+          <strong className="text-[var(--text-primary)]">{CLOSE_CONFIRMATION}</strong> per confermare.
+        </p>
+        <input
+          aria-label={`Digita ${CLOSE_CONFIRMATION}`}
+          value={closeEventText}
+          onChange={(event) => setCloseEventText(event.target.value)}
+          className="field mt-3 w-full py-2"
+        />
       </Modal>
     </main>
   );

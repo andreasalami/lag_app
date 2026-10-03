@@ -31,13 +31,15 @@ interface InstagramEmbedProps {
 export function InstagramEmbed({ url }: InstagramEmbedProps) {
   useEffect(() => {
     let cancelled = false;
-    loadScriptOnce(EMBED_SCRIPT_SRC, () => Boolean(window.instgrm)).then(() => {
-      if (!cancelled) {
-        window.instgrm?.Embeds.process();
-      }
-    }).catch(() => {
-      // Il link nel blockquote resta un fallback pienamente utilizzabile.
-    });
+    loadScriptOnce(EMBED_SCRIPT_SRC, () => Boolean(window.instgrm))
+      .then(() => {
+        if (!cancelled) {
+          window.instgrm?.Embeds.process();
+        }
+      })
+      .catch(() => {
+        // Il link nel blockquote resta un fallback pienamente utilizzabile.
+      });
     return () => {
       cancelled = true;
     };

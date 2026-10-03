@@ -34,11 +34,18 @@ export function defaultTeams(size: BracketSize): string[] {
 }
 
 /** Vero se nel tabellone non c'è ancora niente da perdere: nomi predefiniti o vuoti, nessun risultato, nessun ripescaggio. */
-export function isUntouchedBracket(size: BracketSize, teams: string[], matches: MatchesMap, overrides: OverridesMap): boolean {
+export function isUntouchedBracket(
+  size: BracketSize,
+  teams: string[],
+  matches: MatchesMap,
+  overrides: OverridesMap,
+): boolean {
   const defaults = defaultTeams(size);
-  return teams.every((name, i) => name.trim() === "" || name === defaults[i])
-    && Object.values(matches).every((match) => match.winner === null && match.scoreA === null && match.scoreB === null)
-    && Object.values(overrides).every((name) => name.trim() === "");
+  return (
+    teams.every((name, i) => name.trim() === "" || name === defaults[i]) &&
+    Object.values(matches).every((match) => match.winner === null && match.scoreA === null && match.scoreB === null) &&
+    Object.values(overrides).every((name) => name.trim() === "")
+  );
 }
 
 export function roundLabel(size: BracketSize, round: number): string {
@@ -77,7 +84,7 @@ export function resolveSlot(
   side: Side,
   teams: string[],
   matches: MatchesMap,
-  overrides: OverridesMap
+  overrides: OverridesMap,
 ): string | null {
   const override = overrides[slotKey(round, index, side)];
   if (override) return override;

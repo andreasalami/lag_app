@@ -11,7 +11,15 @@ type StaffPanelProps = {
   contentClassName?: string;
 };
 
-export function StaffPanel({ eyebrow, title, description, action, children, className = "", contentClassName = "" }: StaffPanelProps) {
+export function StaffPanel({
+  eyebrow,
+  title,
+  description,
+  action,
+  children,
+  className = "",
+  contentClassName = "",
+}: StaffPanelProps) {
   return (
     <Card className={`overflow-hidden !p-0 ${className}`}>
       <div className="flex flex-wrap items-start justify-between gap-4 panel-header">

@@ -39,7 +39,15 @@ export async function createIncomeSnapshotPdf(snapshot: IncomeSnapshot): Promise
   const pdf = new jsPDF({ unit: "mm", format: "a4" });
   let y = 0;
 
-  const text = (value: string | string[], x: number, top: number, size: number, color = INK, bold = false, align: "left" | "center" | "right" = "left") => {
+  const text = (
+    value: string | string[],
+    x: number,
+    top: number,
+    size: number,
+    color = INK,
+    bold = false,
+    align: "left" | "center" | "right" = "left",
+  ) => {
     pdf.setFont("helvetica", bold ? "bold" : "normal");
     pdf.setFontSize(size);
     pdf.setTextColor(...color);
@@ -91,7 +99,15 @@ export async function createIncomeSnapshotPdf(snapshot: IncomeSnapshot): Promise
       if (height > 0) {
         pdf.setFillColor(...(bar === peak ? ACCENT : BAR));
         pdf.rect(center - barWidth / 2, baseline - height, barWidth, height, "F");
-        text(formatWholeEuro(bar.revenue), center, baseline - height - 1.5, bars.length > 12 ? 6 : 7.5, bar === peak ? INK : MUTED, bar === peak, "center");
+        text(
+          formatWholeEuro(bar.revenue),
+          center,
+          baseline - height - 1.5,
+          bars.length > 12 ? 6 : 7.5,
+          bar === peak ? INK : MUTED,
+          bar === peak,
+          "center",
+        );
       }
       text(bar.label, center, baseline + 4.5, 8, MUTED, false, "center");
       if (bar.day) {
@@ -133,7 +149,10 @@ export async function createIncomeSnapshotPdf(snapshot: IncomeSnapshot): Promise
     y += 2.5;
   };
 
-  for (const [category, title] of [["cibo", "Il cibo, sezione per sezione"], ["bevande", "Le bevande, sezione per sezione"]] as const) {
+  for (const [category, title] of [
+    ["cibo", "Il cibo, sezione per sezione"],
+    ["bevande", "Le bevande, sezione per sezione"],
+  ] as const) {
     const summaries = summarizeSections(snapshot.products, category);
     if (summaries.length === 0) continue;
     ensureSpace(22);
@@ -153,6 +172,9 @@ export async function createIncomeSnapshotPdf(snapshot: IncomeSnapshot): Promise
 
 export async function downloadIncomeSnapshotPdf(snapshot: IncomeSnapshot) {
   const pdf = await createIncomeSnapshotPdf(snapshot);
-  const stamp = new Date(snapshot.generated_at).toLocaleString("sv-SE", { timeZone: TIME_ZONE }).slice(0, 16).replace(/[^0-9]/g, "");
+  const stamp = new Date(snapshot.generated_at)
+    .toLocaleString("sv-SE", { timeZone: TIME_ZONE })
+    .slice(0, 16)
+    .replace(/[^0-9]/g, "");
   pdf.save(`situazione-incassi-${stamp}.pdf`);
 }

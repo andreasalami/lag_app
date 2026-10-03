@@ -26,13 +26,15 @@ describe("tournament state", () => {
   });
 
   it("converte una riga archivio Supabase", () => {
-    expect(parseTournamentArchive({
-      ...snapshot,
-      id: "snapshot-1",
-      reason: "size_change",
-      target_size: 16,
-      created_at: "2026-09-01T17:00:00.000Z",
-    })).toEqual({
+    expect(
+      parseTournamentArchive({
+        ...snapshot,
+        id: "snapshot-1",
+        reason: "size_change",
+        target_size: 16,
+        created_at: "2026-09-01T17:00:00.000Z",
+      }),
+    ).toEqual({
       ...snapshot,
       id: "snapshot-1",
       reason: "size_change",
@@ -42,13 +44,14 @@ describe("tournament state", () => {
   });
 
   it("rifiuta metadati archivio non validi", () => {
-    expect(parseTournamentArchive({
-      ...snapshot,
-      id: "snapshot-1",
-      reason: "unknown",
-      target_size: 16,
-      created_at: "not-a-date",
-    })).toBeNull();
+    expect(
+      parseTournamentArchive({
+        ...snapshot,
+        id: "snapshot-1",
+        reason: "unknown",
+        target_size: 16,
+        created_at: "not-a-date",
+      }),
+    ).toBeNull();
   });
 });
-

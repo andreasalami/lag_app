@@ -21,10 +21,23 @@ interface SaveBannerProps {
  * stessa forma ovunque, ma è sempre chiaro DI COSA hai modifiche non
  * salvate se hai più sezioni aperte in tab diverse.
  */
-export function SaveBanner({ message, saving, error, onSave, label = "Salva", savingLabel = "Salvo...", disabled = false }: SaveBannerProps) {
+export function SaveBanner({
+  message,
+  saving,
+  error,
+  onSave,
+  label = "Salva",
+  savingLabel = "Salvo...",
+  disabled = false,
+}: SaveBannerProps) {
   return (
     <div className="glass-elevated glass-elevated--strong fixed inset-x-4 bottom-24 z-40 mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-[var(--radius-md)] px-4 py-3">
-      <span role={error ? "alert" : undefined} className={`text-xs ${error ? "text-[var(--state-error)]" : "text-[var(--text-secondary)]"}`}>{error ?? message}</span>
+      <span
+        role={error ? "alert" : undefined}
+        className={`text-xs ${error ? "text-[var(--state-error)]" : "text-[var(--text-secondary)]"}`}
+      >
+        {error ?? message}
+      </span>
       <button
         onClick={onSave}
         disabled={saving || disabled}

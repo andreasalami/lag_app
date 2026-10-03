@@ -36,26 +36,40 @@ export function TournamentPreview() {
       }
       busy = true;
       try {
-      if (revision !== null) {
-        const probe = await fetchPublishedRevision();
+        if (revision !== null) {
+          const probe = await fetchPublishedRevision();
+          if (cancelled) return;
+          if (probe.error) {
+            setLoadError("Aggiornamenti del torneo non disponibili. Riprova più tardi.");
+            return;
+          }
+          if (probe.revision === revision) {
+            setLoadError(null);
+            return;
+          }
+        }
+        const latest = await fetchPublishedTournament();
         if (cancelled) return;
-        if (probe.error) { setLoadError("Aggiornamenti del torneo non disponibili. Riprova più tardi."); return; }
-        if (probe.revision === revision) { setLoadError(null); return; }
+        if (latest.error || !latest.snapshot) {
+          setLoadError("Aggiornamenti del torneo non disponibili. Riprova più tardi.");
+        } else {
+          revision = latest.revision;
+          setSnapshot(latest.snapshot);
+          setLoadError(null);
+        }
+        setLoading(false);
+      } finally {
+        busy = false;
       }
-      const latest = await fetchPublishedTournament();
-      if (cancelled) return;
-      if (latest.error || !latest.snapshot) {
-        setLoadError("Aggiornamenti del torneo non disponibili. Riprova più tardi.");
-      } else {
-        revision = latest.revision;
-        setSnapshot(latest.snapshot);
-        setLoadError(null);
-      }
-      setLoading(false);
-      } finally { busy = false; }
     }
 
-    const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; if (visible) void load(); }, { rootMargin: "200px" });
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        visible = entry.isIntersecting;
+        if (visible) void load();
+      },
+      { rootMargin: "200px" },
+    );
     if (sectionRef.current) observer.observe(sectionRef.current);
     const stopPolling = pollWhileVisible(() => void load(), POLL_INTERVAL_MS);
     return () => {
@@ -72,11 +86,18 @@ export function TournamentPreview() {
     <section ref={sectionRef} id="tornei" className="mx-auto w-full max-w-3xl px-4 py-10">
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
-          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent-primary)]">Live tournament</p>
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent-primary)]">
+            Live tournament
+          </p>
           <h2 className="text-2xl font-semibold">Torneo LAG</h2>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">Risultati e avanzamento del torneo, senza uscire dalla serata.</p>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            Risultati e avanzamento del torneo, senza uscire dalla serata.
+          </p>
         </div>
-        <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-[var(--accent-primary)] shadow-[0_0_14px_var(--accent-primary)]" aria-label="Torneo in aggiornamento" />
+        <span
+          className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-[var(--accent-primary)] shadow-[0_0_14px_var(--accent-primary)]"
+          aria-label="Torneo in aggiornamento"
+        />
       </div>
 
       <NotificationPermission />
@@ -102,7 +123,9 @@ export function TournamentPreview() {
           </div>
 
           {loadError ? (
-            <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-sm text-[var(--state-error)]">{loadError}</p>
+            <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-sm text-[var(--state-error)]">
+              {loadError}
+            </p>
           ) : loading ? (
             <p className="py-5 text-center text-sm text-[var(--text-secondary)]">Carico i risultati…</p>
           ) : results.length === 0 ? (
@@ -112,21 +135,35 @@ export function TournamentPreview() {
           ) : (
             <ol className="space-y-2">
               {results.map((result) => (
-                <li key={result.key} className="rounded-[var(--radius-md)] border border-[var(--surface-border)] px-3 py-3">
+                <li
+                  key={result.key}
+                  className="rounded-[var(--radius-md)] border border-[var(--surface-border)] px-3 py-3"
+                >
                   <div className="mb-2 flex items-center justify-between gap-3 text-[10px] uppercase tracking-wide text-[var(--text-secondary)]">
                     <span>{result.roundLabel}</span>
                     {result.completedAt && (
                       <time dateTime={result.completedAt}>
-                        {new Date(result.completedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(result.completedAt).toLocaleTimeString("it-IT", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </time>
                     )}
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-sm">
-                    <span className={`truncate ${result.winner === "A" ? "font-semibold text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>{result.teamA}</span>
+                    <span
+                      className={`truncate ${result.winner === "A" ? "font-semibold text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}
+                    >
+                      {result.teamA}
+                    </span>
                     <strong className="rounded-[var(--radius-pill)] bg-white/5 px-3 py-1 font-mono text-[var(--accent-primary)]">
                       {result.scoreA}–{result.scoreB}
                     </strong>
-                    <span className={`truncate text-right ${result.winner === "B" ? "font-semibold text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>{result.teamB}</span>
+                    <span
+                      className={`truncate text-right ${result.winner === "B" ? "font-semibold text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}
+                    >
+                      {result.teamB}
+                    </span>
                   </div>
                 </li>
               ))}

@@ -110,16 +110,7 @@ interface MatchCardProps {
   onOverride: (side: Side, name: string) => void;
 }
 
-export function MatchCard({
-  nameA,
-  nameB,
-  scoreA,
-  scoreB,
-  winner,
-  editable,
-  onSetScore,
-  onOverride,
-}: MatchCardProps) {
+export function MatchCard({ nameA, nameB, scoreA, scoreB, winner, editable, onSetScore, onOverride }: MatchCardProps) {
   return (
     <Card className="h-full !p-3">
       <SlotRow

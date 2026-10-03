@@ -39,7 +39,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void supabase.auth.getSession()
+    void supabase.auth
+      .getSession()
       .then(({ data }) => {
         setSession(data.session);
         setAuthReady(true);
@@ -72,15 +73,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfileError(null);
     setLoading(true);
 
-    void supabase.from("profiles").select("role").eq("id", session.user.id).single().then(({ data, error }) => {
-      if (cancelled) return;
-      if (error || !data) {
-        setProfileError("Impossibile leggere il profilo autorizzativo. Riprova o contatta l'amministratore.");
-      } else {
-        setRole(data.role as Role);
-      }
-      setLoading(false);
-    });
+    void supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", session.user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          setProfileError("Impossibile leggere il profilo autorizzativo. Riprova o contatta l'amministratore.");
+        } else {
+          setRole(data.role as Role);
+        }
+        setLoading(false);
+      });
 
     return () => {
       cancelled = true;

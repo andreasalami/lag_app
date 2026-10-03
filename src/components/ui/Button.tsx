@@ -29,9 +29,12 @@ export function Button({ variant = "primary", className = "", children, ...props
     primary: "glass-elevated glass-elevated--strong signature-glow text-[var(--text-primary)] hover:brightness-110",
     ghost: "border border-[var(--surface-border)] text-[var(--text-primary)] hover:bg-white/5",
     back: "border border-[var(--surface-border)] bg-white/[0.03] text-[var(--text-secondary)] hover:bg-white/[0.07] hover:text-[var(--text-primary)]",
-    "staff-primary": "signature-glow border border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)] hover:brightness-110",
-    "staff-secondary": "border border-[rgba(242,128,46,0.45)] bg-[rgba(242,128,46,0.08)] text-[var(--accent-primary)] hover:bg-[rgba(242,128,46,0.16)]",
-    "staff-danger": "border border-[rgba(229,88,75,0.55)] bg-[rgba(239,68,68,0.08)] text-[var(--state-error)] hover:bg-[rgba(239,68,68,0.16)]",
+    "staff-primary":
+      "signature-glow border border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)] hover:brightness-110",
+    "staff-secondary":
+      "border border-[rgba(242,128,46,0.45)] bg-[rgba(242,128,46,0.08)] text-[var(--accent-primary)] hover:bg-[rgba(242,128,46,0.16)]",
+    "staff-danger":
+      "border border-[rgba(229,88,75,0.55)] bg-[rgba(239,68,68,0.08)] text-[var(--state-error)] hover:bg-[rgba(239,68,68,0.16)]",
   }[variant];
 
   const classes = `${base} ${variantClasses} ${className}`;

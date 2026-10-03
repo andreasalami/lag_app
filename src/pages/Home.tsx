@@ -33,9 +33,7 @@ export function Home() {
         <p className="mb-3 font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-secondary)]">
           Cascina Marasco · Cremona
         </p>
-        <h1 className="font-display text-4xl font-semibold leading-tight sm:text-6xl">
-          L'Agro ai Giovani
-        </h1>
+        <h1 className="font-display text-4xl font-semibold leading-tight sm:text-6xl">L'Agro ai Giovani</h1>
         <p className="mx-auto mt-4 max-w-md text-[var(--text-secondary)]">
           Festival benefico — DJ set e musica live. Il ricavato sostiene Agropolis ONLUS.
         </p>
@@ -48,7 +46,9 @@ export function Home() {
       <TournamentPreview />
 
       <section className="mx-auto max-w-3xl px-4 pb-4 pt-2 text-center sm:hidden">
-        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">Solo per lo staff</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">
+          Solo per lo staff
+        </p>
         <Button href={appHref("#staff")} variant="ghost" className="mt-3">
           Login staff
         </Button>

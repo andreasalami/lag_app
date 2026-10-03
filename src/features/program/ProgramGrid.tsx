@@ -44,7 +44,7 @@ function timelineTimes(slots: ProgramSlotData[]) {
       let end = toMinutes(slot.end_time);
       while (end <= start) end += DAY_MINUTES;
       return [slot.id, { start, end }];
-    })
+    }),
   );
 }
 
@@ -99,7 +99,10 @@ export function ProgramGrid({ slots, stages, days }: ProgramGridProps) {
               <div className="grid w-full min-w-0 grid-cols-[38px_minmax(0,1fr)_minmax(0,1fr)] gap-1.5 sm:grid-cols-[48px_minmax(0,1fr)_minmax(0,1fr)] sm:gap-3">
                 <div />
                 {stages.map((stage) => (
-                  <h4 key={stage} className="min-w-0 truncate text-center font-display text-xs text-[var(--accent-primary)] sm:text-sm">
+                  <h4
+                    key={stage}
+                    className="min-w-0 truncate text-center font-display text-xs text-[var(--accent-primary)] sm:text-sm"
+                  >
                     {stage}
                   </h4>
                 ))}
@@ -135,17 +138,16 @@ export function ProgramGrid({ slots, stages, days }: ProgramGridProps) {
                         const time = times.get(slot.id);
                         if (!time) return null;
                         const top = (time.start - minMinutes) * PX_PER_MIN;
-                        const height = Math.max(
-                          (time.end - time.start) * PX_PER_MIN,
-                          MIN_BOX_HEIGHT
-                        );
+                        const height = Math.max((time.end - time.start) * PX_PER_MIN, MIN_BOX_HEIGHT);
                         return (
                           <div
                             key={slot.id}
                             className="surface-solid absolute left-0.5 right-0.5 overflow-hidden rounded-[var(--radius-sm)] border-l-2 border-l-[var(--accent-primary)] px-1.5 py-1 sm:left-1 sm:right-1 sm:rounded-[var(--radius-md)] sm:px-2"
                             style={{ top, height }}
                           >
-                            <p className="line-clamp-2 text-[11px] font-semibold leading-tight text-[var(--text-primary)] sm:text-xs">{slot.title}</p>
+                            <p className="line-clamp-2 text-[11px] font-semibold leading-tight text-[var(--text-primary)] sm:text-xs">
+                              {slot.title}
+                            </p>
                             <p className="truncate font-mono text-[9px] text-[var(--text-secondary)] sm:text-[10px]">
                               {slot.start_time}–{slot.end_time}
                             </p>

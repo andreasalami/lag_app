@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { ORDER_STATUS_LABELS, orderStatusClassName, readOrderHistory, syncOrderHistoryStatuses, type StoredOrder } from "../../features/orders/orderHistory";
+import {
+  ORDER_STATUS_LABELS,
+  orderStatusClassName,
+  readOrderHistory,
+  syncOrderHistoryStatuses,
+  type StoredOrder,
+} from "../../features/orders/orderHistory";
 import { priceFormatter } from "../../features/orders/orderUtils";
 import { appHref } from "../../lib/browser";
 
@@ -44,11 +50,21 @@ export function Navbar() {
         </a>
 
         <nav className="hidden gap-6 text-sm text-[var(--text-secondary)] sm:flex">
-          <a href="#biglietti" className="hover:text-[var(--text-primary)]">Biglietti</a>
-          <a href="#programma" className="hover:text-[var(--text-primary)]">Programma</a>
-          <a href="#menu" className="hover:text-[var(--text-primary)]">Menu</a>
-          <a href="#tornei" className="hover:text-[var(--text-primary)]">Torneo</a>
-          <a href={staffPath} className="hover:text-[var(--text-primary)]">Staff</a>
+          <a href="#biglietti" className="hover:text-[var(--text-primary)]">
+            Biglietti
+          </a>
+          <a href="#programma" className="hover:text-[var(--text-primary)]">
+            Programma
+          </a>
+          <a href="#menu" className="hover:text-[var(--text-primary)]">
+            Menu
+          </a>
+          <a href="#tornei" className="hover:text-[var(--text-primary)]">
+            Torneo
+          </a>
+          <a href={staffPath} className="hover:text-[var(--text-primary)]">
+            Staff
+          </a>
         </nav>
 
         <div className="relative h-10 w-10 sm:hidden">
@@ -91,21 +107,37 @@ export function Navbar() {
                 <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--surface-border)] bg-[var(--surface-solid)] p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold">I miei ordini</p>
-                    <button type="button" onClick={() => void refreshOrders()} disabled={refreshingOrders} className="text-xs text-[var(--text-secondary)] hover:underline disabled:opacity-60">
+                    <button
+                      type="button"
+                      onClick={() => void refreshOrders()}
+                      disabled={refreshingOrders}
+                      className="text-xs text-[var(--text-secondary)] hover:underline disabled:opacity-60"
+                    >
                       {refreshingOrders ? "Aggiorno…" : "Aggiorna"}
                     </button>
                   </div>
                   {orders.length === 0 ? (
-                    <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">Non hai ancora ordini salvati su questo telefono.</p>
+                    <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
+                      Non hai ancora ordini salvati su questo telefono.
+                    </p>
                   ) : (
                     <ul className="mt-2 space-y-2">
                       {orders.slice(0, 3).map((order) => (
-                        <li key={order.order_id} className="flex items-center justify-between gap-3 border-t border-[var(--surface-border)] pt-2 text-xs first:border-0 first:pt-0">
+                        <li
+                          key={order.order_id}
+                          className="flex items-center justify-between gap-3 border-t border-[var(--surface-border)] pt-2 text-xs first:border-0 first:pt-0"
+                        >
                           <span className="min-w-0">
-                            <strong className="block truncate">#{order.display_number} · {order.alias}</strong>
-                            <span className="text-[var(--text-secondary)]">{priceFormatter.format(Number(order.total))}</span>
+                            <strong className="block truncate">
+                              #{order.display_number} · {order.alias}
+                            </strong>
+                            <span className="text-[var(--text-secondary)]">
+                              {priceFormatter.format(Number(order.total))}
+                            </span>
                           </span>
-                          <span className={`shrink-0 font-semibold ${orderStatusClassName(order.status)}`}>{ORDER_STATUS_LABELS[order.status]}</span>
+                          <span className={`shrink-0 font-semibold ${orderStatusClassName(order.status)}`}>
+                            {ORDER_STATUS_LABELS[order.status]}
+                          </span>
                         </li>
                       ))}
                     </ul>

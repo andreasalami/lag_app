@@ -42,11 +42,17 @@ export function cashStationLabel(station: CashStation) {
 }
 
 /** Ricerca di cassa e postazioni: numero e nome ordine si possono combinare. */
-export function matchesOrderSearch(order: { display_number: number; alias: string | null }, number: string, alias: string) {
+export function matchesOrderSearch(
+  order: { display_number: number; alias: string | null },
+  number: string,
+  alias: string,
+) {
   const wantedNumber = number.trim();
   const wantedAlias = alias.trim().toLocaleLowerCase("it");
-  return (!wantedNumber || String(order.display_number).includes(wantedNumber))
-    && (!wantedAlias || (order.alias ?? "").toLocaleLowerCase("it").includes(wantedAlias));
+  return (
+    (!wantedNumber || String(order.display_number).includes(wantedNumber)) &&
+    (!wantedAlias || (order.alias ?? "").toLocaleLowerCase("it").includes(wantedAlias))
+  );
 }
 
 export type FulfillmentProgress = {

@@ -17,9 +17,13 @@ const OrderPage = lazy(() => import("./features/orders/OrderPage").then((module)
 const Cassa = lazy(() => import("./features/orders/Cassa").then((module) => ({ default: module.Cassa })));
 const Cucina = lazy(() => import("./features/orders/Cucina").then((module) => ({ default: module.Cucina })));
 const Bar = lazy(() => import("./features/orders/Bar").then((module) => ({ default: module.Bar })));
-const EventManagement = lazy(() => import("./features/event/EventManagement").then((module) => ({ default: module.EventManagement })));
+const EventManagement = lazy(() =>
+  import("./features/event/EventManagement").then((module) => ({ default: module.EventManagement })),
+);
 
-const LOADING = <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Carico…</section>;
+const LOADING = (
+  <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Carico…</section>
+);
 
 function ProtectedOperationalPage({
   allowedRoles,
@@ -33,7 +37,11 @@ function ProtectedOperationalPage({
   const { session, role, loading, profileError } = useAuth();
 
   if (loading) {
-    return <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Verifico l’accesso…</section>;
+    return (
+      <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">
+        Verifico l’accesso…
+      </section>
+    );
   }
 
   if (!session || profileError || !allowedRoles.includes(role)) {
@@ -78,50 +86,66 @@ function App() {
 
   // Le anteprime dimostrative vivono nel loro entry point (anteprima.html), non
   // qui: non caricano Supabase né la sessione staff e non finiscono nel bundle.
-  const internalPages = ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo", "gestione-evento"];
+  const internalPages = [
+    "staff",
+    "cassa",
+    "cucina",
+    "bar",
+    "ordina",
+    "ordina-nuovo",
+    "tabellone",
+    "gestione-programma",
+    "gestione-menu",
+    "gestione-torneo",
+    "gestione-evento",
+  ];
   const hashRoute = hashPath.split("?")[0];
   const internalPage = internalPages.includes(hashRoute) ? hashRoute : path.slice(1);
 
   return (
     <AuthProvider>
       <Suspense fallback={LOADING}>
-      {internalPage === "staff" ? (
-        <Staff />
-      ) : internalPage === "cassa" ? (
-        <ProtectedOperationalPage allowedRoles={["cassa", "admin"]} component={Cassa} title="Casse" />
-      ) : internalPage === "cucina" ? (
-        <ProtectedOperationalPage allowedRoles={["cucina", "admin"]} component={Cucina} title="Cucina" />
-      ) : internalPage === "bar" ? (
-        <ProtectedOperationalPage allowedRoles={["bar", "admin"]} component={Bar} title="Bar" />
-      ) : internalPage === "gestione-evento" ? (
-        <ProtectedOperationalPage allowedRoles={["cassa", "admin"]} component={EventManagement} title="Gestione evento" />
-      ) : internalPage === "ordina-nuovo" ? (
-        <OrderPage startFresh />
-      ) : internalPage === "ordina" ? (
-        <OrderPage key={hashPath} />
-      ) : internalPage === "tabellone" ? (
-        <TournamentBoard />
-      ) : internalPage === "gestione-programma" ? (
-        <ProtectedOperationalPage
-          allowedRoles={["staff", "admin"]}
-          component={ProgramManagement}
-          title="Gestione Scaletta"
-        />
-      ) : internalPage === "gestione-menu" ? (
-        <ProtectedOperationalPage
-          allowedRoles={["staff", "cucina", "admin"]}
-          component={MenuManagement}
-          title="Gestione Menu e Scorte"
-        />
-      ) : internalPage === "gestione-torneo" ? (
-        <ProtectedOperationalPage
-          allowedRoles={["tournament_manager", "admin"]}
-          component={TournamentManagement}
-          title="Gestione torneo"
-        />
-      ) : (
-        <Home />
-      )}
+        {internalPage === "staff" ? (
+          <Staff />
+        ) : internalPage === "cassa" ? (
+          <ProtectedOperationalPage allowedRoles={["cassa", "admin"]} component={Cassa} title="Casse" />
+        ) : internalPage === "cucina" ? (
+          <ProtectedOperationalPage allowedRoles={["cucina", "admin"]} component={Cucina} title="Cucina" />
+        ) : internalPage === "bar" ? (
+          <ProtectedOperationalPage allowedRoles={["bar", "admin"]} component={Bar} title="Bar" />
+        ) : internalPage === "gestione-evento" ? (
+          <ProtectedOperationalPage
+            allowedRoles={["cassa", "admin"]}
+            component={EventManagement}
+            title="Gestione evento"
+          />
+        ) : internalPage === "ordina-nuovo" ? (
+          <OrderPage startFresh />
+        ) : internalPage === "ordina" ? (
+          <OrderPage key={hashPath} />
+        ) : internalPage === "tabellone" ? (
+          <TournamentBoard />
+        ) : internalPage === "gestione-programma" ? (
+          <ProtectedOperationalPage
+            allowedRoles={["staff", "admin"]}
+            component={ProgramManagement}
+            title="Gestione Scaletta"
+          />
+        ) : internalPage === "gestione-menu" ? (
+          <ProtectedOperationalPage
+            allowedRoles={["staff", "cucina", "admin"]}
+            component={MenuManagement}
+            title="Gestione Menu e Scorte"
+          />
+        ) : internalPage === "gestione-torneo" ? (
+          <ProtectedOperationalPage
+            allowedRoles={["tournament_manager", "admin"]}
+            component={TournamentManagement}
+            title="Gestione torneo"
+          />
+        ) : (
+          <Home />
+        )}
       </Suspense>
     </AuthProvider>
   );

@@ -65,13 +65,21 @@ export function Staff() {
   if (!session) {
     return (
       <section className="mx-auto max-w-md px-4 py-12">
-        <StaffPageHeading eyebrow="Area riservata" title="Accesso staff" description="Accedi con l’account assegnato alla tua funzione." />
+        <StaffPageHeading
+          eyebrow="Area riservata"
+          title="Accesso staff"
+          description="Accedi con l’account assegnato alla tua funzione."
+        />
         {!isSupabaseConfigured && (
           <p className="mb-4 text-center text-xs text-[var(--state-error)]">
             Accesso non disponibile: Supabase non è configurato nella build pubblicata.
           </p>
         )}
-        <StaffPanel eyebrow="Autenticazione" title="Entra nella gestione" description="I permessi vengono applicati automaticamente in base al tuo ruolo.">
+        <StaffPanel
+          eyebrow="Autenticazione"
+          title="Entra nella gestione"
+          description="I permessi vengono applicati automaticamente in base al tuo ruolo."
+        >
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <input
               type="email"
@@ -90,13 +98,20 @@ export function Staff() {
               onChange={(e) => setPassword(e.target.value)}
               className="field"
             />
-            <Button variant="staff-primary" type="submit" disabled={submitting || !isSupabaseConfigured} className="w-full">
+            <Button
+              variant="staff-primary"
+              type="submit"
+              disabled={submitting || !isSupabaseConfigured}
+              className="w-full"
+            >
               {submitting ? "..." : "Accedi"}
             </Button>
             {error && <p className="text-xs text-[var(--state-error)]">{error}</p>}
           </form>
         </StaffPanel>
-        <Button variant="back" href={appHref()} className="mt-4 w-full">← Torna al sito</Button>
+        <Button variant="back" href={appHref()} className="mt-4 w-full">
+          ← Torna al sito
+        </Button>
       </section>
     );
   }
@@ -104,10 +119,15 @@ export function Staff() {
   if (profileError) {
     return (
       <section className="mx-auto max-w-md px-4 py-12">
-        <StaffPageHeading title="Profilo non disponibile" description="Non è stato possibile caricare i permessi dell’account." />
+        <StaffPageHeading
+          title="Profilo non disponibile"
+          description="Non è stato possibile caricare i permessi dell’account."
+        />
         <StaffPanel eyebrow="Accesso interrotto" title="Controlla il profilo">
           <p className="text-sm text-[var(--state-error)]">{profileError}</p>
-          <Button variant="staff-secondary" className="mt-5" onClick={signOut}>Esci</Button>
+          <Button variant="staff-secondary" className="mt-5" onClick={signOut}>
+            Esci
+          </Button>
         </StaffPanel>
       </section>
     );
@@ -130,8 +150,12 @@ export function Staff() {
             Contatta l’amministratore per ricevere il ruolo necessario.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <Button variant="staff-secondary" onClick={signOut}>Esci</Button>
-            <Button variant="back" href={appHref()}>← Torna al sito</Button>
+            <Button variant="staff-secondary" onClick={signOut}>
+              Esci
+            </Button>
+            <Button variant="back" href={appHref()}>
+              ← Torna al sito
+            </Button>
           </div>
         </StaffPanel>
       </section>
@@ -140,35 +164,59 @@ export function Staff() {
 
   return (
     <section className="mx-auto max-w-3xl px-4 py-10">
-      <StaffPageHeading eyebrow="Area riservata" title="Gestione" description={`Accesso attivo · ${session.user.email ?? "account staff"}`} />
+      <StaffPageHeading
+        eyebrow="Area riservata"
+        title="Gestione"
+        description={`Accesso attivo · ${session.user.email ?? "account staff"}`}
+      />
 
       <div className="flex flex-col gap-6">
-        {(role === "staff" || role === "cucina" || role === "cassa" || role === "admin") && <StaffPanel eyebrow="Gestione" title="Sezioni del sito" description="Contenuti mostrati nella Home e gestione dell’evento.">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
-              <a key={d.label} href={appHref(d.path)} className="tile font-semibold text-[var(--accent-primary)]">
-                {d.label}
-                <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Apri la pagina di gestione →</span>
-              </a>
-            ))}
-          </div>
-        </StaffPanel>}
+        {(role === "staff" || role === "cucina" || role === "cassa" || role === "admin") && (
+          <StaffPanel
+            eyebrow="Gestione"
+            title="Sezioni del sito"
+            description="Contenuti mostrati nella Home e gestione dell’evento."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
+                <a key={d.label} href={appHref(d.path)} className="tile font-semibold text-[var(--accent-primary)]">
+                  {d.label}
+                  <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">
+                    Apri la pagina di gestione →
+                  </span>
+                </a>
+              ))}
+            </div>
+          </StaffPanel>
+        )}
 
-        {(role === "cassa" || role === "cucina" || role === "bar" || role === "admin") && <StaffPanel eyebrow="Evento live" title="Operatività" description="Apri la postazione assegnata durante il servizio.">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {OPERATIONS.filter((d) => role === "admin" || d.role === role).map((d) => (
-              <a key={d.label} href={appHref(d.path)} className="tile font-semibold text-[var(--accent-primary)]">
-                {d.label}
-                <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Avvia postazione →</span>
-              </a>
-            ))}
-          </div>
-        </StaffPanel>}
+        {(role === "cassa" || role === "cucina" || role === "bar" || role === "admin") && (
+          <StaffPanel
+            eyebrow="Evento live"
+            title="Operatività"
+            description="Apri la postazione assegnata durante il servizio."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              {OPERATIONS.filter((d) => role === "admin" || d.role === role).map((d) => (
+                <a key={d.label} href={appHref(d.path)} className="tile font-semibold text-[var(--accent-primary)]">
+                  {d.label}
+                  <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">
+                    Avvia postazione →
+                  </span>
+                </a>
+              ))}
+            </div>
+          </StaffPanel>
+        )}
       </div>
 
       <div className="mt-6 flex flex-wrap justify-center gap-2">
-        <Button variant="staff-secondary" onClick={signOut}>Esci</Button>
-        <Button variant="back" href={appHref()}>← Torna al sito</Button>
+        <Button variant="staff-secondary" onClick={signOut}>
+          Esci
+        </Button>
+        <Button variant="back" href={appHref()}>
+          ← Torna al sito
+        </Button>
       </div>
     </section>
   );

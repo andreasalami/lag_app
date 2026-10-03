@@ -40,10 +40,18 @@ export function Modal({ open, title, children, actions, dismissible = false, onC
       onClick={(event) => {
         if (!dismissible || event.target !== event.currentTarget) return;
         const bounds = event.currentTarget.getBoundingClientRect();
-        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose?.();
+        if (
+          event.clientX < bounds.left ||
+          event.clientX > bounds.right ||
+          event.clientY < bounds.top ||
+          event.clientY > bounds.bottom
+        )
+          onClose?.();
       }}
     >
-      <h2 id={titleId} className="text-xl font-semibold">{title}</h2>
+      <h2 id={titleId} className="text-xl font-semibold">
+        {title}
+      </h2>
       <div className="mt-3 text-sm text-[var(--text-secondary)]">{children}</div>
       <div className="mt-5 flex flex-wrap justify-end gap-2">{actions}</div>
     </dialog>

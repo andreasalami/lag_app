@@ -30,7 +30,8 @@ export function addToCart(
   const qty = cart[item.id]?.qty ?? 0;
   if (remainingStock(cart, item) === 0) return { cart, blocked: "stock" };
   if (limits.maxItem !== undefined && qty >= limits.maxItem) return { cart, blocked: "item_limit" };
-  if (limits.maxOrder !== undefined && cartItemCount(Object.values(cart)) >= limits.maxOrder) return { cart, blocked: "order_limit" };
+  if (limits.maxOrder !== undefined && cartItemCount(Object.values(cart)) >= limits.maxOrder)
+    return { cart, blocked: "order_limit" };
   return {
     cart: {
       ...cart,

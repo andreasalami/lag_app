@@ -41,7 +41,9 @@ describe("bracketUtils", () => {
   it("riconosce un tabellone senza niente da perdere", () => {
     const teams = defaultTeams(8);
     expect(isUntouchedBracket(8, teams, {}, {})).toBe(true);
-    expect(isUntouchedBracket(8, ["", ...teams.slice(1)], { "0-0": { winner: null, scoreA: null, scoreB: null } }, {})).toBe(true);
+    expect(
+      isUntouchedBracket(8, ["", ...teams.slice(1)], { "0-0": { winner: null, scoreA: null, scoreB: null } }, {}),
+    ).toBe(true);
     expect(isUntouchedBracket(8, ["Leoni", ...teams.slice(1)], {}, {})).toBe(false);
     expect(isUntouchedBracket(8, teams, { "0-0": { winner: null, scoreA: 1, scoreB: null } }, {})).toBe(false);
     expect(isUntouchedBracket(8, teams, {}, { "1-0-A": "Ripescata" })).toBe(false);

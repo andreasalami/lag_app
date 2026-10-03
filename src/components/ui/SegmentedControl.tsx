@@ -1,7 +1,12 @@
 type Option<T extends string> = { value: T; label: string };
 
 /** Selettore a pillola con una sola opzione attiva (es. QR / Riepilogo). */
-export function SegmentedControl<T extends string>({ options, value, onChange, className = "" }: {
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  className = "",
+}: {
   options: Option<T>[];
   value: T;
   onChange: (value: T) => void;

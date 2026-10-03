@@ -23,11 +23,21 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
       <div className="grid gap-3 sm:grid-cols-2">
         <label>
           <span className="mb-1 block text-xs font-semibold">Alias</span>
-          <input value={alias} maxLength={32} onChange={(event) => setAlias(event.target.value)} className="field w-full py-2" />
+          <input
+            value={alias}
+            maxLength={32}
+            onChange={(event) => setAlias(event.target.value)}
+            className="field w-full py-2"
+          />
         </label>
         <label>
           <span className="mb-1 block text-xs font-semibold">Note cucina</span>
-          <input value={notes} maxLength={300} onChange={(event) => setNotes(event.target.value)} className="field w-full py-2" />
+          <input
+            value={notes}
+            maxLength={300}
+            onChange={(event) => setNotes(event.target.value)}
+            className="field w-full py-2"
+          />
         </label>
       </div>
 
@@ -40,8 +50,13 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
             disabled={remainingStock(cart, item) === 0}
             className="field flex min-h-12 items-center justify-between gap-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span className="text-sm">{item.name}{item.available_portions === 0 ? " — terminato" : ""}</span>
-            <span className="shrink-0 font-mono text-[var(--accent-primary)]">{priceFormatter.format(Number(item.price))}</span>
+            <span className="text-sm">
+              {item.name}
+              {item.available_portions === 0 ? " — terminato" : ""}
+            </span>
+            <span className="shrink-0 font-mono text-[var(--accent-primary)]">
+              {priceFormatter.format(Number(item.price))}
+            </span>
           </button>
         ))}
       </div>
@@ -51,10 +66,19 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
         {lines.length === 0 && <p className="text-sm text-[var(--text-secondary)]">Nessuna voce.</p>}
         {lines.map((line) => (
           <div key={line.id} className="flex items-center justify-between gap-3 text-sm">
-            <span>{line.qty}× {line.name}</span>
+            <span>
+              {line.qty}× {line.name}
+            </span>
             <div className="flex items-center gap-3">
               <span className="font-mono">{priceFormatter.format(lineTotal(line))}</span>
-              <button type="button" onClick={() => setCart((current) => removeOneFromCart(current, line.id))} className="text-lg text-[var(--state-error)]" aria-label={`Rimuovi una unità di ${line.name}`}>−</button>
+              <button
+                type="button"
+                onClick={() => setCart((current) => removeOneFromCart(current, line.id))}
+                className="text-lg text-[var(--state-error)]"
+                aria-label={`Rimuovi una unità di ${line.name}`}
+              >
+                −
+              </button>
             </div>
           </div>
         ))}

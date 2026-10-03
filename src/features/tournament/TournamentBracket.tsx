@@ -125,7 +125,10 @@ export function TournamentBracket({ management = false }: { management?: boolean
 
       const latest = await fetchPublishedTournament();
       if (cancelled) return;
-      if (latest.error) { setLoadError("Tabellone non disponibile. Ricarica prima di modificare il torneo."); return; }
+      if (latest.error) {
+        setLoadError("Tabellone non disponibile. Ricarica prima di modificare il torneo.");
+        return;
+      }
 
       const published = latest.snapshot ?? EMPTY_TOURNAMENT_SNAPSHOT;
       setLoadError(null);
@@ -143,7 +146,10 @@ export function TournamentBracket({ management = false }: { management?: boolean
             if (parsed) {
               starting = parsed;
               baseRevision = typeof draft.revision === "number" ? draft.revision : null;
-              if (baseRevision !== latest.revision) setPublishError("La bozza parte da una versione precedente. La pubblicazione è protetta: confronta la bozza con il tabellone aggiornato prima di sostituirla.");
+              if (baseRevision !== latest.revision)
+                setPublishError(
+                  "La bozza parte da una versione precedente. La pubblicazione è protetta: confronta la bozza con il tabellone aggiornato prima di sostituirla.",
+                );
             }
           }
         } catch {
@@ -192,17 +198,19 @@ export function TournamentBracket({ management = false }: { management?: boolean
       if (busy || document.visibilityState !== "visible") return;
       busy = true;
       try {
-      const probe = await fetchPublishedRevision();
-      if (cancelled || probe.error || (seenRevision !== null && probe.revision === seenRevision)) return;
-      const { error, snapshot, revision } = await fetchPublishedTournament();
-      if (cancelled || error || !snapshot) return;
-      seenRevision = revision;
-      setSize(snapshot.size);
-      setTeams(snapshot.teams);
-      setMatches(snapshot.matches);
-      setOverrides(snapshot.overrides);
-      setLastSyncedAt(new Date());
-      } finally { busy = false; }
+        const probe = await fetchPublishedRevision();
+        if (cancelled || probe.error || (seenRevision !== null && probe.revision === seenRevision)) return;
+        const { error, snapshot, revision } = await fetchPublishedTournament();
+        if (cancelled || error || !snapshot) return;
+        seenRevision = revision;
+        setSize(snapshot.size);
+        setTeams(snapshot.teams);
+        setMatches(snapshot.matches);
+        setOverrides(snapshot.overrides);
+        setLastSyncedAt(new Date());
+      } finally {
+        busy = false;
+      }
     }
 
     const stopPolling = pollWhileVisible(() => void refreshPublished(), POLL_INTERVAL_MS);
@@ -251,14 +259,20 @@ export function TournamentBracket({ management = false }: { management?: boolean
     setPublishing(true);
     setPublishError(null);
     const { data: nextRevision, error } = await supabase.rpc("publish_tournament", {
-      p_expected_revision: revision, p_size: size, p_teams: teams, p_matches: matches, p_overrides: overrides,
+      p_expected_revision: revision,
+      p_size: size,
+      p_teams: teams,
+      p_matches: matches,
+      p_overrides: overrides,
     });
 
     if (error) {
       console.error("[Torneo] Errore pubblicazione:", error.message);
-      setPublishError(/tournament_conflict|revision_required/.test(error.message)
-        ? "Un’altra postazione ha aggiornato il torneo. La tua bozza è conservata: carica la versione aggiornata prima di riprendere le modifiche."
-        : "Pubblicazione non riuscita. Riprova.");
+      setPublishError(
+        /tournament_conflict|revision_required/.test(error.message)
+          ? "Un’altra postazione ha aggiornato il torneo. La tua bozza è conservata: carica la versione aggiornata prima di riprendere le modifiche."
+          : "Pubblicazione non riuscita. Riprova.",
+      );
       setPublishing(false);
       return false;
     }
@@ -272,13 +286,23 @@ export function TournamentBracket({ management = false }: { management?: boolean
   async function loadLatestPublished() {
     setPublishing(true);
     try {
-      localStorage.setItem(`${draftKey}:before-reload`, JSON.stringify({size,teams,matches,overrides,revision}));
+      localStorage.setItem(`${draftKey}:before-reload`, JSON.stringify({ size, teams, matches, overrides, revision }));
       const { error, snapshot: latest, revision: latestRevision } = await fetchPublishedTournament();
       if (error || !latest) throw new Error("load_failed");
-      setSize(latest.size); setTeams(latest.teams); setMatches(latest.matches); setOverrides(latest.overrides);
-      setRevision(latestRevision); setSavedSnapshot(latest); setPublishError(null);
-    } catch {setPublishError("Impossibile conservare la bozza o caricare il tabellone. Le modifiche attuali sono ancora aperte.");}
-    finally {setPublishing(false);}
+      setSize(latest.size);
+      setTeams(latest.teams);
+      setMatches(latest.matches);
+      setOverrides(latest.overrides);
+      setRevision(latestRevision);
+      setSavedSnapshot(latest);
+      setPublishError(null);
+    } catch {
+      setPublishError(
+        "Impossibile conservare la bozza o caricare il tabellone. Le modifiche attuali sono ancora aperte.",
+      );
+    } finally {
+      setPublishing(false);
+    }
   }
 
   // Chiudere il pannello nomi squadre con modifiche in sospeso è
@@ -315,7 +339,9 @@ export function TournamentBracket({ management = false }: { management?: boolean
     targetSize: BracketSize,
   ): Promise<TournamentArchive | null> {
     if (!isSupabaseConfigured) {
-      setArchiveError("Archivio non disponibile: la copia non può essere salvata. Il tabellone non è stato modificato.");
+      setArchiveError(
+        "Archivio non disponibile: la copia non può essere salvata. Il tabellone non è stato modificato.",
+      );
       return null;
     }
     setArchiveLoading(true);
@@ -394,7 +420,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
           winner,
           scoreA,
           scoreB,
-          completedAt: winner ? (scoreChanged ? new Date().toISOString() : current.completedAt ?? null) : null,
+          completedAt: winner ? (scoreChanged ? new Date().toISOString() : (current.completedAt ?? null)) : null,
         },
       };
     });
@@ -424,14 +450,20 @@ export function TournamentBracket({ management = false }: { management?: boolean
       {!canEdit && (
         <p className="mb-4 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-3 text-xs text-[var(--text-secondary)]">
           Tabellone in sola lettura.
-          {lastSyncedAt && ` Aggiornato alle ${lastSyncedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}.`}
+          {lastSyncedAt &&
+            ` Aggiornato alle ${lastSyncedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}.`}
         </p>
       )}
 
       {canEdit && (
         <>
           <TournamentBroadcast />
-          <StaffPanel className="mb-5" eyebrow="Configurazione torneo" title="Squadre e tabellone" description="Scegli la dimensione e aggiorna i nomi delle squadre.">
+          <StaffPanel
+            className="mb-5"
+            eyebrow="Configurazione torneo"
+            title="Squadre e tabellone"
+            description="Scegli la dimensione e aggiorna i nomi delle squadre."
+          >
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-[var(--text-secondary)]">Squadre:</span>
               {BRACKET_SIZES.map((s) => (
@@ -484,7 +516,9 @@ export function TournamentBracket({ management = false }: { management?: boolean
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--surface-border)] pt-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">Copia di sicurezza</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+                  Copia di sicurezza
+                </p>
                 <p className="mt-1 text-sm text-[var(--text-secondary)]">
                   {latestArchive
                     ? `${latestArchive.size} squadre · ${new Date(latestArchive.createdAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}`
@@ -492,7 +526,14 @@ export function TournamentBracket({ management = false }: { management?: boolean
                 </p>
               </div>
               {latestArchive && (
-                <Button variant="staff-secondary" className="px-4 py-2 text-xs" onClick={() => { setArchiveError(null); setShowRestoreWarning(true); }}>
+                <Button
+                  variant="staff-secondary"
+                  className="px-4 py-2 text-xs"
+                  onClick={() => {
+                    setArchiveError(null);
+                    setShowRestoreWarning(true);
+                  }}
+                >
                   Ripristina ultima copia
                 </Button>
               )}
@@ -504,47 +545,43 @@ export function TournamentBracket({ management = false }: { management?: boolean
 
       <div className="max-h-[75vh] overflow-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex min-w-max gap-6 pr-4">
-        {Array.from({ length: rounds }, (_, round) => (
-          <div
-            key={round}
-            className={`relative w-56 flex-shrink-0 ${
-              round < rounds - 1
-                ? "after:absolute after:-right-3 after:top-0 after:h-full after:border-r after:border-[var(--surface-border)]"
-                : ""
-            }`}
-          >
-            <h3 className="mb-1 text-center font-display text-sm text-[var(--accent-primary)]">
-              {roundLabel(size, round)}
-            </h3>
-            <div className="relative" style={{ height: bracketHeight }}>
-            {Array.from({ length: matchesInRound(size, round) }, (_, index) => {
-              const nameA = resolveSlot(round, index, "A", teams, matches, overrides);
-              const nameB = resolveSlot(round, index, "B", teams, matches, overrides);
-              const state = matches[matchKey(round, index)];
-              const groupSize = 2 ** round;
-              const top = (index * groupSize + (groupSize - 1) / 2) * matchStep;
-              return (
-                <div
-                  key={index}
-                  className="absolute inset-x-0"
-                  style={{ top, height: matchHeight }}
-                >
-                  <MatchCard
-                    nameA={nameA}
-                    nameB={nameB}
-                    scoreA={state?.scoreA ?? null}
-                    scoreB={state?.scoreB ?? null}
-                    winner={state?.winner ?? null}
-                    editable={canEdit}
-                    onSetScore={(side, value) => setScore(round, index, side, value)}
-                    onOverride={(side, name) => setOverride(round, index, side, name)}
-                  />
-                </div>
-              );
-            })}
+          {Array.from({ length: rounds }, (_, round) => (
+            <div
+              key={round}
+              className={`relative w-56 flex-shrink-0 ${
+                round < rounds - 1
+                  ? "after:absolute after:-right-3 after:top-0 after:h-full after:border-r after:border-[var(--surface-border)]"
+                  : ""
+              }`}
+            >
+              <h3 className="mb-1 text-center font-display text-sm text-[var(--accent-primary)]">
+                {roundLabel(size, round)}
+              </h3>
+              <div className="relative" style={{ height: bracketHeight }}>
+                {Array.from({ length: matchesInRound(size, round) }, (_, index) => {
+                  const nameA = resolveSlot(round, index, "A", teams, matches, overrides);
+                  const nameB = resolveSlot(round, index, "B", teams, matches, overrides);
+                  const state = matches[matchKey(round, index)];
+                  const groupSize = 2 ** round;
+                  const top = (index * groupSize + (groupSize - 1) / 2) * matchStep;
+                  return (
+                    <div key={index} className="absolute inset-x-0" style={{ top, height: matchHeight }}>
+                      <MatchCard
+                        nameA={nameA}
+                        nameB={nameB}
+                        scoreA={state?.scoreA ?? null}
+                        scoreB={state?.scoreB ?? null}
+                        winner={state?.winner ?? null}
+                        editable={canEdit}
+                        onSetScore={(side, value) => setScore(round, index, side, value)}
+                        onOverride={(side, name) => setOverride(round, index, side, name)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
         </div>
       </div>
 
@@ -552,22 +589,43 @@ export function TournamentBracket({ management = false }: { management?: boolean
           l'etichetta del bottone è "Salva" ovunque nell'app per coerenza,
           il messaggio resta specifico del Torneo perché qui "salvare"
           vuol dire pubblicare — chi guarda vede il tabellone solo dopo. */}
-      {canEdit && publishError && <div role="alert" className="my-4 rounded-xl border border-[var(--state-warning)] p-4 text-sm">
-        <p>{publishError}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button variant="staff-secondary" disabled={publishing} onClick={() => {
-            const url = URL.createObjectURL(new Blob([JSON.stringify({size,teams,matches,overrides,revision},null,2)],{type:"application/json"}));
-            const link=document.createElement("a"); link.href=url; link.download="bozza-torneo.json"; link.click();
-            window.setTimeout(()=>URL.revokeObjectURL(url),1000);
-          }}>Scarica la mia bozza</Button>
-          <Button variant="staff-secondary" disabled={publishing} onClick={() => void loadLatestPublished()}>Carica versione aggiornata</Button>
+      {canEdit && publishError && (
+        <div role="alert" className="my-4 rounded-xl border border-[var(--state-warning)] p-4 text-sm">
+          <p>{publishError}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="staff-secondary"
+              disabled={publishing}
+              onClick={() => {
+                const url = URL.createObjectURL(
+                  new Blob([JSON.stringify({ size, teams, matches, overrides, revision }, null, 2)], {
+                    type: "application/json",
+                  }),
+                );
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "bozza-torneo.json";
+                link.click();
+                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+              }}
+            >
+              Scarica la mia bozza
+            </Button>
+            <Button variant="staff-secondary" disabled={publishing} onClick={() => void loadLatestPublished()}>
+              Carica versione aggiornata
+            </Button>
+          </div>
         </div>
-      </div>}
+      )}
       {canEdit && isDirty && (
         <SaveBanner
           message="Ci sono modifiche al Torneo non ancora salvate — chi guarda vede ancora l'ultimo turno pubblicato."
           saving={publishing}
-          error={hasTooLongNames ? `Un nome squadra supera i ${TEAM_NAME_MAX_LENGTH} caratteri: accorcialo per poter salvare.` : publishError}
+          error={
+            hasTooLongNames
+              ? `Un nome squadra supera i ${TEAM_NAME_MAX_LENGTH} caratteri: accorcialo per poter salvare.`
+              : publishError
+          }
           disabled={hasTooLongNames}
           onSave={handlePublish}
         />
@@ -577,22 +635,40 @@ export function TournamentBracket({ management = false }: { management?: boolean
         open={pendingSize !== null}
         title="Cambiare numero di squadre?"
         dismissible={!archiveLoading}
-        onClose={() => { if (!archiveLoading) { setPendingSize(null); setArchiveError(null); } }}
-        actions={(
+        onClose={() => {
+          if (!archiveLoading) {
+            setPendingSize(null);
+            setArchiveError(null);
+          }
+        }}
+        actions={
           <>
-            <Button variant="staff-secondary" onClick={() => { setPendingSize(null); setArchiveError(null); }} disabled={archiveLoading}>Annulla</Button>
-            <Button variant="staff-secondary" onClick={() => void confirmSizeChange(false)} disabled={archiveLoading}>Cambia senza salvare</Button>
+            <Button
+              variant="staff-secondary"
+              onClick={() => {
+                setPendingSize(null);
+                setArchiveError(null);
+              }}
+              disabled={archiveLoading}
+            >
+              Annulla
+            </Button>
+            <Button variant="staff-secondary" onClick={() => void confirmSizeChange(false)} disabled={archiveLoading}>
+              Cambia senza salvare
+            </Button>
             <Button variant="staff-primary" onClick={() => void confirmSizeChange(true)} disabled={archiveLoading}>
               {archiveLoading ? "Salvo la copia…" : "Salva una copia e cambia"}
             </Button>
           </>
-        )}
+        }
       >
         <p>
-          Passando da <strong>{size}</strong> a <strong>{pendingSize ?? size}</strong> squadre, nomi e risultati attuali spariscono dall’editor.
+          Passando da <strong>{size}</strong> a <strong>{pendingSize ?? size}</strong> squadre, nomi e risultati attuali
+          spariscono dall’editor.
         </p>
         <p className="mt-2">
-          Vuoi salvare prima una copia del torneo attuale? Potrai riaverlo con <strong>Ripristina ultima copia</strong>. Il tabellone pubblico non cambia finché non premi Salva.
+          Vuoi salvare prima una copia del torneo attuale? Potrai riaverlo con <strong>Ripristina ultima copia</strong>.
+          Il tabellone pubblico non cambia finché non premi Salva.
         </p>
         {archiveError && <p className="mt-3 text-[var(--state-error)]">{archiveError}</p>}
       </Modal>
@@ -601,22 +677,44 @@ export function TournamentBracket({ management = false }: { management?: boolean
         open={showRestoreWarning}
         title="Ripristinare l’ultima copia?"
         dismissible={!archiveLoading}
-        onClose={() => { if (!archiveLoading) { setShowRestoreWarning(false); setArchiveError(null); } }}
-        actions={(
+        onClose={() => {
+          if (!archiveLoading) {
+            setShowRestoreWarning(false);
+            setArchiveError(null);
+          }
+        }}
+        actions={
           <>
-            <Button variant="staff-secondary" onClick={() => { setShowRestoreWarning(false); setArchiveError(null); }} disabled={archiveLoading}>Annulla</Button>
-            <Button variant="staff-primary" onClick={() => void confirmRestore()} disabled={archiveLoading || !latestArchive}>
+            <Button
+              variant="staff-secondary"
+              onClick={() => {
+                setShowRestoreWarning(false);
+                setArchiveError(null);
+              }}
+              disabled={archiveLoading}
+            >
+              Annulla
+            </Button>
+            <Button
+              variant="staff-primary"
+              onClick={() => void confirmRestore()}
+              disabled={archiveLoading || !latestArchive}
+            >
               {archiveLoading ? "Proteggo lo stato attuale…" : "Proteggi e ripristina"}
             </Button>
           </>
-        )}
+        }
       >
         <p>
           Verrà ripristinata la copia da <strong>{latestArchive?.size ?? size} squadre</strong>
-          {latestArchive ? ` del ${new Date(latestArchive.createdAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}` : ""}.
+          {latestArchive
+            ? ` del ${new Date(latestArchive.createdAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}`
+            : ""}
+          .
         </p>
         <p className="mt-2">
-          Anche lo stato corrente verrà archiviato prima del ripristino, così potrai tornare indietro. Per renderlo pubblico dovrai poi premere Salva.
+          Anche lo stato corrente verrà archiviato prima del ripristino, così potrai tornare indietro. Per renderlo
+          pubblico dovrai poi premere Salva.
         </p>
         {archiveError && <p className="mt-3 text-[var(--state-error)]">{archiveError}</p>}
       </Modal>
@@ -626,23 +724,35 @@ export function TournamentBracket({ management = false }: { management?: boolean
         title="Modifiche non pubblicate"
         dismissible={!publishing}
         onClose={() => setShowCloseWarning(false)}
-        actions={(
+        actions={
           <>
-            <Button variant="staff-danger" onClick={handleCloseWithoutSaving} disabled={publishing} className="px-4 py-2 text-xs">
+            <Button
+              variant="staff-danger"
+              onClick={handleCloseWithoutSaving}
+              disabled={publishing}
+              className="px-4 py-2 text-xs"
+            >
               Chiudi senza pubblicare
             </Button>
-            <Button variant="staff-primary" onClick={() => void handlePublishAndClose()} disabled={publishing || hasTooLongNames} className="px-4 py-2 text-xs">
+            <Button
+              variant="staff-primary"
+              onClick={() => void handlePublishAndClose()}
+              disabled={publishing || hasTooLongNames}
+              className="px-4 py-2 text-xs"
+            >
               {publishing ? "Salvo..." : "Salva ora"}
             </Button>
           </>
-        )}
+        }
       >
         <p>
-          Hai punteggi o nomi non ancora pubblicati. Se cambi dispositivo o serve che il pubblico veda il
-          tabellone aggiornato, devi pubblicare ora — altrimenti restano solo su questo browser.
+          Hai punteggi o nomi non ancora pubblicati. Se cambi dispositivo o serve che il pubblico veda il tabellone
+          aggiornato, devi pubblicare ora — altrimenti restano solo su questo browser.
         </p>
         {hasTooLongNames && (
-          <p className="mt-2 text-[var(--state-error)]">Prima accorcia i nomi squadra oltre i {TEAM_NAME_MAX_LENGTH} caratteri.</p>
+          <p className="mt-2 text-[var(--state-error)]">
+            Prima accorcia i nomi squadra oltre i {TEAM_NAME_MAX_LENGTH} caratteri.
+          </p>
         )}
       </Modal>
     </section>

@@ -7,9 +7,9 @@
 // both into separate throwaway databases and compares the resulting catalog:
 // tables, columns, constraints, indexes, policies, grants, RLS, realtime and every
 // function body. Any divergence fails the build with the exact offending object.
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { emptyDatabase, installFiles, migrationFiles, schemaFile } from './pglite-harness.mjs';
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { emptyDatabase, installFiles, migrationFiles, schemaFile } from "./pglite-harness.mjs";
 
 async function install(files) {
   const db = await emptyDatabase();
@@ -20,7 +20,11 @@ async function install(files) {
 // Comments and line wrapping inside a function body are not behaviour: comparing
 // raw source would report a reformatting as a schema drift and train us to ignore
 // this check. Strip line comments and collapse whitespace before comparing.
-const normalize = (body) => body.replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ').trim();
+const normalize = (body) =>
+  body
+    .replace(/--[^\n]*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const PROBES = {
   functions: `select p.proname||'('||pg_get_function_identity_arguments(p.oid)||') secdef='
@@ -65,17 +69,17 @@ async function snapshot(db) {
 // schema.sql used to be a plain concatenation of the migrations, so the same
 // function was defined up to three times and only the last one was live. Keeping
 // it to one definition per function is what makes the file readable at all.
-const schemaText = readFileSync(schemaFile, 'utf8');
+const schemaText = readFileSync(schemaFile, "utf8");
 const defined = [...schemaText.matchAll(/^create or replace function public\.([a-z_]+)\s*\(/gm)].map((m) => m[1]);
 const repeated = [...new Set(defined.filter((name, i) => defined.indexOf(name) !== i))];
-assert.deepEqual(repeated, [], `schema.sql defines the same function more than once: ${repeated.join(', ')}`);
+assert.deepEqual(repeated, [], `schema.sql defines the same function more than once: ${repeated.join(", ")}`);
 
 // Every statement must be able to roll back together: a half-applied schema is
 // harder to diagnose than a failed one.
 assert.deepEqual(
   [schemaText.match(/^begin;$/gm)?.length ?? 0, schemaText.match(/^commit;$/gm)?.length ?? 0],
   [1, 1],
-  'schema.sql must run as exactly one transaction: one begin; and one commit;',
+  "schema.sql must run as exactly one transaction: one begin; and one commit;",
 );
 
 const migrations = migrationFiles();
@@ -89,16 +93,24 @@ function differences(actual) {
   for (const name of Object.keys(PROBES)) {
     const inSchema = new Set(actual[name]);
     const inMigrations = new Set(expected[name]);
-    for (const item of expected[name]) if (!inSchema.has(item)) failures.push(`${name}: missing from schema.sql -> ${item.slice(0, 200)}`);
-    for (const item of actual[name]) if (!inMigrations.has(item)) failures.push(`${name}: only in schema.sql -> ${item.slice(0, 200)}`);
+    for (const item of expected[name])
+      if (!inSchema.has(item)) failures.push(`${name}: missing from schema.sql -> ${item.slice(0, 200)}`);
+    for (const item of actual[name])
+      if (!inMigrations.has(item)) failures.push(`${name}: only in schema.sql -> ${item.slice(0, 200)}`);
   }
   return failures;
 }
 
 const fromSchema = await install([schemaFile]);
-assert.deepEqual(differences(await snapshot(fromSchema)), [], 'schema.sql and the migration chain describe different databases');
+assert.deepEqual(
+  differences(await snapshot(fromSchema)),
+  [],
+  "schema.sql and the migration chain describe different databases",
+);
 await fromSchema.close();
-console.log(`PASS: schema.sql matches the migration chain (${Object.values(expected).flat().length} catalog entries compared).`);
+console.log(
+  `PASS: schema.sql matches the migration chain (${Object.values(expected).flat().length} catalog entries compared).`,
+);
 
 // schema.sql is also how an existing database gets upgraded (README). Starting from
 // every past version of the chain, applying it must land on the same final database:
@@ -107,7 +119,7 @@ for (let applied = 1; applied < migrations.length; applied += 1) {
   const upgraded = await install([...migrations.slice(0, applied), schemaFile]);
   const failures = differences(await snapshot(upgraded));
   await upgraded.close();
-  const from = migrations[applied - 1].pathname.split('/').pop();
+  const from = migrations[applied - 1].pathname.split("/").pop();
   assert.deepEqual(failures, [], `schema.sql does not upgrade a database at ${from} to the final state`);
 }
 console.log(`PASS: schema.sql upgrades every past version (${migrations.length - 1}) to the final state.`);

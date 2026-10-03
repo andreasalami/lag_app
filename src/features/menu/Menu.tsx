@@ -10,12 +10,7 @@ import { ALLERGENS, priceFormatter } from "../orders/orderUtils";
 import { OrderEntryButton } from "../orders/OrderEntryButton";
 import type { OrderMenuItem } from "../orders/types";
 import { FreeWaterNotice } from "./FreeWaterNotice";
-import {
-  MENU_SECTIONS,
-  isMenuSectionForCategory,
-  type MenuCategory,
-  type MenuSection,
-} from "./menuSections";
+import { MENU_SECTIONS, isMenuSectionForCategory, type MenuCategory, type MenuSection } from "./menuSections";
 import { appHref } from "../../lib/browser";
 
 type Category = MenuCategory;
@@ -31,10 +26,46 @@ const CATEGORY_DESCRIPTION: Record<Category, string> = {
 };
 
 const FALLBACK_ITEMS: MenuItem[] = [
-  { id: "f1", category: "cibo", subcategory: "secondi", name: "Panino salamella — esempio", price: 5, available_portions: null, stock_capacity: null, allergens: [1] },
-  { id: "f2", category: "cibo", subcategory: "contorni", name: "Patatine fritte — esempio", price: 3, available_portions: null, stock_capacity: null, allergens: [] },
-  { id: "f3", category: "bevande", subcategory: "birre", name: "Birra media — esempio", price: 4, available_portions: null, stock_capacity: null, allergens: [1] },
-  { id: "f4", category: "bevande", subcategory: "bevande", name: "Acqua — esempio", price: 1.5, available_portions: null, stock_capacity: null, allergens: [] },
+  {
+    id: "f1",
+    category: "cibo",
+    subcategory: "secondi",
+    name: "Panino salamella — esempio",
+    price: 5,
+    available_portions: null,
+    stock_capacity: null,
+    allergens: [1],
+  },
+  {
+    id: "f2",
+    category: "cibo",
+    subcategory: "contorni",
+    name: "Patatine fritte — esempio",
+    price: 3,
+    available_portions: null,
+    stock_capacity: null,
+    allergens: [],
+  },
+  {
+    id: "f3",
+    category: "bevande",
+    subcategory: "birre",
+    name: "Birra media — esempio",
+    price: 4,
+    available_portions: null,
+    stock_capacity: null,
+    allergens: [1],
+  },
+  {
+    id: "f4",
+    category: "bevande",
+    subcategory: "bevande",
+    name: "Acqua — esempio",
+    price: 1.5,
+    available_portions: null,
+    stock_capacity: null,
+    allergens: [],
+  },
 ];
 
 /*
@@ -52,13 +83,16 @@ export function Menu({ management = false }: { management?: boolean }) {
   const { role } = useAuth();
   const canManage = role === "staff" || role === "cucina" || role === "admin";
   const canEdit = management && canManage;
-  const { rows: items, setRows: setItems, loading, error: loadError, refetch } = useSupabaseRows<MenuItem>({
+  const {
+    rows: items,
+    setRows: setItems,
+    loading,
+    error: loadError,
+    refetch,
+  } = useSupabaseRows<MenuItem>({
     table: "menu_items",
     select: "id, category, subcategory, name, price, available_portions, stock_capacity, allergens",
-    orderBy: [
-      { column: "category" },
-      { column: "name" },
-    ],
+    orderBy: [{ column: "category" }, { column: "name" }],
     fallback: FALLBACK_ITEMS,
   });
 
@@ -85,24 +119,25 @@ export function Menu({ management = false }: { management?: boolean }) {
   function moveItem(id: string, value: string) {
     const [category, subcategory] = value.split(":") as [Category, MenuSection];
     if (!CATEGORIES.includes(category) || !isMenuSectionForCategory(category, subcategory)) return;
-    setItems((prev) => prev.map((item) => item.id === id ? { ...item, category, subcategory } : item));
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, category, subcategory } : item)));
   }
 
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
 
-    const invalidItem = items.some((item) =>
-      !item.name.trim()
-      || item.name.length > 200
-      || !Number.isFinite(item.price)
-      || item.price < 0
-      || item.price > 9999.99
-      || !isMenuSectionForCategory(item.category, item.subcategory)
-      || item.allergens.some((allergen) => !Number.isInteger(allergen) || allergen < 1 || allergen > 14)
-      || new Set(item.allergens).size !== item.allergens.length
-      || (item.available_portions !== null
-        && (!Number.isInteger(item.available_portions) || item.available_portions < 0))
+    const invalidItem = items.some(
+      (item) =>
+        !item.name.trim() ||
+        item.name.length > 200 ||
+        !Number.isFinite(item.price) ||
+        item.price < 0 ||
+        item.price > 9999.99 ||
+        !isMenuSectionForCategory(item.category, item.subcategory) ||
+        item.allergens.some((allergen) => !Number.isInteger(allergen) || allergen < 1 || allergen > 14) ||
+        new Set(item.allergens).size !== item.allergens.length ||
+        (item.available_portions !== null &&
+          (!Number.isInteger(item.available_portions) || item.available_portions < 0)),
     );
     if (invalidItem) {
       setSaveError("Controlla nomi, prezzi e porzioni: alcuni valori non sono validi.");
@@ -119,7 +154,10 @@ export function Menu({ management = false }: { management?: boolean }) {
       allergens,
     }));
     // Le porzioni originali permettono al database di accorgersi se un ordine le ha cambiate nel frattempo.
-    const updated = draft.updated.map(({ row, original }) => ({ ...row, original_available_portions: original.available_portions }));
+    const updated = draft.updated.map(({ row, original }) => ({
+      ...row,
+      original_available_portions: original.available_portions,
+    }));
 
     const { error } = await supabase.rpc("bulk_upsert_menu_items", {
       p_created: created,
@@ -129,9 +167,11 @@ export function Menu({ management = false }: { management?: boolean }) {
 
     if (error) {
       console.error("[Menu] Errore salvataggio:", error.message);
-      setSaveError(error.message.includes("stock_changed_retry")
-        ? "Le scorte sono cambiate per un nuovo ordine. Ricarica la pagina e ripeti la modifica."
-        : "Salvataggio non riuscito. Riprova.");
+      setSaveError(
+        error.message.includes("stock_changed_retry")
+          ? "Le scorte sono cambiate per un nuovo ordine. Ricarica la pagina e ripeti la modifica."
+          : "Salvataggio non riuscito. Riprova.",
+      );
       setSaving(false);
       return;
     }
@@ -144,7 +184,9 @@ export function Menu({ management = false }: { management?: boolean }) {
     <section id="menu" className="mx-auto max-w-3xl px-4 py-10">
       <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione Menu e Scorte" : "Menu"}</h2>
       <p className="mb-4 text-sm text-[var(--text-secondary)]">
-        {management ? "Aggiorna prodotti, prezzi, disponibilità e allergeni." : "Cucina e Bar disponibili durante l’evento."}
+        {management
+          ? "Aggiorna prodotti, prezzi, disponibilità e allergeni."
+          : "Cucina e Bar disponibili durante l’evento."}
       </p>
 
       {!management && canManage && (
@@ -170,110 +212,163 @@ export function Menu({ management = false }: { management?: boolean }) {
               {category === "bevande" && <FreeWaterNotice />}
 
               {MENU_SECTIONS[category].map((section) => {
-                const sectionItems = items.filter((item) =>
-                  item.category === category && item.subcategory === section.key
+                const sectionItems = items.filter(
+                  (item) => item.category === category && item.subcategory === section.key,
                 );
 
                 return (
                   <div key={section.key} className="border-b border-[var(--surface-border)] py-4 last:border-0">
-                    <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">{section.label}</h4>
+                    <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+                      {section.label}
+                    </h4>
                     {sectionItems.length === 0 ? (
                       <p className="text-sm text-[var(--text-secondary)]">Nessuna proposta al momento.</p>
                     ) : (
                       <div className="space-y-3">
-                        {sectionItems.map((item) => canEdit ? (
-                          <div key={item.id} className="border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0">
-                            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center">
-                              <input
-                                required
-                                maxLength={200}
-                                value={item.name}
-                                onChange={(e) => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? { ...candidate, name: e.target.value } : candidate))}
-                                className="field min-w-0 w-full sm:flex-1"
-                              />
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                max="9999.99"
-                                aria-label={`Prezzo di ${item.name}`}
-                                value={Number.isNaN(item.price) ? "" : item.price}
-                                // Un campo svuotato resta vuoto (NaN) invece di diventare 0: il salvataggio lo segnala come prezzo non valido.
-                                onChange={(e) => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? { ...candidate, price: e.target.value === "" ? Number.NaN : Number(e.target.value) } : candidate))}
-                                className="field w-full min-w-0 text-right font-mono sm:w-20"
-                              />
-                              <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                placeholder="∞"
-                                aria-label={`Porzioni disponibili per ${item.name}`}
-                                value={item.available_portions ?? ""}
-                                onChange={(e) => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? {
-                                  ...candidate,
-                                  available_portions: e.target.value === "" ? null : Number(e.target.value),
-                                } : candidate))}
-                                className="field w-full min-w-0 text-right font-mono sm:w-24"
-                              />
-                              <button type="button" onClick={() => draft.removeRow(item.id)} className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto">
-                                Elimina
-                              </button>
+                        {sectionItems.map((item) =>
+                          canEdit ? (
+                            <div
+                              key={item.id}
+                              className="border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0"
+                            >
+                              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center">
+                                <input
+                                  required
+                                  maxLength={200}
+                                  value={item.name}
+                                  onChange={(e) =>
+                                    setItems((prev) =>
+                                      prev.map((candidate) =>
+                                        candidate.id === item.id ? { ...candidate, name: e.target.value } : candidate,
+                                      ),
+                                    )
+                                  }
+                                  className="field min-w-0 w-full sm:flex-1"
+                                />
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max="9999.99"
+                                  aria-label={`Prezzo di ${item.name}`}
+                                  value={Number.isNaN(item.price) ? "" : item.price}
+                                  // Un campo svuotato resta vuoto (NaN) invece di diventare 0: il salvataggio lo segnala come prezzo non valido.
+                                  onChange={(e) =>
+                                    setItems((prev) =>
+                                      prev.map((candidate) =>
+                                        candidate.id === item.id
+                                          ? {
+                                              ...candidate,
+                                              price: e.target.value === "" ? Number.NaN : Number(e.target.value),
+                                            }
+                                          : candidate,
+                                      ),
+                                    )
+                                  }
+                                  className="field w-full min-w-0 text-right font-mono sm:w-20"
+                                />
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  placeholder="∞"
+                                  aria-label={`Porzioni disponibili per ${item.name}`}
+                                  value={item.available_portions ?? ""}
+                                  onChange={(e) =>
+                                    setItems((prev) =>
+                                      prev.map((candidate) =>
+                                        candidate.id === item.id
+                                          ? {
+                                              ...candidate,
+                                              available_portions: e.target.value === "" ? null : Number(e.target.value),
+                                            }
+                                          : candidate,
+                                      ),
+                                    )
+                                  }
+                                  className="field w-full min-w-0 text-right font-mono sm:w-24"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => draft.removeRow(item.id)}
+                                  className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto"
+                                >
+                                  Elimina
+                                </button>
+                              </div>
+                              <label className="mt-2 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                Sezione
+                                <select
+                                  value={`${item.category}:${item.subcategory}`}
+                                  onChange={(event) => moveItem(item.id, event.target.value)}
+                                  className="field min-w-0 flex-1 text-xs sm:max-w-56"
+                                >
+                                  {CATEGORIES.map((destinationCategory) => (
+                                    <optgroup key={destinationCategory} label={CATEGORY_LABEL[destinationCategory]}>
+                                      {MENU_SECTIONS[destinationCategory].map((destinationSection) => (
+                                        <option
+                                          key={destinationSection.key}
+                                          value={`${destinationCategory}:${destinationSection.key}`}
+                                        >
+                                          {destinationSection.label}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  ))}
+                                </select>
+                              </label>
+                              <div className="mt-2 flex flex-wrap gap-1.5" aria-label={`Allergeni di ${item.name}`}>
+                                {ALLERGENS.map((allergen, index) => {
+                                  const number = index + 1;
+                                  const selected = item.allergens.includes(number);
+                                  return (
+                                    <button
+                                      key={allergen}
+                                      type="button"
+                                      title={`${number}. ${allergen}`}
+                                      aria-pressed={selected}
+                                      onClick={() =>
+                                        setItems((prev) =>
+                                          prev.map((candidate) =>
+                                            candidate.id === item.id
+                                              ? {
+                                                  ...candidate,
+                                                  allergens: selected
+                                                    ? candidate.allergens.filter((value) => value !== number)
+                                                    : [...candidate.allergens, number].sort((a, b) => a - b),
+                                                }
+                                              : candidate,
+                                          ),
+                                        )
+                                      }
+                                      className={`h-7 w-7 rounded-full border text-xs ${
+                                        selected
+                                          ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
+                                          : "border-[var(--surface-border)] text-[var(--text-secondary)]"
+                                      }`}
+                                    >
+                                      {number}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
-                            <label className="mt-2 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                              Sezione
-                              <select
-                                value={`${item.category}:${item.subcategory}`}
-                                onChange={(event) => moveItem(item.id, event.target.value)}
-                                className="field min-w-0 flex-1 text-xs sm:max-w-56"
-                              >
-                                {CATEGORIES.map((destinationCategory) => (
-                                  <optgroup key={destinationCategory} label={CATEGORY_LABEL[destinationCategory]}>
-                                    {MENU_SECTIONS[destinationCategory].map((destinationSection) => (
-                                      <option key={destinationSection.key} value={`${destinationCategory}:${destinationSection.key}`}>
-                                        {destinationSection.label}
-                                      </option>
-                                    ))}
-                                  </optgroup>
-                                ))}
-                              </select>
-                            </label>
-                            <div className="mt-2 flex flex-wrap gap-1.5" aria-label={`Allergeni di ${item.name}`}>
-                              {ALLERGENS.map((allergen, index) => {
-                                const number = index + 1;
-                                const selected = item.allergens.includes(number);
-                                return (
-                                  <button
-                                    key={allergen}
-                                    type="button"
-                                    title={`${number}. ${allergen}`}
-                                    aria-pressed={selected}
-                                    onClick={() => setItems((prev) => prev.map((candidate) => candidate.id === item.id ? {
-                                      ...candidate,
-                                      allergens: selected
-                                        ? candidate.allergens.filter((value) => value !== number)
-                                        : [...candidate.allergens, number].sort((a, b) => a - b),
-                                    } : candidate))}
-                                    className={`h-7 w-7 rounded-full border text-xs ${selected
-                                      ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
-                                      : "border-[var(--surface-border)] text-[var(--text-secondary)]"}`}
-                                  >
-                                    {number}
-                                  </button>
-                                );
-                              })}
+                          ) : (
+                            <div key={item.id} className="flex items-start justify-between gap-3">
+                              <span className="text-sm text-[var(--text-primary)]">
+                                {item.name}
+                                {item.allergens.length > 0 && (
+                                  <span className="ml-2 text-xs text-[var(--text-secondary)]">
+                                    Allergeni: {item.allergens.join(", ")}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">
+                                {priceFormatter.format(item.price)}
+                              </span>
                             </div>
-                          </div>
-                        ) : (
-                          <div key={item.id} className="flex items-start justify-between gap-3">
-                            <span className="text-sm text-[var(--text-primary)]">
-                              {item.name}
-                              {item.allergens.length > 0 && (
-                                <span className="ml-2 text-xs text-[var(--text-secondary)]">Allergeni: {item.allergens.join(", ")}</span>
-                              )}
-                            </span>
-                            <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">{priceFormatter.format(item.price)}</span>
-                          </div>
-                        ))}
+                          ),
+                        )}
                       </div>
                     )}
                     {canEdit && (
@@ -288,7 +383,6 @@ export function Menu({ management = false }: { management?: boolean }) {
                   </div>
                 );
               })}
-
             </div>
           </Card>
         ))

@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
 
 /** Avviso in pagina, opzionalmente chiudibile. `error` viene annunciato subito dagli screen reader. */
-export function Notice({ children, onDismiss, tone = "neutral", className = "" }: {
+export function Notice({
+  children,
+  onDismiss,
+  tone = "neutral",
+  className = "",
+}: {
   children: ReactNode;
   onDismiss?: () => void;
   tone?: "neutral" | "error";
@@ -13,7 +18,11 @@ export function Notice({ children, onDismiss, tone = "neutral", className = "" }
       className={`flex items-start justify-between gap-3 rounded-[var(--radius-sm)] border p-3 text-sm ${tone === "error" ? "border-[rgba(229,88,75,0.5)]" : "border-[var(--surface-border)]"} ${className}`}
     >
       <span>{children}</span>
-      {onDismiss && <button type="button" onClick={onDismiss} aria-label="Chiudi avviso">×</button>}
+      {onDismiss && (
+        <button type="button" onClick={onDismiss} aria-label="Chiudi avviso">
+          ×
+        </button>
+      )}
     </div>
   );
 }

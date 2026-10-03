@@ -1,11 +1,5 @@
 import { supabase } from "../../lib/supabaseClient";
-import {
-  BRACKET_SIZES,
-  defaultTeams,
-  type BracketSize,
-  type MatchesMap,
-  type OverridesMap,
-} from "./bracketUtils";
+import { BRACKET_SIZES, defaultTeams, type BracketSize, type MatchesMap, type OverridesMap } from "./bracketUtils";
 
 export type TournamentSnapshot = {
   size: BracketSize;
@@ -46,19 +40,27 @@ export function parseTournamentSnapshot(value: unknown): TournamentSnapshot | nu
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<TournamentSnapshot>;
   if (!BRACKET_SIZES.includes(candidate.size as BracketSize)) return null;
-  if (!Array.isArray(candidate.teams) || candidate.teams.length !== candidate.size
-    || candidate.teams.some((team) => typeof team !== "string" || team.length > STORED_TEAM_NAME_MAX_LENGTH)) return null;
+  if (
+    !Array.isArray(candidate.teams) ||
+    candidate.teams.length !== candidate.size ||
+    candidate.teams.some((team) => typeof team !== "string" || team.length > STORED_TEAM_NAME_MAX_LENGTH)
+  )
+    return null;
   if (!candidate.matches || typeof candidate.matches !== "object" || Array.isArray(candidate.matches)) return null;
-  if (!candidate.overrides || typeof candidate.overrides !== "object" || Array.isArray(candidate.overrides)) return null;
+  if (!candidate.overrides || typeof candidate.overrides !== "object" || Array.isArray(candidate.overrides))
+    return null;
 
   const matchesAreValid = Object.values(candidate.matches).every((match) => {
     if (!match || typeof match !== "object") return false;
     const state = match as MatchesMap[string];
-    return (state.winner === null || state.winner === "A" || state.winner === "B")
-      && validScore(state.scoreA)
-      && validScore(state.scoreB)
-      && (state.completedAt === undefined || state.completedAt === null
-        || (typeof state.completedAt === "string" && !Number.isNaN(Date.parse(state.completedAt))));
+    return (
+      (state.winner === null || state.winner === "A" || state.winner === "B") &&
+      validScore(state.scoreA) &&
+      validScore(state.scoreB) &&
+      (state.completedAt === undefined ||
+        state.completedAt === null ||
+        (typeof state.completedAt === "string" && !Number.isNaN(Date.parse(state.completedAt))))
+    );
   });
   if (!matchesAreValid) return null;
 
@@ -79,11 +81,12 @@ export function parseTournamentArchive(value: unknown): TournamentArchive | null
     target_size?: unknown;
     created_at?: unknown;
   };
-  const targetSize = candidate.target_size === null
-    ? null
-    : BRACKET_SIZES.includes(candidate.target_size as BracketSize)
-      ? candidate.target_size as BracketSize
-      : undefined;
+  const targetSize =
+    candidate.target_size === null
+      ? null
+      : BRACKET_SIZES.includes(candidate.target_size as BracketSize)
+        ? (candidate.target_size as BracketSize)
+        : undefined;
   if (typeof candidate.id !== "string" || candidate.id.length === 0) return null;
   if (candidate.reason !== "size_change" && candidate.reason !== "restore") return null;
   if (targetSize === undefined) return null;
@@ -102,7 +105,11 @@ const revisionOf = (row: { revision?: unknown } | null) => (typeof row?.revision
 
 /** Ultimo tabellone pubblicato; `snapshot` è null se la riga manca o non è valida. */
 export async function fetchPublishedTournament() {
-  const { data, error } = await supabase.from("tournament_state").select(PUBLISHED_COLUMNS).eq("id", "main").maybeSingle();
+  const { data, error } = await supabase
+    .from("tournament_state")
+    .select(PUBLISHED_COLUMNS)
+    .eq("id", "main")
+    .maybeSingle();
   return { error, snapshot: parseTournamentSnapshot(data), revision: revisionOf(data) };
 }
 

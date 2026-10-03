@@ -8,15 +8,14 @@ function getVapidPublicKey() {
 }
 
 export function isPushSupported() {
-  return typeof window !== "undefined"
-    && "Notification" in window
-    && "serviceWorker" in navigator
-    && "PushManager" in window;
+  return (
+    typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator && "PushManager" in window
+  );
 }
 
 export function urlBase64ToUint8Array(value: string) {
   if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("invalid_vapid_public_key");
-  const padding = "=".repeat((4 - value.length % 4) % 4);
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
   const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
   return Uint8Array.from(raw, (character) => character.charCodeAt(0));
@@ -39,12 +38,17 @@ async function saveSubscription(subscription: PushSubscription, turnstileToken: 
   const auth = serialized.keys?.auth;
   if (!serialized.endpoint || !p256dh || !auth) throw new Error("invalid_push_subscription");
 
-  const { error } = await supabase.functions.invoke("register-push", { body: { turnstileToken, subscription: {
-    p_endpoint: serialized.endpoint,
-    p_p256dh: p256dh,
-    p_auth: auth,
-    p_source: "tournament",
-  } } });
+  const { error } = await supabase.functions.invoke("register-push", {
+    body: {
+      turnstileToken,
+      subscription: {
+        p_endpoint: serialized.endpoint,
+        p_p256dh: p256dh,
+        p_auth: auth,
+        p_source: "tournament",
+      },
+    },
+  });
   if (error) throw new Error(error.message);
 }
 
@@ -53,7 +57,8 @@ export async function syncExistingPushSubscription() {
   if (!subscription) return false;
   const serialized = subscription.toJSON();
   const { data, error } = await supabase.rpc("has_push_subscription", {
-    p_endpoint: serialized.endpoint, p_auth: serialized.keys?.auth,
+    p_endpoint: serialized.endpoint,
+    p_auth: serialized.keys?.auth,
   });
   if (error) throw new Error(error.message);
   return data === true;

@@ -1,5 +1,7 @@
 // Retired runner: preserving historical scenarios for migration, not a valid current benchmark.
-throw new Error("Runner obsoleto: usa RPC ritirate. Eseguire scripts/security/verify-*.mjs per le prove locali; collaudo concorrente ancora da aggiornare.");
+throw new Error(
+  "Runner obsoleto: usa RPC ritirate. Eseguire scripts/security/verify-*.mjs per le prove locali; collaudo concorrente ancora da aggiornare.",
+);
 
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -35,11 +37,12 @@ const readAttempts = integerEnv("LOADTEST_READ_ATTEMPTS", 200);
 const stockAttempts = integerEnv("LOADTEST_STOCK_ATTEMPTS", 50);
 const raceOrders = integerEnv("LOADTEST_CLOSE_RACE_ORDERS", 30);
 const raceRounds = integerEnv("LOADTEST_CLOSE_RACE_ROUNDS", 10);
-const selectedScenarios = new Set((process.env.LOADTEST_SCENARIOS
-  ?? "read,idempotency,stock,capacity,identities,close-race")
-  .split(",")
-  .map((value) => value.trim())
-  .filter(Boolean));
+const selectedScenarios = new Set(
+  (process.env.LOADTEST_SCENARIOS ?? "read,idempotency,stock,capacity,identities,close-race")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
 const knownScenarios = new Set(["read", "idempotency", "stock", "capacity", "identities", "close-race"]);
 
 for (const scenario of selectedScenarios) {
@@ -117,25 +120,40 @@ async function clearOrders() {
 
 async function openEvent(limit = capacity) {
   const now = Date.now();
-  await requireQuery(serviceClient.from("order_events").update({
-    name: `[LOADTEST] ${runId}`,
-    opens_at: new Date(now - 60_000).toISOString(),
-    closes_at: new Date(now + 3_600_000).toISOString(),
-    manual_closed: false,
-    permanently_closed_at: null,
-    final_report: null,
-    max_pending_orders: limit,
-  }).eq("id", eventId), "apertura evento locale");
+  await requireQuery(
+    serviceClient
+      .from("order_events")
+      .update({
+        name: `[LOADTEST] ${runId}`,
+        opens_at: new Date(now - 60_000).toISOString(),
+        closes_at: new Date(now + 3_600_000).toISOString(),
+        manual_closed: false,
+        permanently_closed_at: null,
+        final_report: null,
+        max_pending_orders: limit,
+      })
+      .eq("id", eventId),
+    "apertura evento locale",
+  );
 }
 
 async function setLimitedStock(value) {
-  await requireQuery(serviceClient.from("menu_items").update({
-    available_portions: value,
-    stock_capacity: value,
-  }).eq("id", fixtureIds.limited), "reset scorta fixture");
+  await requireQuery(
+    serviceClient
+      .from("menu_items")
+      .update({
+        available_portions: value,
+        stock_capacity: value,
+      })
+      .eq("id", fixtureIds.limited),
+    "reset scorta fixture",
+  );
 }
 
-function publicOrder(itemId, { requestId = crypto.randomUUID(), qrToken = crypto.randomUUID(), alias = "Load test" } = {}) {
+function publicOrder(
+  itemId,
+  { requestId = crypto.randomUUID(), qrToken = crypto.randomUUID(), alias = "Load test" } = {},
+) {
   return timedRpc(publicClient, "submit_public_order", {
     p_alias: alias,
     p_notes: "",
@@ -162,26 +180,29 @@ async function setup() {
   if (countError) throw new Error(`conteggio ordini iniziali: ${countError.message}`);
   assert.equal(count, 0, "Il database locale deve partire senza ordini per l'evento corrente.");
 
-  await requireQuery(serviceClient.from("menu_items").insert([
-    {
-      id: fixtureIds.unlimited,
-      category: "cibo",
-      name: `[LOADTEST] illimitato ${runId}`,
-      price: 1,
-      available_portions: null,
-      stock_capacity: null,
-      allergens: [],
-    },
-    {
-      id: fixtureIds.limited,
-      category: "cibo",
-      name: `[LOADTEST] ultima porzione ${runId}`,
-      price: 1,
-      available_portions: 1,
-      stock_capacity: 1,
-      allergens: [],
-    },
-  ]), "creazione fixture menu");
+  await requireQuery(
+    serviceClient.from("menu_items").insert([
+      {
+        id: fixtureIds.unlimited,
+        category: "cibo",
+        name: `[LOADTEST] illimitato ${runId}`,
+        price: 1,
+        available_portions: null,
+        stock_capacity: null,
+        allergens: [],
+      },
+      {
+        id: fixtureIds.limited,
+        category: "cibo",
+        name: `[LOADTEST] ultima porzione ${runId}`,
+        price: 1,
+        available_portions: 1,
+        stock_capacity: 1,
+        allergens: [],
+      },
+    ]),
+    "creazione fixture menu",
+  );
   await openEvent();
 
   const email = `lag-loadtest-${runId}@example.invalid`;
@@ -193,7 +214,10 @@ async function setup() {
   });
   if (createError || !created.user) throw new Error(`creazione utente locale: ${messageOf(createError)}`);
   adminUserId = created.user.id;
-  await requireQuery(serviceClient.from("profiles").update({ role: "admin" }).eq("id", adminUserId), "assegnazione ruolo admin locale");
+  await requireQuery(
+    serviceClient.from("profiles").update({ role: "admin" }).eq("id", adminUserId),
+    "assegnazione ruolo admin locale",
+  );
 
   const adminClient = createClient(url, anonKey, clientOptions);
   const { error: signInError } = await adminClient.auth.signInWithPassword({ email, password });
@@ -202,14 +226,17 @@ async function setup() {
 }
 
 async function readBurst() {
-  const results = await Promise.all(Array.from({ length: readAttempts }, () => timedRpc(publicClient, "get_ordering_status")));
+  const results = await Promise.all(
+    Array.from({ length: readAttempts }, () => timedRpc(publicClient, "get_ordering_status")),
+  );
   const errors = results.filter((result) => result.error);
   if (errors.length === 0) pass(`${readAttempts} letture concorrenti dello stato`, timingSummary(results));
-  else finding("Errori nel burst di lettura", {
-    errors: errors.length,
-    first: errorDetails(errors[0].error),
-    ...timingSummary(results),
-  });
+  else
+    finding("Errori nel burst di lettura", {
+      errors: errors.length,
+      first: errorDetails(errors[0].error),
+      ...timingSummary(results),
+    });
 }
 
 async function idempotencyScenario(adminClient) {
@@ -218,11 +245,19 @@ async function idempotencyScenario(adminClient) {
   await setLimitedStock(10);
   const requestId = crypto.randomUUID();
   const qrToken = crypto.randomUUID();
-  const results = await Promise.all(Array.from({ length: 25 }, () => publicOrder(fixtureIds.limited, { requestId, qrToken })));
+  const results = await Promise.all(
+    Array.from({ length: 25 }, () => publicOrder(fixtureIds.limited, { requestId, qrToken })),
+  );
   const successes = results.filter((result) => !result.error);
   const ids = new Set(successes.map((result) => result.data?.order_id));
-  const rows = await requireQuery(serviceClient.from("orders").select("id").eq("event_id", eventId), "ordini idempotenza");
-  const stockRows = await requireQuery(serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited), "scorta idempotenza");
+  const rows = await requireQuery(
+    serviceClient.from("orders").select("id").eq("event_id", eventId),
+    "ordini idempotenza",
+  );
+  const stockRows = await requireQuery(
+    serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
+    "scorta idempotenza",
+  );
   if (successes.length === 25 && ids.size === 1 && rows.length === 1 && stockRows[0]?.available_portions === 9) {
     pass("25 retry simultanei producono un solo ordine", timingSummary(results));
   } else {
@@ -235,7 +270,8 @@ async function idempotencyScenario(adminClient) {
   }
 
   const conflict = await publicOrder(fixtureIds.limited, { requestId, qrToken: crypto.randomUUID() });
-  if (messageOf(conflict.error).includes("request_id_conflict")) pass("Request ID riutilizzato con QR diverso viene respinto");
+  if (messageOf(conflict.error).includes("request_id_conflict"))
+    pass("Request ID riutilizzato con QR diverso viene respinto");
   else finding("Request ID/QR conflict non respinto", { error: messageOf(conflict.error) });
 
   const orderId = successes[0]?.data?.order_id;
@@ -255,22 +291,27 @@ async function idempotencyScenario(adminClient) {
     ? { error: delivery.error }
     : await timedRpc(publicClient, "get_public_order_statuses", { p_qr_tokens: [qrToken] });
   const lateRetry = await publicOrder(fixtureIds.limited, { requestId, qrToken });
-  const finalRows = await requireQuery(serviceClient.from("orders").select("id,status").eq("event_id", eventId), "retry tardivo");
-  const finalStock = (await requireQuery(
-    serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
-    "scorta retry tardivo",
-  ))[0]?.available_portions;
+  const finalRows = await requireQuery(
+    serviceClient.from("orders").select("id,status").eq("event_id", eventId),
+    "retry tardivo",
+  );
+  const finalStock = (
+    await requireQuery(
+      serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
+      "scorta retry tardivo",
+    )
+  )[0]?.available_portions;
   if (
-    !claim.error
-    && !payment.error
-    && !delivery.error
-    && pendingStatuses.data?.[0]?.status === "in_attesa_pagamento"
-    && paidStatus.data?.[0]?.status === "pagato"
-    && deliveredStatus.data?.[0]?.status === "consegnato"
-    && messageOf(lateRetry.error).includes("request_already_processed")
-    && finalRows.length === 1
-    && finalRows[0]?.status === "consegnato"
-    && finalStock === 9
+    !claim.error &&
+    !payment.error &&
+    !delivery.error &&
+    pendingStatuses.data?.[0]?.status === "in_attesa_pagamento" &&
+    paidStatus.data?.[0]?.status === "pagato" &&
+    deliveredStatus.data?.[0]?.status === "consegnato" &&
+    messageOf(lateRetry.error).includes("request_already_processed") &&
+    finalRows.length === 1 &&
+    finalRows[0]?.status === "consegnato" &&
+    finalStock === 9
   ) {
     pass("Un retry tardivo dopo pagamento e consegna non duplica l'ordine");
   } else {
@@ -295,8 +336,15 @@ async function lastPortionScenario() {
   const results = await Promise.all(Array.from({ length: stockAttempts }, () => publicOrder(fixtureIds.limited)));
   const successes = results.filter((result) => !result.error);
   const expectedFailures = results.filter((result) => messageOf(result.error).includes("stock_unavailable"));
-  const stockRows = await requireQuery(serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited), "scorta finale");
-  if (successes.length === 1 && expectedFailures.length === stockAttempts - 1 && stockRows[0]?.available_portions === 0) {
+  const stockRows = await requireQuery(
+    serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
+    "scorta finale",
+  );
+  if (
+    successes.length === 1 &&
+    expectedFailures.length === stockAttempts - 1 &&
+    stockRows[0]?.available_portions === 0
+  ) {
     pass(`${stockAttempts} concorrenti sull'ultima porzione`, timingSummary(results));
   } else {
     finding("Protezione ultima porzione violata", {
@@ -313,9 +361,15 @@ async function capacityScenario() {
   const results = await Promise.all(Array.from({ length: capAttempts }, () => publicOrder(fixtureIds.unlimited)));
   const successes = results.filter((result) => !result.error);
   const capacityErrors = results.filter((result) => messageOf(result.error).includes("capacity_reached"));
-  const unexpectedErrors = results.filter((result) => result.error && !messageOf(result.error).includes("capacity_reached"));
+  const unexpectedErrors = results.filter(
+    (result) => result.error && !messageOf(result.error).includes("capacity_reached"),
+  );
   const rows = await requireQuery(
-    serviceClient.from("orders").select("id,display_number,status").eq("event_id", eventId).eq("status", "in_attesa_pagamento"),
+    serviceClient
+      .from("orders")
+      .select("id,display_number,status")
+      .eq("event_id", eventId)
+      .eq("status", "in_attesa_pagamento"),
     "ordini al limite",
   );
   const uniqueIds = new Set(rows.map((row) => row.id));
@@ -323,14 +377,14 @@ async function capacityScenario() {
   const status = await timedRpc(publicClient, "get_ordering_status");
   const catalog = await timedRpc(publicClient, "get_ordering_catalog");
   if (
-    successes.length === capacity
-    && rows.length === capacity
-    && uniqueIds.size === capacity
-    && uniqueNumbers.size === capacity
-    && status.data?.accepting === false
-    && status.data?.reason === "capacity_reached"
-    && Array.isArray(catalog.data?.items)
-    && catalog.data.items.length === 0
+    successes.length === capacity &&
+    rows.length === capacity &&
+    uniqueIds.size === capacity &&
+    uniqueNumbers.size === capacity &&
+    status.data?.accepting === false &&
+    status.data?.reason === "capacity_reached" &&
+    Array.isArray(catalog.data?.items) &&
+    catalog.data.items.length === 0
   ) {
     pass(`Il burst da ${capAttempts} invii non supera il limite ${capacity}`, {
       accepted: successes.length,
@@ -405,21 +459,26 @@ async function malformedIdentityScenarios(adminClient) {
       p_claim_token: null,
     }),
   ]);
-  const protectedRow = (await requireQuery(
-    serviceClient.from("orders").select("status,claimed_token_hash,claim_expires_at").eq("id", protectedOrder.data.order_id),
-    "stato dopo token NULL",
-  ))[0];
+  const protectedRow = (
+    await requireQuery(
+      serviceClient
+        .from("orders")
+        .select("status,claimed_token_hash,claim_expires_at")
+        .eq("id", protectedOrder.data.order_id),
+      "stato dopo token NULL",
+    )
+  )[0];
   const nullErrors = nullTokenCalls.filter((result) => messageOf(result.error).includes("invalid_claim_token"));
   const validPay = await timedRpc(adminClient, "pay_claimed_order", {
     p_order_id: protectedOrder.data.order_id,
     p_claim_token: validToken,
   });
   if (
-    nullErrors.length === nullTokenCalls.length
-    && protectedRow?.status === "in_attesa_pagamento"
-    && protectedRow?.claimed_token_hash
-    && protectedRow?.claim_expires_at
-    && !validPay.error
+    nullErrors.length === nullTokenCalls.length &&
+    protectedRow?.status === "in_attesa_pagamento" &&
+    protectedRow?.claimed_token_hash &&
+    protectedRow?.claim_expires_at &&
+    !validPay.error
   ) {
     pass("Token claim NULL respinto da tutte le RPC senza alterare il claim valido");
   } else {
@@ -458,13 +517,17 @@ async function malformedIdentityScenarios(adminClient) {
     const order = await publicOrder(fixtureIds.unlimited);
     if (order.error) throw new Error(`setup ${operation.rpc} non claimato: ${order.error.message}`);
     const result = await timedRpc(adminClient, operation.rpc, operation.args(order.data.order_id, crypto.randomUUID()));
-    const row = (await requireQuery(
-      serviceClient.from("orders").select("status").eq("id", order.data.order_id),
-      `stato dopo ${operation.rpc} non claimato`,
-    ))[0];
+    const row = (
+      await requireQuery(
+        serviceClient.from("orders").select("status").eq("id", order.data.order_id),
+        `stato dopo ${operation.rpc} non claimato`,
+      )
+    )[0];
     unclaimedResults.push({ rpc: operation.rpc, error: messageOf(result.error), status: row?.status });
   }
-  if (unclaimedResults.every((result) => result.error.includes("claim_lost") && result.status === "in_attesa_pagamento")) {
+  if (
+    unclaimedResults.every((result) => result.error.includes("claim_lost") && result.status === "in_attesa_pagamento")
+  ) {
     pass("Ordini mai claimati resistono a update, annullamento e pagamento con token casuali");
   } else {
     finding("Un ordine non claimato accetta una mutazione", { results: unclaimedResults });
@@ -480,18 +543,23 @@ async function malformedIdentityScenarios(adminClient) {
   ]);
   const duplicateQrSuccesses = duplicateQr.filter((result) => !result.error);
   const duplicateQrFailures = duplicateQr.filter((result) => result.error);
-  const qrRows = await requireQuery(serviceClient.from("orders").select("id").eq("event_id", eventId), "ordini QR duplicato");
-  const qrStock = (await requireQuery(
-    serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
-    "scorta QR duplicato",
-  ))[0]?.available_portions;
+  const qrRows = await requireQuery(
+    serviceClient.from("orders").select("id").eq("event_id", eventId),
+    "ordini QR duplicato",
+  );
+  const qrStock = (
+    await requireQuery(
+      serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
+      "scorta QR duplicato",
+    )
+  )[0]?.available_portions;
   if (
-    duplicateQrSuccesses.length === 1
-    && duplicateQrFailures.length === 1
-    && duplicateQrFailures[0].error?.code === "23505"
-    && qrRows.length === 1
-    && qrRows[0]?.id === duplicateQrSuccesses[0].data?.order_id
-    && qrStock === 1
+    duplicateQrSuccesses.length === 1 &&
+    duplicateQrFailures.length === 1 &&
+    duplicateQrFailures[0].error?.code === "23505" &&
+    qrRows.length === 1 &&
+    qrRows[0]?.id === duplicateQrSuccesses[0].data?.order_id &&
+    qrStock === 1
   ) {
     pass("QR duplicato respinto senza consumare due volte la scorta");
   } else {
@@ -511,12 +579,19 @@ async function malformedIdentityScenarios(adminClient) {
     publicOrder(fixtureIds.limited, { requestId: null }),
   ]);
   const nullRequestSuccesses = nullRequest.filter((result) => !result.error);
-  const nullRequestErrors = nullRequest.filter((result) => messageOf(result.error).includes("invalid_client_request_id"));
-  const nullRows = await requireQuery(serviceClient.from("orders").select("id").eq("event_id", eventId), "ordini request ID NULL");
-  const nullStock = (await requireQuery(
-    serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
-    "scorta request ID NULL",
-  ))[0]?.available_portions;
+  const nullRequestErrors = nullRequest.filter((result) =>
+    messageOf(result.error).includes("invalid_client_request_id"),
+  );
+  const nullRows = await requireQuery(
+    serviceClient.from("orders").select("id").eq("event_id", eventId),
+    "ordini request ID NULL",
+  );
+  const nullStock = (
+    await requireQuery(
+      serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
+      "scorta request ID NULL",
+    )
+  )[0]?.available_portions;
   if (nullRequestSuccesses.length === 0 && nullRequestErrors.length === 2 && nullRows.length === 0 && nullStock === 2) {
     pass("Client request ID NULL respinto senza creare ordini o consumare scorte");
   } else {
@@ -540,12 +615,18 @@ async function closeRaceScenario(adminClient) {
     const submitted = await Promise.all(Array.from({ length: raceOrders }, () => publicOrder(fixtureIds.limited)));
     const orders = submitted.filter((result) => !result.error).map((result) => result.data);
     assert.equal(orders.length, raceOrders, `Setup race chiusura incompleto al round ${round + 1}.`);
-    const claims = await Promise.all(orders.map(async (order) => {
-      const token = crypto.randomUUID();
-      const result = await timedRpc(adminClient, "claim_order", { p_order_id: order.order_id, p_claim_token: token });
-      return { order, token, result };
-    }));
-    assert.equal(claims.filter(({ result }) => !result.error).length, raceOrders, "Non tutti gli ordini sono stati presi in carico.");
+    const claims = await Promise.all(
+      orders.map(async (order) => {
+        const token = crypto.randomUUID();
+        const result = await timedRpc(adminClient, "claim_order", { p_order_id: order.order_id, p_claim_token: token });
+        return { order, token, result };
+      }),
+    );
+    assert.equal(
+      claims.filter(({ result }) => !result.error).length,
+      raceOrders,
+      "Non tutti gli ordini sono stati presi in carico.",
+    );
 
     const seedClaim = claims[0];
     const seedPayment = await timedRpc(adminClient, "pay_claimed_order", {
@@ -554,13 +635,14 @@ async function closeRaceScenario(adminClient) {
     });
     if (seedPayment.error) throw new Error(`Pagamento seed race: ${seedPayment.error.message}`);
     const raceClaims = claims.slice(1);
-    const startPayments = () => raceClaims.map(({ order, token }) => ({
-      orderId: order.order_id,
-      promise: timedRpc(adminClient, "pay_claimed_order", {
-        p_order_id: order.order_id,
-        p_claim_token: token,
-      }),
-    }));
+    const startPayments = () =>
+      raceClaims.map(({ order, token }) => ({
+        orderId: order.order_id,
+        promise: timedRpc(adminClient, "pay_claimed_order", {
+          p_order_id: order.order_id,
+          p_claim_token: token,
+        }),
+      }));
 
     let closePromise;
     let pendingPayments;
@@ -578,7 +660,9 @@ async function closeRaceScenario(adminClient) {
       Promise.all(pendingPayments.map(async ({ orderId, promise }) => ({ orderId, result: await promise }))),
     ]);
     const rawPayResults = payResults.map(({ result }) => result);
-    deadlocks += [closeResult, ...rawPayResults].filter((result) => /deadlock|40P01/i.test(messageOf(result.error))).length;
+    deadlocks += [closeResult, ...rawPayResults].filter((result) =>
+      /deadlock|40P01/i.test(messageOf(result.error)),
+    ).length;
 
     const finalOrders = await requireQuery(
       serviceClient.from("orders").select("id,status").eq("event_id", eventId),
@@ -589,11 +673,19 @@ async function closeRaceScenario(adminClient) {
     const cancelled = finalOrders.filter((order) => order.status === "annullato").length;
     const successfulRacePayments = payResults.filter(({ result }) => !result.error);
     const paySuccesses = 1 + successfulRacePayments.length;
-    const expectedPayErrors = payResults.filter(({ result }) => messageOf(result.error).includes("event_closed")).length;
+    const expectedPayErrors = payResults.filter(({ result }) =>
+      messageOf(result.error).includes("event_closed"),
+    ).length;
     const unexpectedPayErrors = payResults.length - successfulRacePayments.length - expectedPayErrors;
-    const resultMappingValid = finalById.get(seedClaim.order.order_id) === "consegnato"
-      && payResults.every(({ orderId, result }) => finalById.get(orderId) === (!result.error ? "consegnato" : "annullato"));
-    const stockRows = await requireQuery(serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited), "scorta dopo race chiusura");
+    const resultMappingValid =
+      finalById.get(seedClaim.order.order_id) === "consegnato" &&
+      payResults.every(
+        ({ orderId, result }) => finalById.get(orderId) === (!result.error ? "consegnato" : "annullato"),
+      );
+    const stockRows = await requireQuery(
+      serviceClient.from("menu_items").select("available_portions").eq("id", fixtureIds.limited),
+      "scorta dopo race chiusura",
+    );
     const actualStock = stockRows[0]?.available_portions;
     const expectedStock = raceOrders - paySuccesses;
     const reportPaid = Number(closeResult.data?.summary?.orders_paid ?? 0);
@@ -607,19 +699,20 @@ async function closeRaceScenario(adminClient) {
       serviceClient.from("order_events").select("permanently_closed_at,final_report").eq("id", eventId),
       "evento dopo race chiusura",
     );
-    const coherent = !closeResult.error
-      && eventRows[0]?.permanently_closed_at
-      && eventRows[0]?.final_report
-      && delivered === paySuccesses
-      && cancelled === raceOrders - paySuccesses
-      && resultMappingValid
-      && actualStock === expectedStock
-      && reportTotal === raceOrders
-      && reportPaid === paySuccesses
-      && reportAbandoned === raceOrders - paySuccesses
-      && reportRevenue === paySuccesses
-      && reportProductQuantity === paySuccesses
-      && unexpectedPayErrors === 0;
+    const coherent =
+      !closeResult.error &&
+      eventRows[0]?.permanently_closed_at &&
+      eventRows[0]?.final_report &&
+      delivered === paySuccesses &&
+      cancelled === raceOrders - paySuccesses &&
+      resultMappingValid &&
+      actualStock === expectedStock &&
+      reportTotal === raceOrders &&
+      reportPaid === paySuccesses &&
+      reportAbandoned === raceOrders - paySuccesses &&
+      reportRevenue === paySuccesses &&
+      reportProductQuantity === paySuccesses &&
+      unexpectedPayErrors === 0;
     if (!coherent) {
       inconsistentRounds += 1;
       if (samples.length < 3) {
@@ -664,15 +757,18 @@ async function cleanup() {
   }
   await serviceClient.from("menu_items").delete().in("id", Object.values(fixtureIds));
   if (savedEvent) {
-    await serviceClient.from("order_events").update({
-      name: savedEvent.name,
-      opens_at: savedEvent.opens_at,
-      closes_at: savedEvent.closes_at,
-      manual_closed: savedEvent.manual_closed,
-      permanently_closed_at: savedEvent.permanently_closed_at,
-      max_pending_orders: savedEvent.max_pending_orders,
-      final_report: savedEvent.final_report,
-    }).eq("id", savedEvent.id);
+    await serviceClient
+      .from("order_events")
+      .update({
+        name: savedEvent.name,
+        opens_at: savedEvent.opens_at,
+        closes_at: savedEvent.closes_at,
+        manual_closed: savedEvent.manual_closed,
+        permanently_closed_at: savedEvent.permanently_closed_at,
+        max_pending_orders: savedEvent.max_pending_orders,
+        final_report: savedEvent.final_report,
+      })
+      .eq("id", savedEvent.id);
   }
   if (adminUserId) await serviceClient.auth.admin.deleteUser(adminUserId);
 }

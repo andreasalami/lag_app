@@ -19,14 +19,30 @@ type JournalStorage = Pick<Storage, "getItem" | "setItem" | "removeItem" | "key"
 function valid(value: unknown): value is PendingOrderRequest {
   if (!value || typeof value !== "object") return false;
   const p = value as Partial<PendingOrderRequest>;
-  return typeof p.requestId === "string" && UUID_PATTERN.test(p.requestId)
-    && typeof p.qrToken === "string" && UUID_PATTERN.test(p.qrToken)
-    && typeof p.eventId === "string" && UUID_PATTERN.test(p.eventId)
-    && typeof p.alias === "string" && typeof p.notes === "string" && typeof p.createdAt === "string"
-    && (p.preparationMode === undefined || p.preparationMode === "immediate" || p.preparationMode === "deferred")
-    && Array.isArray(p.items) && p.items.length > 0 && p.items.length <= 100
-    && p.items.every((line) => line && typeof line.id === "string" && UUID_PATTERN.test(line.id)
-      && typeof line.name === "string" && Number.isSafeInteger(line.qty) && line.qty > 0);
+  return (
+    typeof p.requestId === "string" &&
+    UUID_PATTERN.test(p.requestId) &&
+    typeof p.qrToken === "string" &&
+    UUID_PATTERN.test(p.qrToken) &&
+    typeof p.eventId === "string" &&
+    UUID_PATTERN.test(p.eventId) &&
+    typeof p.alias === "string" &&
+    typeof p.notes === "string" &&
+    typeof p.createdAt === "string" &&
+    (p.preparationMode === undefined || p.preparationMode === "immediate" || p.preparationMode === "deferred") &&
+    Array.isArray(p.items) &&
+    p.items.length > 0 &&
+    p.items.length <= 100 &&
+    p.items.every(
+      (line) =>
+        line &&
+        typeof line.id === "string" &&
+        UUID_PATTERN.test(line.id) &&
+        typeof line.name === "string" &&
+        Number.isSafeInteger(line.qty) &&
+        line.qty > 0,
+    )
+  );
 }
 
 export function readPendingOrder(storage?: JournalStorage): PendingOrderRequest | null {

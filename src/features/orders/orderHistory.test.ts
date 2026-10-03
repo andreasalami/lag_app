@@ -28,8 +28,12 @@ function memoryStorage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial));
   return {
     getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => { values.set(key, value); },
-    removeItem: (key: string) => { values.delete(key); },
+    setItem: (key: string, value: string) => {
+      values.set(key, value);
+    },
+    removeItem: (key: string) => {
+      values.delete(key);
+    },
   };
 }
 
@@ -50,15 +54,14 @@ describe("orderHistory", () => {
     const first = order("order-1");
     const second = order("order-2");
 
-    expect(addOrderToHistory([first], second).map((item) => item.order_id))
-      .toEqual(["order-2", "order-1"]);
-    expect(addOrderToHistory([first], { ...first, status: "pagato" }))
-      .toEqual([{ ...first, status: "pagato" }]);
+    expect(addOrderToHistory([first], second).map((item) => item.order_id)).toEqual(["order-2", "order-1"]);
+    expect(addOrderToHistory([first], { ...first, status: "pagato" })).toEqual([{ ...first, status: "pagato" }]);
   });
 
   it("conserva soltanto gli ordini dell'evento corrente", () => {
-    expect(ordersForEvent([order("order-1"), order("order-2", "event-2")], "event-2"))
-      .toEqual([order("order-2", "event-2")]);
+    expect(ordersForEvent([order("order-1"), order("order-2", "event-2")], "event-2")).toEqual([
+      order("order-2", "event-2"),
+    ]);
   });
 
   it("salva lo storico e rimuove la chiave precedente", () => {

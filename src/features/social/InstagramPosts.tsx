@@ -53,9 +53,12 @@ export function InstagramPosts() {
   const dragging = useRef(false);
   const animationTimer = useRef<number | null>(null);
 
-  useEffect(() => () => {
-    if (animationTimer.current !== null) window.clearTimeout(animationTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (animationTimer.current !== null) window.clearTimeout(animationTimer.current);
+    },
+    [],
+  );
 
   const total = CURATED_POSTS.length;
 

@@ -18,8 +18,8 @@ function getPermissionState(): PermissionState {
 }
 
 function isStandaloneWebApp() {
-  const iosStandalone = "standalone" in navigator
-    && (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const iosStandalone =
+    "standalone" in navigator && (navigator as Navigator & { standalone?: boolean }).standalone === true;
   return window.matchMedia("(display-mode: standalone)").matches || iosStandalone;
 }
 
@@ -108,7 +108,7 @@ export function NotificationPermission() {
     } finally {
       setRequesting(false);
       setChallengeToken("");
-      setChallengeAttempt(value => value + 1);
+      setChallengeAttempt((value) => value + 1);
     }
   }
 
@@ -129,16 +129,18 @@ export function NotificationPermission() {
     }
   }
 
-  const buttonLabel = state === "granted"
-    ? "Completa attivazione"
-    : "Attiva notifiche del torneo";
+  const buttonLabel = state === "granted" ? "Completa attivazione" : "Attiva notifiche del torneo";
 
   return (
     <>
       {state === "granted" && subscribed ? (
         <div className="mb-4 flex flex-col items-start gap-2">
-          <p className="flex items-center gap-2 text-sm text-[var(--state-success)]"><span aria-hidden>✓</span> Notifiche attive su questo dispositivo</p>
-          <Button variant="ghost" onClick={() => void triggerDeviceTest()} className="w-full justify-start sm:w-64">Prova notifica su questo dispositivo</Button>
+          <p className="flex items-center gap-2 text-sm text-[var(--state-success)]">
+            <span aria-hidden>✓</span> Notifiche attive su questo dispositivo
+          </p>
+          <Button variant="ghost" onClick={() => void triggerDeviceTest()} className="w-full justify-start sm:w-64">
+            Prova notifica su questo dispositivo
+          </Button>
           {testFeedback && <p className="text-xs text-[var(--state-success)]">{testFeedback}</p>}
           {activationError && <p className="text-xs text-[var(--state-error)]">{activationError}</p>}
         </div>
@@ -147,11 +149,15 @@ export function NotificationPermission() {
           <p className="text-sm text-[var(--text-secondary)]">
             Notifiche bloccate dal browser — riattivale nelle impostazioni del sito.
           </p>
-          <Button variant="ghost" onClick={openInstructions} className="w-full justify-start sm:w-64">Vedi istruzioni</Button>
+          <Button variant="ghost" onClick={openInstructions} className="w-full justify-start sm:w-64">
+            Vedi istruzioni
+          </Button>
         </div>
       ) : (
         <div className="mb-3">
-          <Button variant="primary" onClick={openInstructions} className="w-full justify-start sm:w-64">{buttonLabel}</Button>
+          <Button variant="primary" onClick={openInstructions} className="w-full justify-start sm:w-64">
+            {buttonLabel}
+          </Button>
           {activationError && <p className="mt-2 text-xs text-[var(--state-error)]">{activationError}</p>}
         </div>
       )}
@@ -161,25 +167,34 @@ export function NotificationPermission() {
         title="Come ricevere le notifiche"
         dismissible
         onClose={() => setOpen(false)}
-        actions={(
+        actions={
           <>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Chiudi</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Chiudi
+            </Button>
             {platform === "android" && state !== "denied" && (
-              <Button onClick={() => void activateNotifications()} disabled={requesting || !challengeToken || state === "unsupported"}>
+              <Button
+                onClick={() => void activateNotifications()}
+                disabled={requesting || !challengeToken || state === "unsupported"}
+              >
                 {requesting ? "Attendo…" : "Continua e attiva"}
               </Button>
             )}
             {platform === "ios" && standalone && state !== "denied" && (
-              <Button onClick={() => void activateNotifications()} disabled={requesting || !challengeToken || state === "unsupported"}>
+              <Button
+                onClick={() => void activateNotifications()}
+                disabled={requesting || !challengeToken || state === "unsupported"}
+              >
                 {requesting ? "Attendo…" : "Attiva notifiche"}
               </Button>
             )}
           </>
-        )}
+        }
       >
         <p>Scegli il sistema del tuo telefono. Vedrai soltanto i passaggi che ti servono.</p>
         <p className="mt-2 text-xs text-[var(--text-secondary)]">
-          Dopo l’attivazione gli avvisi possono arrivare anche con il sito in background; il telefono deve essere online e le notifiche di sistema devono restare abilitate.
+          Dopo l’attivazione gli avvisi possono arrivare anche con il sito in background; il telefono deve essere online
+          e le notifiche di sistema devono restare abilitate.
         </p>
 
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -214,13 +229,18 @@ export function NotificationPermission() {
             <p className="font-semibold text-[var(--text-primary)]">Su iPhone</p>
             <ol className="mt-2 list-decimal space-y-2 pl-5">
               <li>Verifica di avere iOS 16.4 o successivo, poi apri questo sito con Safari.</li>
-              <li>Tocca <strong>Condividi</strong> e poi <strong>Aggiungi alla schermata Home</strong>.</li>
+              <li>
+                Tocca <strong>Condividi</strong> e poi <strong>Aggiungi alla schermata Home</strong>.
+              </li>
               <li>Chiudi Safari e apri L&apos;Agro ai Giovani dalla nuova icona nella schermata Home.</li>
-              <li>Torna al Torneo, premi di nuovo “Attiva notifiche” e scegli <strong>Consenti</strong>.</li>
+              <li>
+                Torna al Torneo, premi di nuovo “Attiva notifiche” e scegli <strong>Consenti</strong>.
+              </li>
             </ol>
             {state === "denied" && (
               <p className="mt-3 text-xs text-[var(--state-warning)]">
-                Il permesso è bloccato: apri <strong>Impostazioni → Notifiche → LAG</strong> e attiva “Consenti notifiche”.
+                Il permesso è bloccato: apri <strong>Impostazioni → Notifiche → LAG</strong> e attiva “Consenti
+                notifiche”.
               </p>
             )}
             {!standalone && (
@@ -236,13 +256,18 @@ export function NotificationPermission() {
             <p className="font-semibold text-[var(--text-primary)]">Su Android</p>
             <ol className="mt-2 list-decimal space-y-2 pl-5">
               <li>Apri il sito con Chrome o con il browser che usi normalmente.</li>
-              <li>Premi <strong>Continua e attiva</strong> qui sotto.</li>
-              <li>Quando Android chiede il permesso, scegli <strong>Consenti</strong>.</li>
+              <li>
+                Premi <strong>Continua e attiva</strong> qui sotto.
+              </li>
+              <li>
+                Quando Android chiede il permesso, scegli <strong>Consenti</strong>.
+              </li>
               <li>Lascia abilitate le notifiche per questo sito sia nel browser sia nelle impostazioni Android.</li>
             </ol>
             {state === "denied" && (
               <p className="mt-3 text-xs text-[var(--state-warning)]">
-                Il permesso è bloccato: nelle impostazioni di Chrome apri <strong>Impostazioni sito → Notifiche</strong> e riabilita questo sito.
+                Il permesso è bloccato: nelle impostazioni di Chrome apri <strong>Impostazioni sito → Notifiche</strong>{" "}
+                e riabilita questo sito.
               </p>
             )}
             {state === "unsupported" && (
@@ -253,7 +278,9 @@ export function NotificationPermission() {
           </div>
         )}
 
-        {(platform === "android" || (platform === "ios" && standalone)) && <TurnstileChallenge key={challengeAttempt} action="push" onToken={setChallengeToken}/>}
+        {(platform === "android" || (platform === "ios" && standalone)) && (
+          <TurnstileChallenge key={challengeAttempt} action="push" onToken={setChallengeToken} />
+        )}
         {activationError && <p className="mt-3 text-xs text-[var(--state-error)]">{activationError}</p>}
       </Modal>
     </>

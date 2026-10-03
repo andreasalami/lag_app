@@ -22,7 +22,13 @@ interface UseSupabaseRowsOptions<T> {
  *
  * Un solo posto dove questa logica può avere un bug, invece di tre.
  */
-export function useSupabaseRows<T>({ table, select, orderBy = [], fallback, realtime = false }: UseSupabaseRowsOptions<T>) {
+export function useSupabaseRows<T>({
+  table,
+  select,
+  orderBy = [],
+  fallback,
+  realtime = false,
+}: UseSupabaseRowsOptions<T>) {
   const [rows, setRows] = useState<T[]>(isSupabaseConfigured ? [] : fallback);
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [error, setError] = useState<string | null>(null);
@@ -50,9 +56,9 @@ export function useSupabaseRows<T>({ table, select, orderBy = [], fallback, real
 
     const channel = realtime
       ? supabase
-        .channel(`${table}-changes`)
-        .on("postgres_changes", { event: "*", schema: "public", table }, () => void refetch())
-        .subscribe()
+          .channel(`${table}-changes`)
+          .on("postgres_changes", { event: "*", schema: "public", table }, () => void refetch())
+          .subscribe()
       : null;
 
     return () => {

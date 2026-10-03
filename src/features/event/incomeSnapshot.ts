@@ -1,7 +1,13 @@
 import { MENU_SECTIONS, isMenuSectionForCategory, type MenuCategory, type MenuSection } from "../menu/menuSections";
 
 // Dati aggregati restituiti da public.get_order_event_snapshot: nessun alias o nota.
-export type SnapshotProduct = { name: string; category: MenuCategory; section: MenuSection; quantity: number; revenue: number };
+export type SnapshotProduct = {
+  name: string;
+  category: MenuCategory;
+  section: MenuSection;
+  quantity: number;
+  revenue: number;
+};
 export type SnapshotHour = { hour: string; orders: number; revenue: number };
 export type IncomeSnapshot = {
   event_name: string;
@@ -35,14 +41,26 @@ export function parseIncomeSnapshot(value: unknown): IncomeSnapshot | null {
   const data = value as Record<string, unknown>;
   const numeric = (field: unknown) => (typeof field === "string" ? Number(field) : field);
   const revenueTotal = numeric(data.revenue_total);
-  if (typeof data.event_name !== "string" || typeof data.generated_at !== "string"
-    || !isFiniteNumber(revenueTotal) || !isFiniteNumber(data.orders_paid)
-    || !Array.isArray(data.hours) || !Array.isArray(data.products)) return null;
+  if (
+    typeof data.event_name !== "string" ||
+    typeof data.generated_at !== "string" ||
+    !isFiniteNumber(revenueTotal) ||
+    !isFiniteNumber(data.orders_paid) ||
+    !Array.isArray(data.hours) ||
+    !Array.isArray(data.products)
+  )
+    return null;
 
   const hours: SnapshotHour[] = [];
   for (const row of data.hours as Record<string, unknown>[]) {
     const revenue = numeric(row?.revenue);
-    if (typeof row?.hour !== "string" || !LOCAL_HOUR.test(row.hour) || !isFiniteNumber(row.orders) || !isFiniteNumber(revenue)) return null;
+    if (
+      typeof row?.hour !== "string" ||
+      !LOCAL_HOUR.test(row.hour) ||
+      !isFiniteNumber(row.orders) ||
+      !isFiniteNumber(revenue)
+    )
+      return null;
     hours.push({ hour: row.hour, orders: row.orders, revenue });
   }
 
@@ -50,9 +68,15 @@ export function parseIncomeSnapshot(value: unknown): IncomeSnapshot | null {
   for (const row of data.products as Record<string, unknown>[]) {
     const revenue = numeric(row?.revenue);
     const category = row?.category;
-    if (typeof row?.name !== "string" || (category !== "cibo" && category !== "bevande")
-      || typeof row.section !== "string" || !isMenuSectionForCategory(category, row.section as MenuSection)
-      || !isFiniteNumber(row.quantity) || !isFiniteNumber(revenue)) return null;
+    if (
+      typeof row?.name !== "string" ||
+      (category !== "cibo" && category !== "bevande") ||
+      typeof row.section !== "string" ||
+      !isMenuSectionForCategory(category, row.section as MenuSection) ||
+      !isFiniteNumber(row.quantity) ||
+      !isFiniteNumber(revenue)
+    )
+      return null;
     products.push({ name: row.name, category, section: row.section as MenuSection, quantity: row.quantity, revenue });
   }
 
@@ -78,7 +102,11 @@ export function summarizeSections(products: SnapshotProduct[], category: MenuCat
       .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, "it"));
     if (rows.length === 0) return [];
     const total = rows.reduce((sum, row) => sum + row.quantity, 0);
-    const rank = (row: SnapshotProduct): RankedProduct => ({ name: row.name, quantity: row.quantity, share: total > 0 ? row.quantity / total : 0 });
+    const rank = (row: SnapshotProduct): RankedProduct => ({
+      name: row.name,
+      quantity: row.quantity,
+      share: total > 0 ? row.quantity / total : 0,
+    });
     const least = rows.slice(2).sort((a, b) => a.quantity - b.quantity || a.name.localeCompare(b.name, "it"))[0];
     return [{ category, label, total, top: rows.slice(0, 2).map(rank), least: least ? rank(least) : null }];
   });
@@ -93,8 +121,12 @@ const WEEKDAYS = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "
 export function hourlyBars(hours: SnapshotHour[]): HourBar[] {
   // Le ore arrivano già nel fuso dell'evento: si trattano come orari "da parete", senza conversioni.
   const rows = hours.map((row) => ({ ...row, ms: Date.parse(`${row.hour}Z`) })).sort((a, b) => a.ms - b.ms);
-  const bar = (ms: number, revenue: number, orders: number, day: string | null = null): HourBar =>
-    ({ label: new Date(ms).toISOString().slice(11, 13), revenue, orders, day });
+  const bar = (ms: number, revenue: number, orders: number, day: string | null = null): HourBar => ({
+    label: new Date(ms).toISOString().slice(11, 13),
+    revenue,
+    orders,
+    day,
+  });
   const bars: HourBar[] = [];
   let sessions = 0;
   rows.forEach((row, index) => {
@@ -104,7 +136,8 @@ export function hourlyBars(hours: SnapshotHour[]): HourBar[] {
       bars.push(bar(row.ms, row.revenue, row.orders, WEEKDAYS[new Date(row.ms).getUTCDay()]));
       return;
     }
-    for (let missing = 1; missing <= gapHours; missing += 1) bars.push(bar(rows[index - 1].ms + missing * 3_600_000, 0, 0));
+    for (let missing = 1; missing <= gapHours; missing += 1)
+      bars.push(bar(rows[index - 1].ms + missing * 3_600_000, 0, 0));
     bars.push(bar(row.ms, row.revenue, row.orders));
   });
   // Con una sola serata il giorno non serve: resta solo l'ora.
@@ -119,7 +152,12 @@ export function peakHour(bars: HourBar[]) {
 // L'asserzione serve solo perché il tsconfig (lib ES2020) tipizza useGrouping come booleano.
 const grouping = { useGrouping: "always" as unknown as boolean };
 const euro = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", ...grouping });
-const wholeEuro = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0, ...grouping });
+const wholeEuro = new Intl.NumberFormat("it-IT", {
+  style: "currency",
+  currency: "EUR",
+  maximumFractionDigits: 0,
+  ...grouping,
+});
 export const formatEuro = (amount: number) => euro.format(amount);
 export const formatWholeEuro = (amount: number) => wholeEuro.format(amount);
 
@@ -144,7 +182,10 @@ export function peakSentence(bars: HourBar[]) {
   if (!peak) return "Non ci sono ancora incassi da mostrare ora per ora.";
   const next = String((Number(peak.label) + 1) % 24).padStart(2, "0");
   // Su più serate si dice anche quale: la serata è quella dell'ultima colonna con il giorno.
-  const day = bars.slice(0, bars.indexOf(peak) + 1).reverse().find((item) => item.day)?.day;
+  const day = bars
+    .slice(0, bars.indexOf(peak) + 1)
+    .reverse()
+    .find((item) => item.day)?.day;
   return `Il momento più intenso è stato ${day ? `${day} ` : ""}tra le ${peak.label} e le ${next}: ${formatEuro(peak.revenue)}.`;
 }
 
