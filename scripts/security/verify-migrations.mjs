@@ -25,7 +25,7 @@ const migrationDir=new URL('../../supabase/migrations/',import.meta.url);
 for (const name of readdirSync(migrationDir).filter(name=>name.endsWith('.sql')).sort()) {
   await db.exec(readFileSync(new URL(name,migrationDir),'utf8').replace('create extension if not exists pgcrypto;','-- shim'));
 }
-assert.equal((await db.query("select has_function_privilege('authenticated','public.pay_claimed_order(uuid,text)','EXECUTE') ok")).rows[0].ok,false);
+assert.equal((await db.query("select to_regprocedure('public.pay_claimed_order(uuid,text)') fn")).rows[0].fn,null);
 assert.equal((await db.query("select column_name from information_schema.columns where table_name='tournament_state' and column_name='revision'")).rows.length,1);
 console.log('PASS: database installed from zero using the complete ordered migration chain.');
 await db.close();

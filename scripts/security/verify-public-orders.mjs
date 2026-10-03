@@ -1,4 +1,3 @@
-import {readdirSync} from "node:fs";
 // Isolated PostgreSQL verification. Never connects to the live Supabase project.
 // LAG_AUDIT_PGLITE_MODULE may point to a temporary local PGlite installation.
 import assert from 'node:assert/strict';
@@ -46,7 +45,7 @@ async function rpc(name, values) {
 const schema = readFileSync(new URL('../../supabase/schema.sql', import.meta.url), 'utf8').replace('create extension if not exists pgcrypto;', '-- shim');
 await db.exec(schema);
 console.log('PASS: schema applied twice.');
-for(const name of readdirSync(new URL('../../supabase/migrations/',import.meta.url)).filter(name=>name.startsWith('20260905') && name.endsWith('.sql')).sort()) await db.exec(readFileSync(new URL('../../supabase/migrations/'+name,import.meta.url),'utf8'));
+// L'aggiornamento da ogni versione precedente è verificato in verify-schema-matches-migrations.mjs.
 await db.query('update menu_items set available_portions=5000,stock_capacity=5000 where id=$1',[beer]);
 async function stock() {return (await db.query('select available_portions from menu_items where id=$1',[beer])).rows[0].available_portions;}
 async function submit(items) {

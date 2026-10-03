@@ -108,19 +108,33 @@ const migrations = readdirSync(migrationDir).filter((n) => n.endsWith('.sql')).s
 const schemaFile = new URL('../../supabase/schema.sql', import.meta.url);
 
 const fromMigrations = await install(migrations);
-const fromSchema = await install([schemaFile]);
 const expected = await snapshot(fromMigrations);
-const actual = await snapshot(fromSchema);
+await fromMigrations.close();
 
-const failures = [];
-for (const name of Object.keys(PROBES)) {
-  const inSchema = new Set(actual[name]);
-  const inMigrations = new Set(expected[name]);
-  for (const item of expected[name]) if (!inSchema.has(item)) failures.push(`${name}: missing from schema.sql -> ${item.slice(0, 200)}`);
-  for (const item of actual[name]) if (!inMigrations.has(item)) failures.push(`${name}: only in schema.sql -> ${item.slice(0, 200)}`);
+function differences(actual) {
+  const failures = [];
+  for (const name of Object.keys(PROBES)) {
+    const inSchema = new Set(actual[name]);
+    const inMigrations = new Set(expected[name]);
+    for (const item of expected[name]) if (!inSchema.has(item)) failures.push(`${name}: missing from schema.sql -> ${item.slice(0, 200)}`);
+    for (const item of actual[name]) if (!inMigrations.has(item)) failures.push(`${name}: only in schema.sql -> ${item.slice(0, 200)}`);
+  }
+  return failures;
 }
 
-assert.deepEqual(failures, [], `schema.sql and the migration chain describe different databases:\n${failures.join('\n')}`);
-console.log(`PASS: schema.sql matches the migration chain (${Object.values(expected).flat().length} catalog entries compared).`);
-await fromMigrations.close();
+const fromSchema = await install([schemaFile]);
+assert.deepEqual(differences(await snapshot(fromSchema)), [], 'schema.sql and the migration chain describe different databases');
 await fromSchema.close();
+console.log(`PASS: schema.sql matches the migration chain (${Object.values(expected).flat().length} catalog entries compared).`);
+
+// schema.sql is also how an existing database gets upgraded (README). Starting from
+// every past version of the chain, applying it must land on the same final database:
+// an upgrade once left an old submit_public_order callable by anon, bypassing Turnstile.
+for (let applied = 1; applied < migrations.length; applied += 1) {
+  const upgraded = await install([...migrations.slice(0, applied), schemaFile]);
+  const failures = differences(await snapshot(upgraded));
+  await upgraded.close();
+  const from = migrations[applied - 1].pathname.split('/').pop();
+  assert.deepEqual(failures, [], `schema.sql does not upgrade a database at ${from} to the final state`);
+}
+console.log(`PASS: schema.sql upgrades every past version (${migrations.length - 1}) to the final state.`);
