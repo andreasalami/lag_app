@@ -7,6 +7,7 @@ import {
   type StoredOrder,
 } from "../../features/orders/orderHistory";
 import { priceFormatter } from "../../features/orders/orderUtils";
+import { TICKETS_ENABLED } from "../../features/tickets/EventbriteTickets";
 import { appHref } from "../../lib/browser";
 
 export function Navbar() {
@@ -50,9 +51,11 @@ export function Navbar() {
         </a>
 
         <nav className="hidden gap-6 text-sm text-(--text-secondary) sm:flex">
-          <a href="#biglietti" className="hover:text-(--text-primary)">
-            Biglietti
-          </a>
+          {TICKETS_ENABLED && (
+            <a href="#biglietti" className="hover:text-(--text-primary)">
+              Biglietti
+            </a>
+          )}
           <a href="#programma" className="hover:text-(--text-primary)">
             Programma
           </a>
