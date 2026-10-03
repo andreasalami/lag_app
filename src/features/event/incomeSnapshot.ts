@@ -9,14 +9,17 @@ export type SnapshotProduct = {
   revenue: number;
 };
 export type SnapshotHour = { hour: string; orders: number; revenue: number };
-export type IncomeSnapshot = {
-  event_name: string;
-  generated_at: string;
+/** Statistiche di una serata o dell'intero evento: stessa forma, stesso PDF. */
+export type SnapshotPart = {
   revenue_total: number;
   orders_paid: number;
   hours: SnapshotHour[];
   products: SnapshotProduct[];
 };
+/** `date` è il giorno in cui la serata comincia (le ore dopo mezzanotte restano sua). */
+export type SnapshotEvening = SnapshotPart & { evening: number; date: string };
+/** `evenings` è vuoto quando l'evento dura una sola serata: basta il totale. */
+export type IncomeSnapshot = SnapshotPart & { event_name: string; generated_at: string; evenings: SnapshotEvening[] };
 
 export type RankedProduct = { name: string; quantity: number; share: number };
 export type SectionSummary = {
@@ -35,15 +38,33 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+const LOCAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 /** Valida la risposta del server: un dato inatteso blocca il PDF invece di stampare numeri sbagliati. */
 export function parseIncomeSnapshot(value: unknown): IncomeSnapshot | null {
   if (!value || typeof value !== "object") return null;
   const data = value as Record<string, unknown>;
-  const numeric = (field: unknown) => (typeof field === "string" ? Number(field) : field);
+  const total = parsePart(data);
+  if (!total || typeof data.event_name !== "string" || typeof data.generated_at !== "string") return null;
+  if (!Array.isArray(data.evenings)) return null;
+
+  const evenings: SnapshotEvening[] = [];
+  for (const row of data.evenings as Record<string, unknown>[]) {
+    const part = parsePart(row);
+    if (!part || !Number.isInteger(row.evening) || typeof row.date !== "string" || !LOCAL_DATE.test(row.date))
+      return null;
+    evenings.push({ ...part, evening: row.evening as number, date: row.date });
+  }
+  return { ...total, event_name: data.event_name, generated_at: data.generated_at, evenings };
+}
+
+const numeric = (field: unknown) => (typeof field === "string" ? Number(field) : field);
+
+function parsePart(value: unknown): SnapshotPart | null {
+  if (!value || typeof value !== "object") return null;
+  const data = value as Record<string, unknown>;
   const revenueTotal = numeric(data.revenue_total);
   if (
-    typeof data.event_name !== "string" ||
-    typeof data.generated_at !== "string" ||
     !isFiniteNumber(revenueTotal) ||
     !isFiniteNumber(data.orders_paid) ||
     !Array.isArray(data.hours) ||
@@ -80,14 +101,7 @@ export function parseIncomeSnapshot(value: unknown): IncomeSnapshot | null {
     products.push({ name: row.name, category, section: row.section as MenuSection, quantity: row.quantity, revenue });
   }
 
-  return {
-    event_name: data.event_name,
-    generated_at: data.generated_at,
-    revenue_total: revenueTotal,
-    orders_paid: data.orders_paid,
-    hours,
-    products,
-  };
+  return { revenue_total: revenueTotal, orders_paid: data.orders_paid, hours, products };
 }
 
 /**
@@ -171,7 +185,7 @@ export function pieces(quantity: number) {
 }
 
 /** Frasi brevi per il riepilogo: chi legge non deve interpretare tabelle. */
-export function headlineSentences(snapshot: IncomeSnapshot) {
+export function headlineSentences(snapshot: SnapshotPart) {
   if (snapshot.orders_paid === 0) return ["Non ci sono ancora ordini pagati."];
   const orders = snapshot.orders_paid === 1 ? "1 ordine pagato" : `${snapshot.orders_paid} ordini pagati`;
   return [`Da ${orders}. In media ogni ordine vale ${formatEuro(snapshot.revenue_total / snapshot.orders_paid)}.`];
@@ -193,4 +207,15 @@ export function leastSentence(least: RankedProduct) {
   return least.quantity === 0
     ? `Meno venduto: ${least.name}, nessun pezzo venduto finora.`
     : `Meno venduto: ${least.name}, ${pieces(least.quantity)} (${formatShare(least.share)}).`;
+}
+
+/** "Serata 2 · sabato 3 ottobre": la data arriva già come giorno locale, senza fuso. */
+export function eveningTitle(evening: SnapshotEvening) {
+  const day = new Date(`${evening.date}T12:00:00Z`).toLocaleDateString("it-IT", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+  return `Serata ${evening.evening} · ${day}`;
 }

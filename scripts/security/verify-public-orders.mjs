@@ -214,6 +214,9 @@ assert.equal(
   101,
 );
 await assert.rejects(submit([{ id: beer, qty: 1 }]), /capacity_reached/);
+// Replaying that old migration recreated its 4-argument signature next to the current one
+// (5 arguments, since the evening count): drop the replayed overload to call the live function.
+await db.exec("drop function public.create_next_order_event(text, timestamptz, timestamptz, integer)");
 await asUser(admin, () => rpc("close_order_event", []));
 const nextEvent = await asUser(admin, () =>
   rpc("create_next_order_event", [

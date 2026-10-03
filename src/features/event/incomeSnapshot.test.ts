@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  eveningTitle,
   formatEuro,
   headlineSentences,
   hourlyBars,
@@ -39,6 +40,7 @@ const snapshot: IncomeSnapshot = {
     product("Birra media", "birre", 142, "bevande"),
     product("Vino rosso", "vini", 0, "bevande"),
   ],
+  evenings: [],
 };
 
 describe("income snapshot", () => {
@@ -112,6 +114,8 @@ describe("income snapshot", () => {
     expect(parseIncomeSnapshot({ ...snapshot, hours: [{ hour: "21:00", orders: 1, revenue: 1 }] })).toBeNull();
     expect(parseIncomeSnapshot({ ...snapshot, products: [product("X", "birre", 1)] })).toBeNull();
     expect(parseIncomeSnapshot(null)).toBeNull();
+    expect(parseIncomeSnapshot({ ...snapshot, evenings: undefined })).toBeNull();
+    expect(parseIncomeSnapshot({ ...snapshot, evenings: [{ ...snapshot, evening: 1, date: "2 ottobre" }] })).toBeNull();
   });
 
   it("genera il PDF con i testi principali", async () => {
@@ -120,5 +124,29 @@ describe("income snapshot", () => {
     expect(source).toContain("Situazione incassi");
     expect(source).toContain("Torta paradiso");
     expect(source).toContain("non contiene nomi");
+  });
+
+  it("con più serate: una parte per serata e poi il totale", async () => {
+    const evening = (number: number, date: string, revenue: number) => ({
+      ...snapshot,
+      revenue_total: revenue,
+      evening: number,
+      date,
+    });
+    const twoEvenings = parseIncomeSnapshot({
+      ...snapshot,
+      evenings: [evening(1, "2026-10-02", 1000), evening(2, "2026-10-03", 2482)],
+    });
+    expect(twoEvenings?.evenings.map(eveningTitle)).toEqual([
+      "Serata 1 · venerdì 2 ottobre",
+      "Serata 2 · sabato 3 ottobre",
+    ]);
+    const pdf = await createIncomeSnapshotPdf(twoEvenings!);
+    const source = pdf.output();
+    expect(source).toContain("Serata 1");
+    expect(source).toContain("Serata 2");
+    expect(source).toContain("Totale evento");
+    expect(source).not.toContain("Situazione incassi");
+    expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(3);
   });
 });
