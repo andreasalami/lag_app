@@ -1,6 +1,6 @@
 # Intervento: sicurezza del database e semplificazione
 
-- Stato: commit sul branch `feat/event-management-and-cleanup` (PR #6), non ancora applicato in produzione.
+- Stato: unito su `main` (`050240c`) e applicato in produzione il 2026-10-03.
 - Data e perimetro: 2026-10-03 — punti S1, S2, M1, M2, M3, M5, M8 della revisione; M6 verificato e non eseguito.
 - Profilo: [PROJECT_PROFILE.md](../PROJECT_PROFILE.md)
 - Piano e approvazione: revisione presentata in chat, Andrea approva "correggi s1 e s2, poi m1, m2, m3; m5 aggiungi Prettier; m6 elimina solo se inutili al 100%; m8 risolvi".
@@ -31,9 +31,12 @@
 
 Eseguito il 2026-10-03: `format:check`, `lint` (tsc), 76 test Vitest, build, tutte le 9 verifiche PGlite (`@electric-sql/pglite@0.5.8` in cartella temporanea). Deno non è installato in locale: `deno check`/`deno test` delle Edge Function girano solo in CI. Nessuna prova nel browser con Supabase.
 
-## Azioni manuali in produzione (non eseguite)
+## Produzione (2026-10-03)
 
-1. Applicare `schema.sql` (o le migrazioni `20261003090000`, `20261003091000` e `20261003100000`).
-2. Ridistribuire la Edge Function `send-push-broadcast`.
-3. Prima, in sola lettura, controllare se la vecchia funzione esiste:
-   `select oid::regprocedure from pg_proc where proname = 'submit_public_order';`
+- Controllo in sola lettura prima: in produzione c'era solo la `submit_public_order` attuale (nessuna
+  esposizione), la tabella `announcements` con 1 annuncio ("Apertura Ingresso — L'ingresso aprirà alle
+  ore 19:00", salvato prima dell'eliminazione), 8 funzioni di cassa ritirate, 0 ordini in attesa.
+- `schema.sql` eseguito dall'SQL Editor (impronta SHA-256 verificata sul commit `338dbfa`) più la
+  registrazione delle 6 migrazioni in `supabase_migrations.schema_migrations`: esito "Success".
+- Verifica dopo: tutte le voci attese, evento corrente intatto.
+- Da fare: ridistribuire la Edge Function `send-push-broadcast`.
