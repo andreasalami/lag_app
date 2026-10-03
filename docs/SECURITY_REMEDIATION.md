@@ -115,7 +115,7 @@ node scripts/security/verify-workflow-safety.mjs
 node scripts/security/verify-push.mjs
 node scripts/security/verify-recovery.mjs
 node scripts/security/verify-kitchen-capacity.mjs
-node docs/anteprime-ordini/verify-partial-pickup.mjs
+node scripts/security/verify-partial-pickup.mjs
 npm test
 npm run build
 deno test --frozen --allow-env --config supabase/functions/submit-order/deno.json supabase/functions/submit-order/index.deno.ts

@@ -37,7 +37,7 @@ Le altre viste sono `ordine`, `qr` e `recupero`.
 - Browser: menu e selettore a 320 e 390 pixel senza overflow orizzontale;
   ritiro di 2 birre seguito dal QR con 8 rimaste e importo invariato;
   scheda di recupero interamente visibile a 390×844 per uno screenshot.
-- `verify-partial-pickup.mjs`: schema reale caricato in PostgreSQL isolato in
+- `scripts/security/verify-partial-pickup.mjs`: schema reale caricato in PostgreSQL isolato in
   memoria (PGlite). Verifica ritiri 2+2+6 birre e 1+1 panini, totale invariato,
   completamento soltanto dopo tutti gli articoli, limiti delle quantità e ruoli.
   Nessun collegamento al database remoto. Il test non simula una gara tra
@@ -46,7 +46,7 @@ Le altre viste sono `ordine`, `qr` e `recupero`.
 Per ripetere la verifica SQL, con PGlite disponibile in un'installazione separata:
 
 ```sh
-LAG_AUDIT_PGLITE_MODULE=/percorso/pglite/dist/index.js node docs/anteprime-ordini/verify-partial-pickup.mjs
+LAG_AUDIT_PGLITE_MODULE=/percorso/pglite/dist/index.js node scripts/security/verify-partial-pickup.mjs
 ```
 
 Le immagini PNG nella cartella sono schermate reali del prototipo a 390×844.

@@ -47,7 +47,7 @@ jobs:
           node scripts/security/verify-recovery.mjs
           node scripts/security/verify-kitchen-capacity.mjs
           node scripts/security/verify-event-snapshot.mjs
-          node docs/anteprime-ordini/verify-partial-pickup.mjs
+          node scripts/security/verify-partial-pickup.mjs
 
       - name: Setup Deno
         uses: denoland/setup-deno@v2

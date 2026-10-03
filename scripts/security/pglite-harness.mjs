@@ -1,8 +1,5 @@
 // Shared harness for the isolated PostgreSQL verifications. Never connects to the live Supabase project.
 // LAG_AUDIT_PGLITE_MODULE may point to a temporary local PGlite installation.
-//
-// ponytail: only the newest verifier uses this module; the older scripts still carry
-// their own copy of the bootstrap. Move them here when one of them needs changes.
 import { readFileSync, readdirSync } from 'node:fs';
 const { PGlite } = await import(process.env.LAG_AUDIT_PGLITE_MODULE ?? '@electric-sql/pglite');
 
@@ -25,14 +22,30 @@ end;$$;
 create publication supabase_realtime;`;
 
 const migrationDir = new URL('../../supabase/migrations/', import.meta.url);
+export const schemaFile = new URL('../../supabase/schema.sql', import.meta.url);
+
+/** Ordered migration files (URLs); `filter` narrows them by file name. */
+export function migrationFiles(filter = () => true) {
+  return readdirSync(migrationDir).filter((name) => name.endsWith('.sql') && filter(name)).sort()
+    .map((name) => new URL(name, migrationDir));
+}
+
+/** Applies SQL files in order; pgcrypto is unavailable in PGlite and is replaced by the BOOTSTRAP shims. */
+export async function installFiles(db, files) {
+  for (const file of files) await db.exec(readFileSync(file, 'utf8').replace('create extension if not exists pgcrypto;', '-- shim'));
+}
+
+/** Empty database with the Supabase roles, auth schema and pgcrypto shims. */
+export async function emptyDatabase() {
+  const db = new PGlite();
+  await db.exec(BOOTSTRAP);
+  return db;
+}
 
 /** Fresh database with the complete migration chain, plus helpers to act as a Supabase user. */
 export async function migratedDatabase() {
-  const db = new PGlite();
-  await db.exec(BOOTSTRAP);
-  for (const name of readdirSync(migrationDir).filter((file) => file.endsWith('.sql')).sort()) {
-    await db.exec(readFileSync(new URL(name, migrationDir), 'utf8').replace('create extension if not exists pgcrypto;', '-- shim'));
-  }
+  const db = await emptyDatabase();
+  await installFiles(db, migrationFiles());
 
   /** Runs `action` as an authenticated user (id) or as anon (null), like a browser request. */
   async function asUser(id, action) {
