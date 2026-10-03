@@ -286,6 +286,13 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         // Si libera la richiesta salvata e il prossimo invio usa una richiesta nuova.
         clearPendingOrder(requestId); setPendingRequest(null);
         requestIdentityRef.current = { requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() };
+        if (!sentCart) {
+          // Era una richiesta in sospeso, il cui carrello è già stato svuotato: i prodotti
+          // tornano nel carrello (se è vuoto) per poterla correggere e reinviare.
+          setCart((current) => Object.keys(current).length > 0 ? current : Object.fromEntries(pending.items.map((line) => [line.id, line])));
+          setNotes((current) => current || pending.notes);
+          setAlias((current) => current || pending.alias);
+        }
       } else {
         // Esito incerto: il contenuto resta nella richiesta in sospeso mostrata in cima.
         releaseCart();
