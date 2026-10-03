@@ -328,6 +328,21 @@ create policy "Solo lo staff modifica il menu"
 create policy "Solo lo staff elimina dal menu"
   on public.menu_items for delete
   using (exists (select 1 from public.profiles where id = auth.uid() and role in ('staff', 'cucina', 'admin')));
+-- Il bar gestisce le bevande (scorte, prezzi, prodotti) ma non può toccare né
+-- spostare in cucina i piatti: ogni riga resta nella categoria "bevande".
+drop policy if exists "Il bar scrive le bevande" on public.menu_items;
+drop policy if exists "Il bar modifica le bevande" on public.menu_items;
+drop policy if exists "Il bar elimina le bevande" on public.menu_items;
+create policy "Il bar scrive le bevande"
+  on public.menu_items for insert
+  with check (category = 'bevande' and exists (select 1 from public.profiles where id = auth.uid() and role = 'bar'));
+create policy "Il bar modifica le bevande"
+  on public.menu_items for update
+  using (category = 'bevande' and exists (select 1 from public.profiles where id = auth.uid() and role = 'bar'))
+  with check (category = 'bevande' and exists (select 1 from public.profiles where id = auth.uid() and role = 'bar'));
+create policy "Il bar elimina le bevande"
+  on public.menu_items for delete
+  using (category = 'bevande' and exists (select 1 from public.profiles where id = auth.uid() and role = 'bar'));
 grant select on public.menu_items to anon, authenticated;
 grant insert, update, delete on public.menu_items to authenticated;
 
@@ -926,7 +941,7 @@ create policy "Gestori leggono lo storico notifiche"
   on public.push_broadcasts for select
   using (exists (
     select 1 from public.profiles
-    where id = auth.uid() and role in ('staff', 'tournament_manager', 'admin')
+    where id = auth.uid() and role in ('tournament_manager', 'admin')
   ));
 
 create or replace function public.valid_push_endpoint(p_endpoint text)
