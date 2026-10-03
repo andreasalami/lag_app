@@ -5,12 +5,15 @@ l'app restano nel [README](../README.md).
 
 ## Stato dello studio
 
-- Commit analizzato: `9caa4ec0f8f0e068324c3b728634a4c191be6662` (`main`, 2026-10-02), working tree pulito.
-- Lavoro in corso: branch `feat/event-management-and-cleanup`, costruito sopra la PR #4
-  (`chore/schema-and-dead-code-cleanup`, aperta e non ancora unita a `main`).
-- Copertura della disamina: tutto `src/`, Edge Functions (escluso `send-push-broadcast`),
-  funzioni SQL recenti per ordini, cassa e torneo, CI, configurazione. Non letti: i documenti
-  di audit in `docs/`. Comportamento nel browser verificato solo senza backend.
+- `main`: `050240c` (merge della PR #6, 2026-10-03), che include anche la PR #4; deploy su GitHub Pages
+  avviato al merge.
+- Database di produzione (Supabase `lagapp`): aggiornato il 2026-10-03 con `schema.sql`; migrazioni
+  registrate fino a `20261003100000`. Il piano gratuito non ha backup automatici.
+- Lavoro in corso: branch `chore/tournament-only-push` (notifiche solo per il torneo, migrazione
+  `20261003110000`, da applicare in produzione).
+- Copertura della disamina: tutto `src/`, tutte le Edge Functions, `schema.sql` e migrazioni, CI,
+  configurazione. Non letti: i documenti di audit in `docs/`. Comportamento nel browser verificato
+  con un finto backend locale (ordini) e confronto degli stili calcolati (Tailwind 4).
 
 ## Checkpoint
 
@@ -18,6 +21,9 @@ l'app restano nel [README](../README.md).
   del "Capitolo Bug", conferma implicita registrata e dichiarata in chat.
 - 2026-10-02 — Piano: approvato con "Sì, procedi" (PR bug + sezione Gestione evento con PDF),
   poi "Prosegue solo questa" per riprendere il lavoro della sessione fork nella stessa cartella.
+- 2026-10-03 — Produzione: Andrea conferma l'esecuzione di `schema.sql` su `lagapp` (controllo in sola
+  lettura prima, verifica dopo) e il merge della PR #6 su `main`. Notifiche push: "serve solo
+  l'avviso nella sezione torneo, il resto si può rimuovere".
 - 2026-10-03 — Decisioni ruoli: cucina gestisce tutto il menu, bar le bevande, chiusura evento a
   cassa e admin, staff senza storico notifiche. Approvati anche M7, script di stress e Tailwind 4.
 - 2026-10-03 — Revisione profonda presentata in chat; approvati S1, S2, M1, M2, M3, M5, M8 e la
@@ -47,12 +53,9 @@ l'app restano nel [README](../README.md).
 
 - Comportamenti inattesi dei test di usabilità (docs/USABILITY_TEST_RESULTS_2026-10-02.md).
 - D17: ESLint (Prettier aggiunto il 2026-10-03).
-- Produzione: applicare `schema.sql` del 2026-10-03, ridistribuire `send-push-broadcast`, verificare la
-  vecchia `submit_public_order` (vedi l'intervento del 2026-10-03).
-- Produzione: applicare anche la migrazione `20261003100000` (bar sulle bevande, storico notifiche).
+- Produzione: ridistribuire la Edge Function `send-push-broadcast` (il database rifiuta già gli annunci).
 - `npm audit`: restano 2 moderate (vitest) e 1 bassa (dompurify, via jsPDF).
 - `docs/RISCRITTURA_DA_ZERO_2026-10-03.md` non versionato, di un'altra sessione: da valutare.
-- Lavoro pubblicato nella PR #6 verso `main`, che include anche la PR #4: dopo il merge la #4 si può chiudere.
 
 ## Interventi
 

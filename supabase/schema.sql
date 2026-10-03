@@ -915,13 +915,13 @@ alter table public.push_subscriptions add constraint push_subscriptions_values_v
   and length(endpoint) between 28 and 2048
   and p256dh ~ '^[A-Za-z0-9_-]{80,120}$'
   and auth ~ '^[A-Za-z0-9_-]{16,64}$'
-  and source in ('announcements', 'tournament')
+  and source = 'tournament'
   and (user_agent is null or length(user_agent) <= 500)
 ) not valid;
 
 create table if not exists public.push_broadcasts (
   id uuid primary key default gen_random_uuid(),
-  kind text not null check (kind in ('announcement', 'tournament')),
+  kind text not null check (kind = 'tournament'),
   title text not null check (length(title) between 2 and 80),
   message text not null check (length(message) between 2 and 240),
   sent_by uuid references auth.users(id) on delete set null,
@@ -931,6 +931,9 @@ create table if not exists public.push_broadcasts (
   created_at timestamptz not null default now()
 );
 
+-- Notifiche solo del torneo: sostituito anche nei database creati con gli annunci.
+alter table public.push_broadcasts drop constraint if exists push_broadcasts_kind_check;
+alter table public.push_broadcasts add constraint push_broadcasts_kind_check check (kind = 'tournament');
 alter table public.push_broadcasts enable row level security;
 revoke all on public.push_broadcasts from public, anon, authenticated;
 grant select on public.push_broadcasts to authenticated;
@@ -970,7 +973,7 @@ begin
     or length(p_endpoint) not between 28 and 2048
     or p_p256dh is null or p_p256dh !~ '^[A-Za-z0-9_-]{87}$'
     or p_auth is null or p_auth !~ '^[A-Za-z0-9_-]{22}$'
-    or p_source is null or p_source not in ('announcements', 'tournament')
+    or p_source is distinct from 'tournament'
     or length(coalesce(p_user_agent, '')) > 500 then
     raise exception 'invalid_push_subscription';
   end if;
