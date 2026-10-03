@@ -18,6 +18,8 @@ l'app restano nel [README](../README.md).
   del "Capitolo Bug", conferma implicita registrata e dichiarata in chat.
 - 2026-10-02 — Piano: approvato con "Sì, procedi" (PR bug + sezione Gestione evento con PDF),
   poi "Prosegue solo questa" per riprendere il lavoro della sessione fork nella stessa cartella.
+- 2026-10-03 — Revisione profonda presentata in chat; approvati S1, S2, M1, M2, M3, M5, M8 e la
+  verifica di M6. M4 (schema ruoli) e M7 (OrderPage) solo come spiegazione.
 - Fuori dall'approvazione: migrazioni sul database di produzione, merge su `main`, deploy.
 
 ## Architettura in breve
@@ -28,21 +30,31 @@ l'app restano nel [README](../README.md).
 - Routing a hash in `src/App.tsx`; le pagine riservate passano da `ProtectedOperationalPage`.
 - Feature in `src/features/<dominio>/` (auth, program, menu, orders, event, tournament,
   notifications, social, tickets); helper condivisi in `src/lib/`, UI condivisa in `src/components/`.
-- Database: `supabase/migrations/` è la storia, `supabase/schema.sql` lo stato finale; la CI
-  installa entrambi su PGlite e ne confronta il catalogo.
+- Database: `supabase/migrations/` è la storia, `supabase/schema.sql` lo stato finale e anche lo
+  script di aggiornamento manuale; la CI (`.github/workflows/verify.yml`, usato da CI e deploy)
+  confronta su PGlite il catalogo delle migrazioni con `schema.sql` installato da zero e sopra
+  ogni versione storica.
 
 ## Convenzioni osservate
 
 - Testi interfaccia e commenti in italiano; identificatori e commit in inglese (Conventional Commits).
 - Logica pura separata e testata con Vitest; verifiche SQL isolate in `scripts/security/` su PGlite.
-- Nessun ESLint/Prettier configurato: alcuni file storici sono compressi su poche righe.
+- Formattazione con Prettier (`npm run format`), controllata in CI; ESLint non configurato.
 
 ## Decisioni aperte
 
 - Comportamenti inattesi dei test di usabilità (docs/USABILITY_TEST_RESULTS_2026-10-02.md).
-- D16 (preparazione PGlite duplicata negli script più vecchi) e D17 (formatter/ESLint).
+- D17: ESLint (Prettier aggiunto il 2026-10-03).
+- Produzione: applicare `schema.sql` del 2026-10-03, ridistribuire `send-push-broadcast`, verificare la
+  vecchia `submit_public_order` (vedi l'intervento del 2026-10-03).
+- Ruoli e permessi da rivedere con Andrea (M4): `cucina` può modificare prezzi, `cassa` chiude
+  l'evento, `staff` legge ancora lo storico notifiche.
+- `scripts/stress/orders.mjs` usa le API di cassa eliminate: va riscritto o rimosso.
+- `npm audit`: 5 high da `braces` in Tailwind 3 (solo build), risolte da Tailwind 4.
+- `docs/RISCRITTURA_DA_ZERO_2026-10-03.md` non versionato, di un'altra sessione: da valutare.
 - Lavoro pubblicato nella PR #6 verso `main`, che include anche la PR #4: dopo il merge la #4 si può chiudere.
 
 ## Interventi
 
 - [2026-10-02 — Bug, pulizia e Gestione evento](changes/2026-10-02-bug-fixes-and-event-management.md)
+- [2026-10-03 — Sicurezza del database e semplificazione](changes/2026-10-03-security-and-simplification.md)
