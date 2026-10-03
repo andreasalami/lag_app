@@ -65,3 +65,20 @@ export function loadScriptOnce(src: string, isReady: () => boolean, timeoutMs = 
   scripts.set(src, promise);
   return promise;
 }
+
+/**
+ * Chiama `refresh` ogni `intervalMs` e quando la scheda torna visibile, mai a scheda
+ * nascosta: niente richieste da telefoni in tasca. Restituisce la funzione di pulizia
+ * da chiamare nel cleanup dell'effetto.
+ */
+export function pollWhileVisible(refresh: () => void, intervalMs: number) {
+  const run = () => {
+    if (document.visibilityState === "visible") refresh();
+  };
+  const timer = window.setInterval(run, intervalMs);
+  document.addEventListener("visibilitychange", run);
+  return () => {
+    window.clearInterval(timer);
+    document.removeEventListener("visibilitychange", run);
+  };
+}

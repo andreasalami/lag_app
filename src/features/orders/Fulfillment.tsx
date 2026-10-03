@@ -13,7 +13,7 @@ import { PickupSelection } from "./PickupSelection";
 import { kitchenMessage } from "./PreparationChoice";
 import type { KitchenState } from "./types";
 import { isPickupSelectionValid, remainingToPickUp, selectedPickupCount } from "./pickupQuantities";
-import { appHref, readStorage, removeStorage, writeStorage } from "../../lib/browser";
+import { appHref, pollWhileVisible, readStorage, removeStorage, writeStorage } from "../../lib/browser";
 
 type FulfillmentItem = {
   id: string;
@@ -125,13 +125,10 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "order_fulfillment_items" }, () => void refetch())
       .subscribe();
-    const refreshVisible=()=>{if(document.visibilityState==='visible')void refetch();};
-    const timer = window.setInterval(refreshVisible, 15_000);
-    document.addEventListener('visibilitychange',refreshVisible);
+    const stopPolling = pollWhileVisible(() => void refetch(), 15_000);
     return () => {
       queueRequestId.current += 1;
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange',refreshVisible);
+      stopPolling();
       void supabase.removeChannel(channel);
     };
   }, [area, refetch, station]);

@@ -4,7 +4,7 @@ import { Modal } from "../../components/ui/Modal";
 import { Notice } from "../../components/ui/Notice";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { StaffPageHeading, StaffPanel } from "../../components/ui/StaffPanel";
-import { readStorage, removeStorage, writeStorage } from "../../lib/browser";
+import { pollWhileVisible, readStorage, removeStorage, writeStorage } from "../../lib/browser";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
 import { lineTotal, type Cart } from "./cart";
@@ -118,20 +118,13 @@ export function Cassa() {
         (data ?? []).map((claim: { order_id: string; claimed_station: CashStation; claim_expires_at: string }) => [claim.order_id, claim]));
       setPendingOrders((current) => current.map((order) => ({ ...order, ...(claims.get(order.id) ?? { claimed_station: null, claim_expires_at: null }) })));
     };
-    const claimsTimer = window.setInterval(() => void refreshClaims(), 10_000);
-    const queueTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refetchOrders();
-    }, 30_000);
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") void refetchOrders();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
+    const stopClaims = pollWhileVisible(() => void refreshClaims(), 10_000);
+    const stopQueue = pollWhileVisible(() => void refetchOrders(), 30_000);
     return () => {
       stopped = true;
       queueRequestRef.current += 1;
-      window.clearInterval(claimsTimer);
-      window.clearInterval(queueTimer);
-      document.removeEventListener("visibilitychange", onVisibility);
+      stopClaims();
+      stopQueue();
       void supabase.removeChannel(channel);
     };
   }, [refetchOrders]);

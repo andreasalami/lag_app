@@ -11,7 +11,7 @@ import {
   fetchPublishedTournament,
   type TournamentSnapshot,
 } from "./tournamentState";
-import { appHref } from "../../lib/browser";
+import { appHref, pollWhileVisible } from "../../lib/browser";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -57,14 +57,11 @@ export function TournamentPreview() {
 
     const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; if (visible) void load(); }, { rootMargin: "200px" });
     if (sectionRef.current) observer.observe(sectionRef.current);
-    const interval = window.setInterval(() => void load(), POLL_INTERVAL_MS);
-    const handleVisibility = () => void load();
-    document.addEventListener("visibilitychange", handleVisibility);
+    const stopPolling = pollWhileVisible(() => void load(), POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       observer.disconnect();
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibility);
+      stopPolling();
     };
   }, []);
 

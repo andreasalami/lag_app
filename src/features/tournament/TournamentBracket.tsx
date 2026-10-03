@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthContext";
 import { TournamentBroadcast } from "./TournamentBroadcast";
 import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
 import { MatchCard } from "./MatchCard";
+import { pollWhileVisible } from "../../lib/browser";
 import {
   BRACKET_SIZES,
   type BracketSize,
@@ -204,13 +205,10 @@ export function TournamentBracket({ management = false }: { management?: boolean
       } finally { busy = false; }
     }
 
-    const interval = window.setInterval(() => void refreshPublished(), POLL_INTERVAL_MS);
-    const handleVisibility = () => void refreshPublished();
-    document.addEventListener("visibilitychange", handleVisibility);
+    const stopPolling = pollWhileVisible(() => void refreshPublished(), POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibility);
+      stopPolling();
     };
   }, [canEdit]);
 

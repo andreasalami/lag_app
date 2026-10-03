@@ -34,7 +34,7 @@ import { PreparationChoice, PreparationStatus } from "./PreparationChoice";
 import type { PreparationMode } from "./types";
 import { MENU_SECTIONS } from "../menu/menuSections";
 import { FreeWaterNotice } from "../menu/FreeWaterNotice";
-import { appHref } from "../../lib/browser";
+import { appHref, pollWhileVisible } from "../../lib/browser";
 
 function statusMessage(status: PublicOrderStatus) {
   switch (status) {
@@ -147,17 +147,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startFresh]);
 
-  useEffect(() => {
-    const refresh = () => {
-      if (document.visibilityState === "visible") void refreshOrderStatuses();
-    };
-    const timer = window.setInterval(refresh, 30_000);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, [refreshOrderStatuses]);
+  useEffect(() => pollWhileVisible(() => void refreshOrderStatuses(), 30_000), [refreshOrderStatuses]);
 
   useEffect(() => {
     if (!submittedOrder) {
