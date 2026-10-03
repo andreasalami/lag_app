@@ -7,6 +7,7 @@ import {
   subscribeToPushNotifications,
   syncExistingPushSubscription,
 } from "../../lib/pushNotifications";
+import { appHref } from "../../lib/browser";
 
 type PermissionState = "unsupported" | "default" | "granted" | "denied";
 type MobilePlatform = "ios" | "android";
@@ -17,8 +18,8 @@ function getPermissionState(): PermissionState {
 }
 
 function isStandaloneWebApp() {
-  const iosStandalone = "standalone" in navigator
-    && (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const iosStandalone =
+    "standalone" in navigator && (navigator as Navigator & { standalone?: boolean }).standalone === true;
   return window.matchMedia("(display-mode: standalone)").matches || iosStandalone;
 }
 
@@ -96,8 +97,8 @@ export function NotificationPermission() {
       try {
         await registration.showNotification("L'Agro ai Giovani", {
           body: "Notifiche del torneo attive su questo dispositivo.",
-          icon: `${import.meta.env.BASE_URL}apple-touch-icon.png`,
-          data: { url: `${window.location.origin}${import.meta.env.BASE_URL}#tornei` },
+          icon: appHref("apple-touch-icon.png"),
+          data: { url: `${window.location.origin}${appHref()}#tornei` },
         });
       } catch {
         // L'iscrizione e' gia attiva: la notifica di conferma non deve annullare il flusso.
@@ -107,7 +108,7 @@ export function NotificationPermission() {
     } finally {
       setRequesting(false);
       setChallengeToken("");
-      setChallengeAttempt(value => value + 1);
+      setChallengeAttempt((value) => value + 1);
     }
   }
 
@@ -118,9 +119,9 @@ export function NotificationPermission() {
       const registration = await navigator.serviceWorker.ready;
       await registration.showNotification("Test notifiche Torneo LAG", {
         body: "Se leggi questo messaggio, le notifiche sono abilitate correttamente su questo dispositivo.",
-        icon: `${import.meta.env.BASE_URL}apple-touch-icon.png`,
+        icon: appHref("apple-touch-icon.png"),
         tag: `lag-device-test-${Date.now()}`,
-        data: { url: `${window.location.origin}${import.meta.env.BASE_URL}#tornei` },
+        data: { url: `${window.location.origin}${appHref()}#tornei` },
       });
       setTestFeedback("Notifica di prova attivata su questo dispositivo.");
     } catch (error) {
@@ -128,30 +129,36 @@ export function NotificationPermission() {
     }
   }
 
-  const buttonLabel = state === "granted"
-    ? "Completa attivazione"
-    : "Attiva notifiche del torneo";
+  const buttonLabel = state === "granted" ? "Completa attivazione" : "Attiva notifiche del torneo";
 
   return (
     <>
       {state === "granted" && subscribed ? (
         <div className="mb-4 flex flex-col items-start gap-2">
-          <p className="flex items-center gap-2 text-sm text-[var(--state-success)]"><span aria-hidden>✓</span> Notifiche attive su questo dispositivo</p>
-          <Button variant="ghost" onClick={() => void triggerDeviceTest()} className="w-full justify-start sm:w-64">Prova notifica su questo dispositivo</Button>
-          {testFeedback && <p className="text-xs text-[var(--state-success)]">{testFeedback}</p>}
-          {activationError && <p className="text-xs text-[var(--state-error)]">{activationError}</p>}
+          <p className="flex items-center gap-2 text-sm text-(--state-success)">
+            <span aria-hidden>✓</span> Notifiche attive su questo dispositivo
+          </p>
+          <Button variant="ghost" onClick={() => void triggerDeviceTest()} className="w-full justify-start sm:w-64">
+            Prova notifica su questo dispositivo
+          </Button>
+          {testFeedback && <p className="text-xs text-(--state-success)">{testFeedback}</p>}
+          {activationError && <p className="text-xs text-(--state-error)">{activationError}</p>}
         </div>
       ) : state === "denied" ? (
         <div className="mb-3 flex flex-col items-start gap-3">
-          <p className="text-sm text-[var(--text-secondary)]">
+          <p className="text-sm text-(--text-secondary)">
             Notifiche bloccate dal browser — riattivale nelle impostazioni del sito.
           </p>
-          <Button variant="ghost" onClick={openInstructions} className="w-full justify-start sm:w-64">Vedi istruzioni</Button>
+          <Button variant="ghost" onClick={openInstructions} className="w-full justify-start sm:w-64">
+            Vedi istruzioni
+          </Button>
         </div>
       ) : (
         <div className="mb-3">
-          <Button variant="primary" onClick={openInstructions} className="w-full justify-start sm:w-64">{buttonLabel}</Button>
-          {activationError && <p className="mt-2 text-xs text-[var(--state-error)]">{activationError}</p>}
+          <Button variant="primary" onClick={openInstructions} className="w-full justify-start sm:w-64">
+            {buttonLabel}
+          </Button>
+          {activationError && <p className="mt-2 text-xs text-(--state-error)">{activationError}</p>}
         </div>
       )}
 
@@ -160,25 +167,34 @@ export function NotificationPermission() {
         title="Come ricevere le notifiche"
         dismissible
         onClose={() => setOpen(false)}
-        actions={(
+        actions={
           <>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Chiudi</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Chiudi
+            </Button>
             {platform === "android" && state !== "denied" && (
-              <Button onClick={() => void activateNotifications()} disabled={requesting || !challengeToken || state === "unsupported"}>
+              <Button
+                onClick={() => void activateNotifications()}
+                disabled={requesting || !challengeToken || state === "unsupported"}
+              >
                 {requesting ? "Attendo…" : "Continua e attiva"}
               </Button>
             )}
             {platform === "ios" && standalone && state !== "denied" && (
-              <Button onClick={() => void activateNotifications()} disabled={requesting || !challengeToken || state === "unsupported"}>
+              <Button
+                onClick={() => void activateNotifications()}
+                disabled={requesting || !challengeToken || state === "unsupported"}
+              >
                 {requesting ? "Attendo…" : "Attiva notifiche"}
               </Button>
             )}
           </>
-        )}
+        }
       >
         <p>Scegli il sistema del tuo telefono. Vedrai soltanto i passaggi che ti servono.</p>
-        <p className="mt-2 text-xs text-[var(--text-secondary)]">
-          Dopo l’attivazione gli avvisi possono arrivare anche con il sito in background; il telefono deve essere online e le notifiche di sistema devono restare abilitate.
+        <p className="mt-2 text-xs text-(--text-secondary)">
+          Dopo l’attivazione gli avvisi possono arrivare anche con il sito in background; il telefono deve essere online
+          e le notifiche di sistema devono restare abilitate.
         </p>
 
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -186,10 +202,10 @@ export function NotificationPermission() {
             type="button"
             aria-pressed={platform === "ios"}
             onClick={() => setPlatform("ios")}
-            className={`rounded-[var(--radius-md)] border px-4 py-3 text-sm font-semibold transition-colors ${
+            className={`rounded-md border px-4 py-3 text-sm font-semibold transition-colors ${
               platform === "ios"
-                ? "border-[var(--accent-primary)] text-[var(--accent-primary)]"
-                : "border-[var(--surface-border)] text-[var(--text-primary)] hover:bg-white/5"
+                ? "border-(--accent-primary) text-(--accent-primary)"
+                : "border-(--surface-border) text-(--text-primary) hover:bg-white/5"
             }`}
           >
             Istruzioni per iOS
@@ -198,10 +214,10 @@ export function NotificationPermission() {
             type="button"
             aria-pressed={platform === "android"}
             onClick={() => setPlatform("android")}
-            className={`rounded-[var(--radius-md)] border px-4 py-3 text-sm font-semibold transition-colors ${
+            className={`rounded-md border px-4 py-3 text-sm font-semibold transition-colors ${
               platform === "android"
-                ? "border-[var(--accent-primary)] text-[var(--accent-primary)]"
-                : "border-[var(--surface-border)] text-[var(--text-primary)] hover:bg-white/5"
+                ? "border-(--accent-primary) text-(--accent-primary)"
+                : "border-(--surface-border) text-(--text-primary) hover:bg-white/5"
             }`}
           >
             Istruzioni per Android
@@ -209,21 +225,26 @@ export function NotificationPermission() {
         </div>
 
         {platform === "ios" && (
-          <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--surface-border)] p-4">
-            <p className="font-semibold text-[var(--text-primary)]">Su iPhone</p>
+          <div className="mt-4 rounded-md border border-(--surface-border) p-4">
+            <p className="font-semibold text-(--text-primary)">Su iPhone</p>
             <ol className="mt-2 list-decimal space-y-2 pl-5">
               <li>Verifica di avere iOS 16.4 o successivo, poi apri questo sito con Safari.</li>
-              <li>Tocca <strong>Condividi</strong> e poi <strong>Aggiungi alla schermata Home</strong>.</li>
+              <li>
+                Tocca <strong>Condividi</strong> e poi <strong>Aggiungi alla schermata Home</strong>.
+              </li>
               <li>Chiudi Safari e apri L&apos;Agro ai Giovani dalla nuova icona nella schermata Home.</li>
-              <li>Torna al Torneo, premi di nuovo “Attiva notifiche” e scegli <strong>Consenti</strong>.</li>
+              <li>
+                Torna al Torneo, premi di nuovo “Attiva notifiche” e scegli <strong>Consenti</strong>.
+              </li>
             </ol>
             {state === "denied" && (
-              <p className="mt-3 text-xs text-[var(--state-warning)]">
-                Il permesso è bloccato: apri <strong>Impostazioni → Notifiche → LAG</strong> e attiva “Consenti notifiche”.
+              <p className="mt-3 text-xs text-(--state-warning)">
+                Il permesso è bloccato: apri <strong>Impostazioni → Notifiche → LAG</strong> e attiva “Consenti
+                notifiche”.
               </p>
             )}
             {!standalone && (
-              <p className="mt-3 text-xs text-[var(--state-warning)]">
+              <p className="mt-3 text-xs text-(--state-warning)">
                 Sei ancora nel browser: completa i passaggi e riapri il sito dalla schermata Home.
               </p>
             )}
@@ -231,29 +252,36 @@ export function NotificationPermission() {
         )}
 
         {platform === "android" && (
-          <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--surface-border)] p-4">
-            <p className="font-semibold text-[var(--text-primary)]">Su Android</p>
+          <div className="mt-4 rounded-md border border-(--surface-border) p-4">
+            <p className="font-semibold text-(--text-primary)">Su Android</p>
             <ol className="mt-2 list-decimal space-y-2 pl-5">
               <li>Apri il sito con Chrome o con il browser che usi normalmente.</li>
-              <li>Premi <strong>Continua e attiva</strong> qui sotto.</li>
-              <li>Quando Android chiede il permesso, scegli <strong>Consenti</strong>.</li>
+              <li>
+                Premi <strong>Continua e attiva</strong> qui sotto.
+              </li>
+              <li>
+                Quando Android chiede il permesso, scegli <strong>Consenti</strong>.
+              </li>
               <li>Lascia abilitate le notifiche per questo sito sia nel browser sia nelle impostazioni Android.</li>
             </ol>
             {state === "denied" && (
-              <p className="mt-3 text-xs text-[var(--state-warning)]">
-                Il permesso è bloccato: nelle impostazioni di Chrome apri <strong>Impostazioni sito → Notifiche</strong> e riabilita questo sito.
+              <p className="mt-3 text-xs text-(--state-warning)">
+                Il permesso è bloccato: nelle impostazioni di Chrome apri <strong>Impostazioni sito → Notifiche</strong>{" "}
+                e riabilita questo sito.
               </p>
             )}
             {state === "unsupported" && (
-              <p className="mt-3 text-xs text-[var(--state-warning)]">
+              <p className="mt-3 text-xs text-(--state-warning)">
                 Questo browser non supporta Web Push: aggiorna Chrome oppure prova con un altro browser.
               </p>
             )}
           </div>
         )}
 
-        {(platform === "android" || (platform === "ios" && standalone)) && <TurnstileChallenge key={challengeAttempt} action="push" onToken={setChallengeToken}/>}
-        {activationError && <p className="mt-3 text-xs text-[var(--state-error)]">{activationError}</p>}
+        {(platform === "android" || (platform === "ios" && standalone)) && (
+          <TurnstileChallenge key={challengeAttempt} action="push" onToken={setChallengeToken} />
+        )}
+        {activationError && <p className="mt-3 text-xs text-(--state-error)">{activationError}</p>}
       </Modal>
     </>
   );

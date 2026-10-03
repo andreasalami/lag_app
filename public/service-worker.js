@@ -17,27 +17,31 @@ self.addEventListener("push", (event) => {
   const body = typeof payload.body === "string" ? payload.body : "Nuovo aggiornamento disponibile.";
   const tag = typeof payload.tag === "string" ? payload.tag : "lag-tournament";
 
-  event.waitUntil(self.registration.showNotification(title, {
-    body,
-    icon: DEFAULT_ICON,
-    badge: DEFAULT_BADGE,
-    tag,
-    renotify: true,
-    data: { url: new URL("#tornei", APP_SCOPE).href },
-  }));
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: DEFAULT_ICON,
+      badge: DEFAULT_BADGE,
+      tag,
+      renotify: true,
+      data: { url: new URL("#tornei", APP_SCOPE).href },
+    }),
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const destination = event.notification.data?.url ?? new URL("#tornei", APP_SCOPE).href;
-  event.waitUntil((async () => {
-    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const client of windows) {
-      if ("focus" in client) {
-        if ("navigate" in client) await client.navigate(destination);
-        return client.focus();
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of windows) {
+        if ("focus" in client) {
+          if ("navigate" in client) await client.navigate(destination);
+          return client.focus();
+        }
       }
-    }
-    return self.clients.openWindow(destination);
-  })());
+      return self.clients.openWindow(destination);
+    })(),
+  );
 });

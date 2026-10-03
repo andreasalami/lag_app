@@ -68,12 +68,12 @@ const tabs: Tab[] = [
 export function TabBar() {
   return (
     <nav className="fixed inset-x-0 bottom-4 z-50 px-4">
-      <div className="glass-elevated mx-auto flex max-w-sm items-center justify-between rounded-[var(--radius-pill)] px-3 py-2">
+      <div className="glass-elevated mx-auto flex max-w-sm items-center justify-between rounded-(--radius-pill) px-3 py-2">
         {tabs.map((tab) => (
           <a
             key={tab.label}
             href={tab.href}
-            className="flex flex-col items-center gap-1 rounded-[var(--radius-md)] px-3 py-1.5 text-[10px] text-[var(--text-secondary)] transition-colors hover:text-[var(--accent-primary)]"
+            className="flex flex-col items-center gap-1 rounded-md px-3 py-1.5 text-[10px] text-(--text-secondary) transition-colors hover:text-(--accent-primary)"
           >
             {tab.icon}
             {tab.label}

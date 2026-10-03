@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { loadScriptOnce } from "../../lib/browser";
 
 declare global {
   interface Window {
@@ -11,32 +12,6 @@ declare global {
 }
 
 const EMBED_SCRIPT_SRC = "https://www.instagram.com/embed.js";
-let instagramScriptPromise: Promise<void> | null = null;
-
-function loadInstagramScript(): Promise<void> {
-  if (window.instgrm) return Promise.resolve();
-  if (instagramScriptPromise) return instagramScriptPromise;
-
-  instagramScriptPromise = new Promise((resolve, reject) => {
-    if (window.instgrm) {
-      resolve();
-      return;
-    }
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${EMBED_SCRIPT_SRC}"]`);
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("Instagram embed non disponibile")));
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = EMBED_SCRIPT_SRC;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Instagram embed non disponibile"));
-    document.body.appendChild(script);
-  });
-  return instagramScriptPromise;
-}
 
 interface InstagramEmbedProps {
   url: string;
@@ -47,7 +22,7 @@ interface InstagramEmbedProps {
  * niente backend: basta l'URL pubblico del post (oEmbed via embed.js).
  *
  * Lo script Instagram si carica UNA sola volta per pagina (vedi
- * loadInstagramScript). Ma React monta il blockquote DOPO che lo script
+ * loadScriptOnce). Ma React monta il blockquote DOPO che lo script
  * ha già fatto la sua scansione iniziale del DOM, quindi il processing
  * automatico da solo non basta: ad ogni mount richiamiamo esplicitamente
  * instgrm.Embeds.process(). Se dimentichi questo pezzo, vedi solo il
@@ -56,13 +31,15 @@ interface InstagramEmbedProps {
 export function InstagramEmbed({ url }: InstagramEmbedProps) {
   useEffect(() => {
     let cancelled = false;
-    loadInstagramScript().then(() => {
-      if (!cancelled) {
-        window.instgrm?.Embeds.process();
-      }
-    }).catch(() => {
-      // Il link nel blockquote resta un fallback pienamente utilizzabile.
-    });
+    loadScriptOnce(EMBED_SCRIPT_SRC, () => Boolean(window.instgrm))
+      .then(() => {
+        if (!cancelled) {
+          window.instgrm?.Embeds.process();
+        }
+      })
+      .catch(() => {
+        // Il link nel blockquote resta un fallback pienamente utilizzabile.
+      });
     return () => {
       cancelled = true;
     };

@@ -1,5 +1,3 @@
-import type { MenuSection } from "../menu/menuSections";
-
 export type CashStation = "cassa_1" | "cassa_2" | "cassa_3" | "cassa_4" | "cassa_5";
 export type KitchenStation = "cucina" | "primi" | "secondi" | "contorni" | "dolci" | "furgone";
 export type BarStation = "birre" | "drinks" | "bar";
@@ -28,22 +26,33 @@ export const BAR_STATIONS: { key: BarStation; label: string; description: string
   { key: "bar", label: "Bar", description: "Bevande, caffè e vini" },
 ];
 
+// La postazione scelta resta sul dispositivo finché non si preme "Cambia".
+export const STATION_STORAGE_KEYS = {
+  cassa: "lag:cash-station",
+  cucina: "lag:kitchen-station",
+  bar: "lag:bar-station",
+} as const;
+
 export function isCashStation(value: unknown): value is CashStation {
   return typeof value === "string" && CASH_STATIONS.some((station) => station.key === value);
-}
-
-export function isFulfillmentStation(value: unknown): value is FulfillmentStation {
-  return typeof value === "string"
-    && [...KITCHEN_STATIONS, ...BAR_STATIONS].some((station) => station.key === value);
 }
 
 export function cashStationLabel(station: CashStation) {
   return CASH_STATIONS.find((candidate) => candidate.key === station)?.label ?? station;
 }
 
-export function fulfillmentStationForSubcategory(subcategory: MenuSection): Exclude<FulfillmentStation, "cucina"> {
-  if (subcategory === "vini" || subcategory === "bevande") return "bar";
-  return subcategory;
+/** Ricerca di cassa e postazioni: numero e nome ordine si possono combinare. */
+export function matchesOrderSearch(
+  order: { display_number: number; alias: string | null },
+  number: string,
+  alias: string,
+) {
+  const wantedNumber = number.trim();
+  const wantedAlias = alias.trim().toLocaleLowerCase("it");
+  return (
+    (!wantedNumber || String(order.display_number).includes(wantedNumber)) &&
+    (!wantedAlias || (order.alias ?? "").toLocaleLowerCase("it").includes(wantedAlias))
+  );
 }
 
 export type FulfillmentProgress = {
@@ -51,15 +60,3 @@ export type FulfillmentProgress = {
   quantity: number;
   delivered: number;
 };
-
-export function publicOrderStatusFromProgress(
-  paid: boolean,
-  progress: FulfillmentProgress[],
-): "in_attesa_pagamento" | "pagato" | "ritiro_parziale" | "consegnato" {
-  if (!paid) return "in_attesa_pagamento";
-  const quantity = progress.reduce((sum, item) => sum + item.quantity, 0);
-  const delivered = progress.reduce((sum, item) => sum + item.delivered, 0);
-  if (quantity > 0 && delivered >= quantity) return "consegnato";
-  if (delivered > 0) return "ritiro_parziale";
-  return "pagato";
-}

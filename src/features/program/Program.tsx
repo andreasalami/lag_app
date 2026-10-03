@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { StaffPanel } from "../../components/ui/StaffPanel";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
+import { newDraftId, useDraftRows } from "../../lib/useDraftRows";
 import { ProgramGrid, type ProgramSlotData } from "./ProgramGrid";
+import { appHref } from "../../lib/browser";
 
 const STAGES = ["Stage 1", "Stage 2"];
 const MAX_DAYS = 3;
@@ -15,9 +17,6 @@ const FALLBACK_SLOTS: ProgramSlotData[] = [
   { id: "f2", day: 1, stage: "Stage 1", title: "DJ set — esempio", start_time: "19:00", end_time: "21:00" },
   { id: "f3", day: 1, stage: "Stage 2", title: "Live band — esempio", start_time: "19:30", end_time: "20:30" },
 ];
-
-const NEW_ID_PREFIX = "new:";
-const isNewId = (id: string) => id.startsWith(NEW_ID_PREFIX);
 
 /*
   Programma — dati Supabase, editing riservato al ruolo 'staff'/'admin'.
@@ -41,26 +40,22 @@ export function Program({ management = false }: { management?: boolean }) {
   const canEdit = management && canManage;
   const [days, setDays] = useState(1);
   const [savedDays, setSavedDays] = useState(1);
-  const { rows: slots, setRows: setSlots, loading, error: loadError, refetch } = useSupabaseRows<ProgramSlotData>({
+  const {
+    rows: slots,
+    setRows: setSlots,
+    loading,
+    error: loadError,
+    refetch,
+  } = useSupabaseRows<ProgramSlotData>({
     table: "program_slots",
     select: "id, day, stage, title, start_time, end_time",
     orderBy: [{ column: "day" }, { column: "start_time" }],
     fallback: FALLBACK_SLOTS,
   });
 
-  const [savedSlots, setSavedSlots] = useState<ProgramSlotData[]>([]);
-  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const draft = useDraftRows(slots, setSlots, loading);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const savedOnceRef = useRef(false);
-
-  useEffect(() => {
-    if (!loading && !savedOnceRef.current) {
-      setSavedSlots(slots);
-      savedOnceRef.current = true;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
 
   // Il numero di giorni è condiviso (riga singola su Supabase,
   // program_settings) — non più uno state locale al browser di chi
@@ -85,7 +80,7 @@ export function Program({ management = false }: { management?: boolean }) {
     };
   }, []);
 
-  const isDirty = days !== savedDays || deletedIds.length > 0 || JSON.stringify(slots) !== JSON.stringify(savedSlots);
+  const isDirty = days !== savedDays || draft.isDirty;
 
   // Rete di sicurezza: se per qualsiasi motivo il valore salvato non
   // è ancora arrivato (o è rimasto indietro) ma esistono comunque
@@ -96,26 +91,22 @@ export function Program({ management = false }: { management?: boolean }) {
   function addSlot() {
     setSlots((prev) => [
       ...prev,
-      { id: `${NEW_ID_PREFIX}${crypto.randomUUID()}`, day: 1, stage: STAGES[0], title: "Nuovo evento", start_time: "20:00", end_time: "21:00" },
+      { id: newDraftId(), day: 1, stage: STAGES[0], title: "Nuovo evento", start_time: "20:00", end_time: "21:00" },
     ]);
-  }
-
-  function deleteSlot(id: string) {
-    setSlots((prev) => prev.filter((s) => s.id !== id));
-    if (!isNewId(id)) setDeletedIds((prev) => [...prev, id]);
   }
 
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
 
-    const invalidSlot = slots.some((slot) =>
-      !slot.title.trim()
-      || slot.title.length > 200
-      || slot.day < 1
-      || slot.day > days
-      || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.start_time)
-      || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.end_time)
+    const invalidSlot = slots.some(
+      (slot) =>
+        !slot.title.trim() ||
+        slot.title.length > 200 ||
+        slot.day < 1 ||
+        slot.day > days ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.start_time) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.end_time),
     );
     if (invalidSlot) {
       setSaveError("Controlla titoli, giorni e orari. Ogni evento deve rientrare nei giorni pubblicati.");
@@ -123,21 +114,19 @@ export function Program({ management = false }: { management?: boolean }) {
       return;
     }
 
-    const created = slots
-      .filter((s) => isNewId(s.id))
-      .map(({ day, stage, title, start_time, end_time }) => ({ day, stage, title, start_time, end_time }));
-
-    const updated = slots.filter((s) => {
-      if (isNewId(s.id)) return false;
-      const original = savedSlots.find((o) => o.id === s.id);
-      return original && JSON.stringify(original) !== JSON.stringify(s);
-    });
+    const created = draft.created.map(({ day, stage, title, start_time, end_time }) => ({
+      day,
+      stage,
+      title,
+      start_time,
+      end_time,
+    }));
 
     const { error } = await supabase.rpc("save_program", {
       p_days: days,
       p_created: created,
-      p_updated: updated,
-      p_deleted: deletedIds,
+      p_updated: draft.updated.map(({ row }) => row),
+      p_deleted: draft.deletedIds,
     });
 
     if (error) {
@@ -147,10 +136,8 @@ export function Program({ management = false }: { management?: boolean }) {
       return;
     }
 
-    const fresh = await refetch();
-    if (fresh) setSavedSlots(fresh);
+    draft.markSaved(await refetch());
     setSavedDays(days);
-    setDeletedIds([]);
     setSaving(false);
   }
 
@@ -158,49 +145,63 @@ export function Program({ management = false }: { management?: boolean }) {
     <section id="programma" className="mx-auto w-full max-w-3xl py-10 sm:px-4">
       <div className="px-4 sm:px-0">
         <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione Scaletta" : "Programma"}</h2>
-        <p className="mb-4 text-sm text-[var(--text-secondary)]">
+        <p className="mb-4 text-sm text-(--text-secondary)">
           {management
             ? "Modifica giorni, palchi e orari pubblicati nella Home."
             : "Due palchi in contemporanea — l’orario può continuare dopo mezzanotte."}
         </p>
         {!management && canManage && (
-          <Button href={`${import.meta.env.BASE_URL}#gestione-programma`} className="mb-5 w-full justify-start sm:w-64">
+          <Button href={appHref("#gestione-programma")} className="mb-5 w-full justify-start sm:w-64">
             Gestisci Scaletta
           </Button>
         )}
       </div>
 
       {canEdit && (
-        <StaffPanel className="mx-4 mb-6 sm:mx-0" eyebrow="Programmazione evento" title="Giorni, palchi e orari" description="Le modifiche restano in bozza finché non premi Salva." contentClassName="flex flex-col gap-3">
-          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+        <StaffPanel
+          className="mx-4 mb-6 sm:mx-0"
+          eyebrow="Programmazione evento"
+          title="Giorni, palchi e orari"
+          description="Le modifiche restano in bozza finché non premi Salva."
+          contentClassName="flex flex-col gap-3"
+        >
+          <label className="flex items-center gap-2 text-sm text-(--text-secondary)">
             Giorni dell’evento
             <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="field text-xs">
               {Array.from({ length: MAX_DAYS }, (_, index) => index + 1).map((dayCount) => (
-                <option key={dayCount} value={dayCount}>{dayCount}</option>
+                <option key={dayCount} value={dayCount}>
+                  {dayCount}
+                </option>
               ))}
             </select>
           </label>
           {slots.map((slot) => (
             <div
               key={slot.id}
-              className="grid gap-2 border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0 sm:flex sm:flex-wrap sm:items-center sm:pb-2"
+              className="grid gap-2 border-b border-(--surface-border) pb-3 last:border-0 last:pb-0 sm:flex sm:flex-wrap sm:items-center sm:pb-2"
             >
               <select
                 value={slot.day}
-                onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, day: Number(e.target.value) } : s)))}
+                onChange={(e) =>
+                  setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, day: Number(e.target.value) } : s)))
+                }
                 className="field min-w-0 text-xs sm:w-auto"
               >
                 {Array.from({ length: displayDays }, (_, index) => index + 1).map((day) => (
-                  <option key={day} value={day}>Giorno {day}</option>
+                  <option key={day} value={day}>
+                    Giorno {day}
+                  </option>
                 ))}
               </select>
               <select
                 value={slot.stage}
-                onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, stage: e.target.value } : s)))}
+                onChange={(e) =>
+                  setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, stage: e.target.value } : s)))
+                }
                 className="field min-w-0 text-xs sm:w-auto"
               >
                 {STAGES.map((s) => (
-                  <option key={s} value={s} className="bg-[var(--surface-solid)]">
+                  <option key={s} value={s} className="bg-(--surface-solid)">
                     {s}
                   </option>
                 ))}
@@ -209,42 +210,48 @@ export function Program({ management = false }: { management?: boolean }) {
                 required
                 maxLength={200}
                 value={slot.title}
-                onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, title: e.target.value } : s)))}
+                onChange={(e) =>
+                  setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, title: e.target.value } : s)))
+                }
                 className="field col-span-2 min-w-0 w-full sm:col-span-auto sm:min-w-[140px] sm:flex-1"
               />
               <div className="col-span-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:contents">
                 <input
                   type="time"
                   value={slot.start_time}
-                  onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, start_time: e.target.value } : s)))}
+                  onChange={(e) =>
+                    setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, start_time: e.target.value } : s)))
+                  }
                   className="field min-w-0 w-full text-xs"
                 />
-                <span className="text-center text-xs text-[var(--text-secondary)]">–</span>
+                <span className="text-center text-xs text-(--text-secondary)">–</span>
                 <input
                   type="time"
                   value={slot.end_time}
-                  onChange={(e) => setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, end_time: e.target.value } : s)))}
+                  onChange={(e) =>
+                    setSlots((prev) => prev.map((s) => (s.id === slot.id ? { ...s, end_time: e.target.value } : s)))
+                  }
                   className="field min-w-0 w-full text-xs"
                 />
               </div>
               <button
-                onClick={() => deleteSlot(slot.id)}
-                className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto"
+                onClick={() => draft.removeRow(slot.id)}
+                className="justify-self-start text-xs text-(--state-error) hover:underline sm:justify-self-auto"
               >
                 Elimina
               </button>
             </div>
           ))}
-          <button onClick={addSlot} className="mt-1 self-start text-xs text-[var(--accent-primary)] hover:underline">
+          <button onClick={addSlot} className="mt-1 self-start text-xs text-(--accent-primary) hover:underline">
             + Aggiungi evento
           </button>
         </StaffPanel>
       )}
 
       {loadError ? (
-        <p className="px-4 text-sm text-[var(--state-error)] sm:px-0">Programma non disponibile. Ricarica la pagina.</p>
+        <p className="px-4 text-sm text-(--state-error) sm:px-0">Programma non disponibile. Ricarica la pagina.</p>
       ) : loading ? (
-        <p className="px-4 text-sm text-[var(--text-secondary)] sm:px-0">Carico il programma...</p>
+        <p className="px-4 text-sm text-(--text-secondary) sm:px-0">Carico il programma...</p>
       ) : (
         <ProgramGrid slots={slots} stages={STAGES} days={displayDays} />
       )}

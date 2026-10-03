@@ -7,6 +7,8 @@ interface SaveBannerProps {
   /** Etichetta del bottone a riposo, es. "Salvo..." diventa questo durante il salvataggio. Default: "Salva". */
   label?: string;
   savingLabel?: string;
+  /** Blocca il salvataggio finché la sezione contiene valori non validi (spiegati in `error`). */
+  disabled?: boolean;
 }
 
 /**
@@ -19,14 +21,27 @@ interface SaveBannerProps {
  * stessa forma ovunque, ma è sempre chiaro DI COSA hai modifiche non
  * salvate se hai più sezioni aperte in tab diverse.
  */
-export function SaveBanner({ message, saving, error, onSave, label = "Salva", savingLabel = "Salvo..." }: SaveBannerProps) {
+export function SaveBanner({
+  message,
+  saving,
+  error,
+  onSave,
+  label = "Salva",
+  savingLabel = "Salvo...",
+  disabled = false,
+}: SaveBannerProps) {
   return (
-    <div className="glass-elevated glass-elevated--strong fixed inset-x-4 bottom-24 z-40 mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-[var(--radius-md)] px-4 py-3">
-      <span className="text-xs text-[var(--text-secondary)]">{error ?? message}</span>
+    <div className="glass-elevated glass-elevated--strong fixed inset-x-4 bottom-24 z-40 mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-md px-4 py-3">
+      <span
+        role={error ? "alert" : undefined}
+        className={`text-xs ${error ? "text-(--state-error)" : "text-(--text-secondary)"}`}
+      >
+        {error ?? message}
+      </span>
       <button
         onClick={onSave}
-        disabled={saving}
-        className="signature-glow rounded-[var(--radius-pill)] bg-[var(--accent-primary)] px-4 py-2 text-sm font-semibold text-[var(--text-on-accent)] disabled:opacity-50"
+        disabled={saving || disabled}
+        className="signature-glow rounded-(--radius-pill) bg-(--accent-primary) px-4 py-2 text-sm font-semibold text-(--text-on-accent) disabled:opacity-50"
       >
         {saving ? savingLabel : label}
       </button>

@@ -44,7 +44,7 @@ function timelineTimes(slots: ProgramSlotData[]) {
       let end = toMinutes(slot.end_time);
       while (end <= start) end += DAY_MINUTES;
       return [slot.id, { start, end }];
-    })
+    }),
   );
 }
 
@@ -57,7 +57,7 @@ function timelineTimes(slots: ProgramSlotData[]) {
 export function ProgramGrid({ slots, stages, days }: ProgramGridProps) {
   if (slots.length === 0) {
     return (
-      <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-center text-sm text-[var(--text-secondary)]">
+      <p className="rounded-md border border-dashed border-(--surface-border) p-4 text-center text-sm text-(--text-secondary)">
         Programma non ancora pubblicato.
       </p>
     );
@@ -71,8 +71,8 @@ export function ProgramGrid({ slots, stages, days }: ProgramGridProps) {
         if (daySlots.length === 0) {
           return (
             <div key={day} className="px-4 sm:px-0">
-              <h3 className="mb-3 font-display text-lg text-[var(--accent-primary)]">{dayLabel(day)}</h3>
-              <p className="rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-center text-sm text-[var(--text-secondary)]">
+              <h3 className="mb-3 font-display text-lg text-(--accent-primary)">{dayLabel(day)}</h3>
+              <p className="rounded-md border border-dashed border-(--surface-border) p-4 text-center text-sm text-(--text-secondary)">
                 Programma non ancora pubblicato.
               </p>
             </div>
@@ -94,12 +94,15 @@ export function ProgramGrid({ slots, stages, days }: ProgramGridProps) {
 
         return (
           <div key={day} className="w-full min-w-0">
-            <h3 className="mb-3 px-4 font-display text-lg text-[var(--accent-primary)] sm:px-0">{dayLabel(day)}</h3>
+            <h3 className="mb-3 px-4 font-display text-lg text-(--accent-primary) sm:px-0">{dayLabel(day)}</h3>
             <div className="w-full min-w-0 px-1 pb-2 sm:px-0">
               <div className="grid w-full min-w-0 grid-cols-[38px_minmax(0,1fr)_minmax(0,1fr)] gap-1.5 sm:grid-cols-[48px_minmax(0,1fr)_minmax(0,1fr)] sm:gap-3">
                 <div />
                 {stages.map((stage) => (
-                  <h4 key={stage} className="min-w-0 truncate text-center font-display text-xs text-[var(--accent-primary)] sm:text-sm">
+                  <h4
+                    key={stage}
+                    className="min-w-0 truncate text-center font-display text-xs text-(--accent-primary) sm:text-sm"
+                  >
                     {stage}
                   </h4>
                 ))}
@@ -108,7 +111,7 @@ export function ProgramGrid({ slots, stages, days }: ProgramGridProps) {
                   {hourMarks.map((minute) => (
                     <span
                       key={minute}
-                      className="absolute -translate-y-1/2 font-mono text-[10px] text-[var(--text-secondary)] sm:text-xs"
+                      className="absolute -translate-y-1/2 font-mono text-[10px] text-(--text-secondary) sm:text-xs"
                       style={{ top: (minute - minMinutes) * PX_PER_MIN }}
                     >
                       {formatMinutes(minute)}
@@ -119,13 +122,13 @@ export function ProgramGrid({ slots, stages, days }: ProgramGridProps) {
                 {stages.map((stage) => (
                   <div
                     key={stage}
-                    className="relative rounded-[var(--radius-lg)] border border-[var(--surface-border)]"
+                    className="relative rounded-lg border border-(--surface-border)"
                     style={{ height: totalHeight }}
                   >
                     {hourMarks.map((minute) => (
                       <div
                         key={minute}
-                        className="absolute left-0 right-0 border-t border-[var(--surface-border)]"
+                        className="absolute left-0 right-0 border-t border-(--surface-border)"
                         style={{ top: (minute - minMinutes) * PX_PER_MIN }}
                       />
                     ))}
@@ -135,18 +138,17 @@ export function ProgramGrid({ slots, stages, days }: ProgramGridProps) {
                         const time = times.get(slot.id);
                         if (!time) return null;
                         const top = (time.start - minMinutes) * PX_PER_MIN;
-                        const height = Math.max(
-                          (time.end - time.start) * PX_PER_MIN,
-                          MIN_BOX_HEIGHT
-                        );
+                        const height = Math.max((time.end - time.start) * PX_PER_MIN, MIN_BOX_HEIGHT);
                         return (
                           <div
                             key={slot.id}
-                            className="surface-solid absolute left-0.5 right-0.5 overflow-hidden rounded-[var(--radius-sm)] border-l-2 border-l-[var(--accent-primary)] px-1.5 py-1 sm:left-1 sm:right-1 sm:rounded-[var(--radius-md)] sm:px-2"
+                            className="surface-solid absolute left-0.5 right-0.5 overflow-hidden rounded-sm border-l-2 border-l-(--accent-primary) px-1.5 py-1 sm:left-1 sm:right-1 sm:rounded-md sm:px-2"
                             style={{ top, height }}
                           >
-                            <p className="line-clamp-2 text-[11px] font-semibold leading-tight text-[var(--text-primary)] sm:text-xs">{slot.title}</p>
-                            <p className="truncate font-mono text-[9px] text-[var(--text-secondary)] sm:text-[10px]">
+                            <p className="line-clamp-2 text-[11px] font-semibold leading-tight text-(--text-primary) sm:text-xs">
+                              {slot.title}
+                            </p>
+                            <p className="truncate font-mono text-[9px] text-(--text-secondary) sm:text-[10px]">
                               {slot.start_time}–{slot.end_time}
                             </p>
                           </div>

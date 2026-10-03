@@ -11,9 +11,5 @@ interface CardProps {
  * tab bar e bottoni (vedi tokens.css).
  */
 export function Card({ children, className = "" }: CardProps) {
-  return (
-    <div className={`surface-solid rounded-[var(--radius-lg)] p-6 ${className}`}>
-      {children}
-    </div>
-  );
+  return <div className={`surface-solid rounded-lg p-6 ${className}`}>{children}</div>;
 }

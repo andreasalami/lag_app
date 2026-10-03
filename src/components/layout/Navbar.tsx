@@ -1,20 +1,32 @@
-import { useState } from "react";
-import { orderStatusClassName, readOrderHistory, syncOrderHistoryStatuses, type PublicOrderStatus, type StoredOrder } from "../../features/orders/orderHistory";
+import { useEffect, useRef, useState } from "react";
+import {
+  ORDER_STATUS_LABELS,
+  orderStatusClassName,
+  readOrderHistory,
+  syncOrderHistoryStatuses,
+  type StoredOrder,
+} from "../../features/orders/orderHistory";
 import { priceFormatter } from "../../features/orders/orderUtils";
-
-const ORDER_STATUS_LABELS: Record<PublicOrderStatus, string> = {
-  in_attesa_pagamento: "Da pagare",
-  pagato: "In preparazione",
-  ritiro_parziale: "Ritiro parziale",
-  consegnato: "Ritirato",
-  annullato: "Annullato",
-};
+import { appHref } from "../../lib/browser";
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [orders, setOrders] = useState<StoredOrder[]>([]);
   const [refreshingOrders, setRefreshingOrders] = useState(false);
-  const staffPath = `${import.meta.env.BASE_URL}#staff`;
+  const staffPath = appHref("#staff");
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  // Esc chiude il menu e riporta il focus al pulsante che l'ha aperto.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      toggleRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   async function refreshOrders() {
     const stored = readOrderHistory();
@@ -32,21 +44,32 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 px-4 pt-4">
-      <div className="glass-elevated mx-auto flex max-w-3xl items-center justify-between rounded-[var(--radius-pill)] px-5 py-3">
+      <div className="glass-elevated mx-auto flex max-w-3xl items-center justify-between rounded-(--radius-pill) px-5 py-3">
         <a href="#home" className="flex items-center gap-2">
-          <img src={`${import.meta.env.BASE_URL}logo-lag.png`} alt="L'Agro ai Giovani" className="h-9 w-auto" />
+          <img src={appHref("logo-lag.png")} alt="L'Agro ai Giovani" className="h-9 w-auto" />
         </a>
 
-        <nav className="hidden gap-6 text-sm text-[var(--text-secondary)] sm:flex">
-          <a href="#biglietti" className="hover:text-[var(--text-primary)]">Biglietti</a>
-          <a href="#programma" className="hover:text-[var(--text-primary)]">Programma</a>
-          <a href="#menu" className="hover:text-[var(--text-primary)]">Menu</a>
-          <a href="#tornei" className="hover:text-[var(--text-primary)]">Torneo</a>
-          <a href={staffPath} className="hover:text-[var(--text-primary)]">Staff</a>
+        <nav className="hidden gap-6 text-sm text-(--text-secondary) sm:flex">
+          <a href="#biglietti" className="hover:text-(--text-primary)">
+            Biglietti
+          </a>
+          <a href="#programma" className="hover:text-(--text-primary)">
+            Programma
+          </a>
+          <a href="#menu" className="hover:text-(--text-primary)">
+            Menu
+          </a>
+          <a href="#tornei" className="hover:text-(--text-primary)">
+            Torneo
+          </a>
+          <a href={staffPath} className="hover:text-(--text-primary)">
+            Staff
+          </a>
         </nav>
 
         <div className="relative h-10 w-10 sm:hidden">
           <button
+            ref={toggleRef}
             type="button"
             onClick={openMenu}
             aria-label="Apri menu"
@@ -71,42 +94,58 @@ export function Navbar() {
               />
               <div
                 id="mobile-navigation-menu"
-                className="glass-elevated glass-elevated--strong absolute right-0 top-12 z-50 w-[min(20rem,calc(100vw-2rem))] rounded-[var(--radius-lg)] p-3"
+                className="glass-elevated glass-elevated--strong absolute right-0 top-12 z-50 w-[min(20rem,calc(100vw-2rem))] rounded-lg p-3"
               >
                 <a
                   href="#programma"
                   onClick={() => setMenuOpen(false)}
-                  className="surface-solid flex min-h-12 items-center justify-center rounded-[var(--radius-md)] px-4 text-sm font-semibold"
+                  className="surface-solid flex min-h-12 items-center justify-center rounded-md px-4 text-sm font-semibold"
                 >
                   Programma
                 </a>
 
-                <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--surface-border)] bg-[var(--surface-solid)] p-3">
+                <div className="mt-3 rounded-md border border-(--surface-border) bg-(--surface-solid) p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold">I miei ordini</p>
-                    <button type="button" onClick={() => void refreshOrders()} disabled={refreshingOrders} className="text-xs text-[var(--text-secondary)] hover:underline disabled:opacity-60">
+                    <button
+                      type="button"
+                      onClick={() => void refreshOrders()}
+                      disabled={refreshingOrders}
+                      className="text-xs text-(--text-secondary) hover:underline disabled:opacity-60"
+                    >
                       {refreshingOrders ? "Aggiorno…" : "Aggiorna"}
                     </button>
                   </div>
                   {orders.length === 0 ? (
-                    <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">Non hai ancora ordini salvati su questo telefono.</p>
+                    <p className="mt-2 text-xs leading-relaxed text-(--text-secondary)">
+                      Non hai ancora ordini salvati su questo telefono.
+                    </p>
                   ) : (
                     <ul className="mt-2 space-y-2">
                       {orders.slice(0, 3).map((order) => (
-                        <li key={order.order_id} className="flex items-center justify-between gap-3 border-t border-[var(--surface-border)] pt-2 text-xs first:border-0 first:pt-0">
+                        <li
+                          key={order.order_id}
+                          className="flex items-center justify-between gap-3 border-t border-(--surface-border) pt-2 text-xs first:border-0 first:pt-0"
+                        >
                           <span className="min-w-0">
-                            <strong className="block truncate">#{order.display_number} · {order.alias}</strong>
-                            <span className="text-[var(--text-secondary)]">{priceFormatter.format(Number(order.total))}</span>
+                            <strong className="block truncate">
+                              #{order.display_number} · {order.alias}
+                            </strong>
+                            <span className="text-(--text-secondary)">
+                              {priceFormatter.format(Number(order.total))}
+                            </span>
                           </span>
-                          <span className={`shrink-0 font-semibold ${orderStatusClassName(order.status)}`}>{ORDER_STATUS_LABELS[order.status]}</span>
+                          <span className={`shrink-0 font-semibold ${orderStatusClassName(order.status)}`}>
+                            {ORDER_STATUS_LABELS[order.status]}
+                          </span>
                         </li>
                       ))}
                     </ul>
                   )}
                   <a
-                    href={`${import.meta.env.BASE_URL}#ordina`}
+                    href={appHref("#ordina")}
                     onClick={() => setMenuOpen(false)}
-                    className="mt-3 block text-center text-xs font-semibold text-[var(--accent-primary)] hover:underline"
+                    className="mt-3 block text-center text-xs font-semibold text-(--accent-primary) hover:underline"
                   >
                     {orders.length === 0 ? "Vai alle ordinazioni" : "Apri riepilogo ordini"}
                   </a>

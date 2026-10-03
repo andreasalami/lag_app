@@ -43,14 +43,19 @@ export function menuSectionFor(category: MenuCategory, itemName: string): MenuSe
   const name = normalizedName(itemName);
 
   if (category === "cibo") {
-    if (includesOneOf(name, ["dolce", "torta", "gelato", "dessert", "crostata", "biscotto", "tiramisù", "tiramisu"])) return "dolci";
-    if (includesOneOf(name, ["patatin", "contorno", "insalata", "verdure", "polenta", "fritto misto"])) return "contorni";
+    if (includesOneOf(name, ["dolce", "torta", "gelato", "dessert", "crostata", "biscotto", "tiramisù", "tiramisu"]))
+      return "dolci";
+    if (includesOneOf(name, ["patatin", "contorno", "insalata", "verdure", "polenta", "fritto misto"]))
+      return "contorni";
     if (includesOneOf(name, ["pasta", "risotto", "lasagn", "gnocc", "raviol", "tortell", "primo"])) return "primi";
     return "secondi";
   }
 
   if (includesOneOf(name, ["birra", "lager", "ipa", "pils", "weiss", "bionda", "rossa"])) return "birre";
   if (includesOneOf(name, ["vino", "prosecco", "spumante", "rosso", "bianco", "rosé", "rose"])) return "vini";
-  if (includesOneOf(name, ["spritz", "cocktail", "drink", "gin", "vodka", "rum", "amaro", "grappa", "mojito", "negroni"])) return "drinks";
+  if (
+    includesOneOf(name, ["spritz", "cocktail", "drink", "gin", "vodka", "rum", "amaro", "grappa", "mojito", "negroni"])
+  )
+    return "drinks";
   return "bevande";
 }

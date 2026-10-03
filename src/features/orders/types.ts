@@ -1,11 +1,14 @@
-export type OrderCategory = "cibo" | "bevande";
+import type { MenuCategory, MenuSection } from "../menu/menuSections";
+
+export type OrderCategory = MenuCategory;
 export type PreparationMode = "immediate" | "deferred";
 export type KitchenState = "none" | "reserved" | "dormant" | "waiting" | "active" | "done";
+export type OrderStatus = "in_attesa_pagamento" | "pagato" | "ritiro_parziale" | "consegnato" | "annullato";
 
 export type OrderMenuItem = {
   id: string;
   category: OrderCategory;
-  subcategory: import("../menu/menuSections").MenuSection;
+  subcategory: MenuSection;
   name: string;
   price: number;
   available_portions: number | null;
@@ -13,15 +16,7 @@ export type OrderMenuItem = {
   allergens: number[];
 };
 
-export type OrderLine = {
-  id: string;
-  category: OrderCategory;
-  subcategory: import("../menu/menuSections").MenuSection;
-  name: string;
-  price: number;
-  qty: number;
-  allergens: number[];
-};
+export type OrderLine = Omit<OrderMenuItem, "available_portions" | "stock_capacity"> & { qty: number };
 
 export type SubmittedOrder = {
   preparation_mode?: PreparationMode;
@@ -61,7 +56,7 @@ export type StaffOrder = {
   notes: string | null;
   items: OrderLine[];
   total: number;
-  status: "in_attesa_pagamento" | "pagato" | "ritiro_parziale" | "consegnato" | "annullato";
+  status: OrderStatus;
   created_at: string;
   paid_at: string | null;
   claim_expires_at: string | null;

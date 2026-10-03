@@ -1,11 +1,4 @@
-import {
-  matchKey,
-  matchesInRound,
-  resolveSlot,
-  roundLabel,
-  totalRounds,
-  type Side,
-} from "./bracketUtils";
+import { matchKey, matchesInRound, resolveSlot, roundLabel, totalRounds, type Side } from "./bracketUtils";
 import type { TournamentSnapshot } from "./tournamentState";
 
 export type TournamentResult = {
@@ -23,8 +16,10 @@ export type TournamentResult = {
 export function currentRoundLabel(snapshot: TournamentSnapshot) {
   const rounds = totalRounds(snapshot.size);
   for (let round = 0; round < rounds; round += 1) {
-    const complete = Array.from({ length: matchesInRound(snapshot.size, round) }, (_, index) =>
-      snapshot.matches[matchKey(round, index)]?.winner != null).every(Boolean);
+    const complete = Array.from(
+      { length: matchesInRound(snapshot.size, round) },
+      (_, index) => snapshot.matches[matchKey(round, index)]?.winner != null,
+    ).every(Boolean);
     if (!complete) return roundLabel(snapshot.size, round);
   }
   return "Torneo concluso";

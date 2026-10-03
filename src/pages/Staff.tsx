@@ -3,6 +3,8 @@ import { useAuth } from "../features/auth/AuthContext";
 import { isSupabaseConfigured } from "../lib/supabaseClient";
 import { Button } from "../components/ui/Button";
 import { StaffPageHeading, StaffPanel } from "../components/ui/StaffPanel";
+import { appHref } from "../lib/browser";
+import { staffPagesFor } from "../features/auth/staffPages";
 
 /*
   Hub staff: un login unico e generico (qualsiasi ruolo: staff,
@@ -14,21 +16,8 @@ import { StaffPageHeading, StaffPanel } from "../components/ui/StaffPanel";
   assoluto) perché questa è una pagina diversa: serve una vera
   navigazione, non un semplice salto d'ancora nella stessa pagina.
 */
-const DESTINATIONS = [
-  { label: "Gestione Scaletta", path: "/#gestione-programma", roles: ["staff", "admin"] },
-  { label: "Gestione Menu e Scorte", path: "/#gestione-menu", roles: ["staff", "cucina", "admin"] },
-  { label: "Gestione torneo", path: "/#gestione-torneo", roles: ["admin"] },
-];
-
-const OPERATIONS = [
-  { label: "Casse", path: "/#cassa", role: "cassa" },
-  { label: "Cucina", path: "/#cucina", role: "cucina" },
-  { label: "Bar", path: "/#bar", role: "bar" },
-];
-
 export function Staff() {
   const { session, role, loading, profileError, signIn, signOut } = useAuth();
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +28,7 @@ export function Staff() {
   // navigazione (non un salto d'ancora) perché stiamo cambiando pagina.
   useEffect(() => {
     if (session && role === "tournament_manager") {
-      window.location.href = `${import.meta.env.BASE_URL}#gestione-torneo`;
+      window.location.href = appHref("#gestione-torneo");
     }
   }, [session, role]);
 
@@ -55,7 +44,7 @@ export function Staff() {
   if (loading) {
     return (
       <section className="mx-auto max-w-sm px-4 py-16 text-center">
-        <p className="text-sm text-[var(--text-secondary)]">Carico...</p>
+        <p className="text-sm text-(--text-secondary)">Carico...</p>
       </section>
     );
   }
@@ -63,13 +52,21 @@ export function Staff() {
   if (!session) {
     return (
       <section className="mx-auto max-w-md px-4 py-12">
-        <StaffPageHeading eyebrow="Area riservata" title="Accesso staff" description="Accedi con l’account assegnato alla tua funzione." />
+        <StaffPageHeading
+          eyebrow="Area riservata"
+          title="Accesso staff"
+          description="Accedi con l’account assegnato alla tua funzione."
+        />
         {!isSupabaseConfigured && (
-          <p className="mb-4 text-center text-xs text-[var(--state-error)]">
+          <p className="mb-4 text-center text-xs text-(--state-error)">
             Accesso non disponibile: Supabase non è configurato nella build pubblicata.
           </p>
         )}
-        <StaffPanel eyebrow="Autenticazione" title="Entra nella gestione" description="I permessi vengono applicati automaticamente in base al tuo ruolo.">
+        <StaffPanel
+          eyebrow="Autenticazione"
+          title="Entra nella gestione"
+          description="I permessi vengono applicati automaticamente in base al tuo ruolo."
+        >
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <input
               type="email"
@@ -88,13 +85,20 @@ export function Staff() {
               onChange={(e) => setPassword(e.target.value)}
               className="field"
             />
-            <Button variant="staff-primary" type="submit" disabled={submitting || !isSupabaseConfigured} className="w-full">
+            <Button
+              variant="staff-primary"
+              type="submit"
+              disabled={submitting || !isSupabaseConfigured}
+              className="w-full"
+            >
               {submitting ? "..." : "Accedi"}
             </Button>
-            {error && <p className="text-xs text-[var(--state-error)]">{error}</p>}
+            {error && <p className="text-xs text-(--state-error)">{error}</p>}
           </form>
         </StaffPanel>
-        <Button variant="back" href={`${basePath}/`} className="mt-4 w-full">← Torna al sito</Button>
+        <Button variant="back" href={appHref()} className="mt-4 w-full">
+          ← Torna al sito
+        </Button>
       </section>
     );
   }
@@ -102,10 +106,15 @@ export function Staff() {
   if (profileError) {
     return (
       <section className="mx-auto max-w-md px-4 py-12">
-        <StaffPageHeading title="Profilo non disponibile" description="Non è stato possibile caricare i permessi dell’account." />
+        <StaffPageHeading
+          title="Profilo non disponibile"
+          description="Non è stato possibile caricare i permessi dell’account."
+        />
         <StaffPanel eyebrow="Accesso interrotto" title="Controlla il profilo">
-          <p className="text-sm text-[var(--state-error)]">{profileError}</p>
-          <Button variant="staff-secondary" className="mt-5" onClick={signOut}>Esci</Button>
+          <p className="text-sm text-(--state-error)">{profileError}</p>
+          <Button variant="staff-secondary" className="mt-5" onClick={signOut}>
+            Esci
+          </Button>
         </StaffPanel>
       </section>
     );
@@ -114,7 +123,7 @@ export function Staff() {
   if (role === null || role === "tournament_manager") {
     return (
       <section className="mx-auto max-w-sm px-4 py-16 text-center">
-        <p className="text-sm text-[var(--text-secondary)]">Carico...</p>
+        <p className="text-sm text-(--text-secondary)">Carico...</p>
       </section>
     );
   }
@@ -124,49 +133,84 @@ export function Staff() {
       <section className="mx-auto max-w-md px-4 py-12">
         <StaffPageHeading title="Account in attesa" description="Il profilo esiste, ma deve ancora essere abilitato." />
         <StaffPanel eyebrow="Permessi staff" title="Ruolo non assegnato">
-          <p className="text-sm text-[var(--text-secondary)]">
-            Contatta l’amministratore per ricevere il ruolo necessario.
-          </p>
+          <p className="text-sm text-(--text-secondary)">Contatta l’amministratore per ricevere il ruolo necessario.</p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <Button variant="staff-secondary" onClick={signOut}>Esci</Button>
-            <Button variant="back" href={`${basePath}/`}>← Torna al sito</Button>
+            <Button variant="staff-secondary" onClick={signOut}>
+              Esci
+            </Button>
+            <Button variant="back" href={appHref()}>
+              ← Torna al sito
+            </Button>
           </div>
         </StaffPanel>
       </section>
     );
   }
 
+  const sections = staffPagesFor(role, "sections");
+  const operations = staffPagesFor(role, "operations");
+
   return (
     <section className="mx-auto max-w-3xl px-4 py-10">
-      <StaffPageHeading eyebrow="Area riservata" title="Gestione" description={`Accesso attivo · ${session.user.email ?? "account staff"}`} />
+      <StaffPageHeading
+        eyebrow="Area riservata"
+        title="Gestione"
+        description={`Accesso attivo · ${session.user.email ?? "account staff"}`}
+      />
 
       <div className="flex flex-col gap-6">
-        {(role === "staff" || role === "cucina" || role === "admin") && <StaffPanel eyebrow="Contenuti pubblici" title="Sezioni del sito" description="Aggiorna ciò che viene mostrato nella Home.">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {DESTINATIONS.filter((d) => d.roles.includes(role)).map((d) => (
-              <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left font-semibold text-[var(--accent-primary)] transition-colors hover:bg-[rgba(242,128,46,0.16)]">
-                {d.label}
-                <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Apri la pagina di gestione →</span>
-              </a>
-            ))}
-          </div>
-        </StaffPanel>}
+        {sections.length > 0 && (
+          <StaffPanel
+            eyebrow="Gestione"
+            title="Sezioni del sito"
+            description="Contenuti mostrati nella Home e gestione dell’evento."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              {sections.map((page) => (
+                <a
+                  key={page.hash}
+                  href={appHref(`#${page.hash}`)}
+                  className="tile font-semibold text-(--accent-primary)"
+                >
+                  {page.title}
+                  <span className="mt-1 block text-xs font-normal text-(--text-secondary)">
+                    Apri la pagina di gestione →
+                  </span>
+                </a>
+              ))}
+            </div>
+          </StaffPanel>
+        )}
 
-        {(role === "cassa" || role === "cucina" || role === "bar" || role === "admin") && <StaffPanel eyebrow="Evento live" title="Operatività" description="Apri la postazione assegnata durante il servizio.">
-          <div className="grid gap-3 sm:grid-cols-3">
-            {OPERATIONS.filter((d) => role === "admin" || d.role === role).map((d) => (
-              <a key={d.label} href={`${basePath}${d.path}`} className="rounded-[var(--radius-md)] border border-[var(--accent-primary)]/45 bg-[rgba(242,128,46,0.08)] p-4 text-left font-semibold text-[var(--accent-primary)] transition-colors hover:bg-[rgba(242,128,46,0.16)]">
-                {d.label}
-                <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">Avvia postazione →</span>
-              </a>
-            ))}
-          </div>
-        </StaffPanel>}
+        {operations.length > 0 && (
+          <StaffPanel
+            eyebrow="Evento live"
+            title="Operatività"
+            description="Apri la postazione assegnata durante il servizio."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              {operations.map((page) => (
+                <a
+                  key={page.hash}
+                  href={appHref(`#${page.hash}`)}
+                  className="tile font-semibold text-(--accent-primary)"
+                >
+                  {page.title}
+                  <span className="mt-1 block text-xs font-normal text-(--text-secondary)">Avvia postazione →</span>
+                </a>
+              ))}
+            </div>
+          </StaffPanel>
+        )}
       </div>
 
       <div className="mt-6 flex flex-wrap justify-center gap-2">
-        <Button variant="staff-secondary" onClick={signOut}>Esci</Button>
-        <Button variant="back" href={`${basePath}/`}>← Torna al sito</Button>
+        <Button variant="staff-secondary" onClick={signOut}>
+          Esci
+        </Button>
+        <Button variant="back" href={appHref()}>
+          ← Torna al sito
+        </Button>
       </div>
     </section>
   );

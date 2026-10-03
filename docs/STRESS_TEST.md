@@ -1,36 +1,48 @@
 # Stress test degli ordini
 
-Il runner `scripts/stress/orders.mjs` verifica automaticamente concorrenza,
-capienza, scorte, idempotenza, claim della cassa, lettura pubblica dello stato,
-seconda scansione QR in cucina e chiusura evento.
+Il runner `scripts/stress/orders.mjs` verifica le funzioni SQL degli ordini sotto
+concorrenza reale: molte connessioni PostgreSQL in parallelo sugli stessi ordini,
+scorte ed evento.
 
-Per sicurezza accetta esclusivamente un Supabase raggiungibile via HTTP su
-`localhost`, `127.0.0.1` o `::1`. Non può essere puntato alla produzione.
+## Come funziona
 
-1. Avvia Supabase locale e applica `supabase/schema.sql`.
-2. Nel solo database locale, abilita il setup e la pulizia del runner:
+1. Crea un cluster PostgreSQL in una cartella temporanea, raggiungibile solo via
+   socket Unix: nessuna porta di rete aperta.
+2. Installa i ruoli di Supabase (`anon`, `authenticated`, `service_role`),
+   `auth.uid()`, pgcrypto e poi `supabase/schema.sql`.
+3. Esegue gli scenari aprendo una connessione `psql` per ogni chiamata, con il
+   ruolo che avrebbe nella realtà: browser (`anon`), gateway Turnstile
+   (`service_role`) o cassa/admin autenticato.
+4. Spegne il cluster e cancella la cartella, anche in caso di errore.
 
-   ```sql
-   grant all privileges on all tables in schema public to service_role;
-   grant all privileges on all sequences in schema public to service_role;
-   ```
+Non si collega mai a Supabase, quindi non può toccare la produzione e non servono
+chiavi. Restano fuori il gateway Turnstile, PostgREST e la rete: quelle parti sono
+coperte dai test delle Edge Function e dalle verifiche in `scripts/security/`.
 
-3. Copia `.env.stress.example` in `.env.stress.local` e inserisci le chiavi
-   locali stampate da `supabase status`.
-4. Esegui `npm run stress:orders`.
+## Requisiti ed esecuzione
 
-Per isolare un caso, imposta ad esempio
-`LOADTEST_SCENARIOS=capacity` oppure `LOADTEST_SCENARIOS=read`.
+Serve PostgreSQL (17 o successivo) installato in locale, per esempio con
+`brew install postgresql@17`. Se i binari non sono nel `PATH`, indica la cartella
+con `LOADTEST_PG_BIN`.
 
-I valori predefiniti costituiscono la regressione ripetibile: 200 letture,
-200 invii contro una capienza di 150, 50 concorrenti sull'ultima porzione e
-10 round da 30 ordini per la gara chiusura/pagamento. Per cercare il punto di
-saturazione del gateway si possono aumentare separatamente i tentativi; oltre
-quel punto gli errori di trasporto descrivono anche i limiti dello stack locale,
-non soltanto quelli delle funzioni SQL.
+```sh
+npm run stress:orders
+```
 
-Il database locale deve avere un solo evento corrente e nessun ordine. Il
-runner crea fixture contrassegnate `[LOADTEST]` e un account admin temporaneo;
-il blocco `finally` elimina ordini, fixture e account e ripristina l'evento.
-Un finding produce exit code `2`, così può essere rilevato da uno script senza
-confonderlo con un crash del runner.
+Le opzioni stanno in `.env.stress.example`; copiale in `.env.stress.local` per
+cambiarle. Per un solo scenario: `LOADTEST_SCENARIOS=capacity npm run stress:orders`.
+
+## Scenari (valori predefiniti)
+
+| Scenario | Cosa verifica |
+|---|---|
+| `read` | 200 letture concorrenti dello stato ordinazioni |
+| `idempotency` | 25 invii simultanei della stessa richiesta creano un solo ordine; stesso request ID con QR diverso respinto; cassa, pagamento, consegna al bar e stato pubblico; un retry tardivo restituisce lo stesso ordine |
+| `stock` | 50 concorrenti sull'ultima porzione: una sola vendita |
+| `capacity` | 150 invii contro un limite di 100: esattamente 100 accettati, numeri unici, ordinazioni chiuse per capienza |
+| `identities` | postazione o dispositivo non validi respinti; solo il dispositivo che ha preso in carico l'ordine può incassarlo o annullarlo; QR duplicato e request ID NULL respinti senza consumare scorte |
+| `close-race` | 10 round da 30 ordini: chiusura evento e pagamenti in parallelo, in ordine alternato; stati, scorte e report coerenti, nessun deadlock |
+
+I tempi riportati includono l'avvio di un processo `psql` per chiamata: servono a
+confrontare due esecuzioni, non come latenza dell'app. Un finding produce exit
+code `2`, distinto da un crash del runner.

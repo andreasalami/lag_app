@@ -31,14 +31,18 @@ export function OrderEntryButton() {
         <Button variant="primary" onClick={enterOrdering} disabled={checking}>
           {checking ? "Verifico..." : "Ordina qui"}
         </Button>
-        <p className="mt-2 text-xs text-[var(--text-secondary)]">Prepara l’ordine e paga in cassa.</p>
+        <p className="mt-2 text-xs text-(--text-secondary)">Prepara l’ordine e paga in cassa.</p>
       </div>
       <Modal
         open={message !== null}
         title="Ordinazioni non disponibili"
         dismissible
         onClose={() => setMessage(null)}
-        actions={<Button variant="primary" onClick={() => setMessage(null)}>Ho capito</Button>}
+        actions={
+          <Button variant="primary" onClick={() => setMessage(null)}>
+            Ho capito
+          </Button>
+        }
       >
         <p>{message}</p>
       </Modal>

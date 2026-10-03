@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isPickupSelectionValid, remainingPickupSelection, remainingToPickUp, selectedPickupCount } from "./pickupQuantities";
+import {
+  isPickupSelectionValid,
+  remainingPickupSelection,
+  remainingToPickUp,
+  selectedPickupCount,
+} from "./pickupQuantities";
 
 const beer = { id: "beer", name: "Birra", quantity: 10, delivered_quantity: 0 };
 const food = { id: "food", name: "Panino", quantity: 3, delivered_quantity: 1 };

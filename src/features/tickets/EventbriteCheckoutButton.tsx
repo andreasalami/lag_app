@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { Button } from "../../components/ui/Button";
+import { loadScriptOnce } from "../../lib/browser";
 
 declare global {
   interface Window {
@@ -17,29 +18,6 @@ declare global {
 
 const WIDGET_SCRIPT_SRC = "https://www.eventbrite.com/static/widgets/eb_widgets.js";
 const EVENT_ID = import.meta.env.VITE_EVENTBRITE_EVENT_ID;
-let eventbriteScriptPromise: Promise<void> | null = null;
-
-function loadEventbriteScript(): Promise<void> {
-  if (window.EBWidgets) return Promise.resolve();
-  if (eventbriteScriptPromise) return eventbriteScriptPromise;
-
-  eventbriteScriptPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${WIDGET_SCRIPT_SRC}"]`);
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("Widget Eventbrite non disponibile")));
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = WIDGET_SCRIPT_SRC;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Widget Eventbrite non disponibile"));
-    document.body.appendChild(script);
-  });
-  return eventbriteScriptPromise;
-}
-
 /*
   Integrazione biglietti Eventbrite — UN SOLO STEP quando l'evento esiste:
   1. Crea l'evento su Eventbrite
@@ -63,11 +41,13 @@ export function EventbriteCheckoutButton({ label = "Acquista su Eventbrite" }: {
   useEffect(() => {
     if (!EVENT_ID) return;
     let cancelled = false;
-    loadEventbriteScript().then(() => {
-      if (!cancelled) setScriptReady(true);
-    }).catch(() => {
-      if (!cancelled) setScriptError(true);
-    });
+    loadScriptOnce(WIDGET_SCRIPT_SRC, () => Boolean(window.EBWidgets))
+      .then(() => {
+        if (!cancelled) setScriptReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setScriptError(true);
+      });
     return () => {
       cancelled = true;
     };

@@ -1,0 +1,3 @@
+# Commit di sola formattazione: git blame (e GitHub) li salta.
+# Locale: git config blame.ignoreRevsFile .git-blame-ignore-revs
+572c3737380d3fadc1bb4f9f0fe9a37f9f5eef46

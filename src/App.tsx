@@ -1,44 +1,69 @@
 import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { Home } from "./pages/Home";
 import { Staff } from "./pages/Staff";
-import { OrderPage } from "./features/orders/OrderPage";
 import { AuthProvider, useAuth, type Role } from "./features/auth/AuthContext";
+import { staffPage, type StaffPageHash } from "./features/auth/staffPages";
 import { TournamentBoard } from "./pages/TournamentBoard";
 import { TournamentManagement } from "./pages/TournamentManagement";
 import { ProgramManagement } from "./pages/ProgramManagement";
 import { MenuManagement } from "./pages/MenuManagement";
 import { StaffBackButton } from "./components/layout/StaffBackButton";
 import { Button } from "./components/ui/Button";
+import { appHref } from "./lib/browser";
 
-const FeaturePreview = lazy(() => import("./pages/FeaturePreview").then((module) => ({ default: module.FeaturePreview })));
+// OrderPage porta con sé carrello, QR, PDF e scanner: chi apre la Home per
+// vedere orari o programma non deve scaricarla. Come Cassa/Cucina/Bar, arriva
+// solo quando si entra davvero in #ordina.
+const OrderPage = lazy(() => import("./features/orders/OrderPage").then((module) => ({ default: module.OrderPage })));
 const Cassa = lazy(() => import("./features/orders/Cassa").then((module) => ({ default: module.Cassa })));
 const Cucina = lazy(() => import("./features/orders/Cucina").then((module) => ({ default: module.Cucina })));
 const Bar = lazy(() => import("./features/orders/Bar").then((module) => ({ default: module.Bar })));
+const EventManagement = lazy(() =>
+  import("./features/event/EventManagement").then((module) => ({ default: module.EventManagement })),
+);
+
+// Componente di ogni pagina riservata; ruoli e titoli stanno in staffPages.ts.
+const PAGE_COMPONENTS: Record<StaffPageHash, ComponentType> = {
+  "gestione-programma": ProgramManagement,
+  "gestione-menu": MenuManagement,
+  "gestione-torneo": TournamentManagement,
+  "gestione-evento": EventManagement,
+  cassa: Cassa,
+  cucina: Cucina,
+  bar: Bar,
+};
+
+const LOADING = (
+  <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-(--text-secondary)">Carico…</section>
+);
 
 function ProtectedOperationalPage({
   allowedRoles,
   component: Component,
   title,
 }: {
-  allowedRoles: Role[];
+  allowedRoles: readonly Role[];
   component: ComponentType;
   title: string;
 }) {
   const { session, role, loading, profileError } = useAuth();
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   if (loading) {
-    return <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Verifico l’accesso…</section>;
+    return (
+      <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-(--text-secondary)">
+        Verifico l’accesso…
+      </section>
+    );
   }
 
   if (!session || profileError || !allowedRoles.includes(role)) {
     return (
       <section className="mx-auto max-w-sm px-4 py-16 text-center">
         <h1 className="font-display text-2xl">{title}: accesso riservato</h1>
-        <p className="mt-3 text-sm text-[var(--text-secondary)]">
+        <p className="mt-3 text-sm text-(--text-secondary)">
           Questa sezione non è pubblica. Serve un account con il ruolo corretto.
         </p>
-        <Button href={`${basePath}/#staff`} variant="staff-primary" className="mt-6">
+        <Button href={appHref("#staff")} variant="staff-primary" className="mt-6">
           Accedi all’area staff
         </Button>
       </section>
@@ -50,7 +75,7 @@ function ProtectedOperationalPage({
       <div className="mx-auto w-full max-w-5xl px-4 pt-4">
         <StaffBackButton />
       </div>
-      <Suspense fallback={<section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Carico…</section>}>
+      <Suspense fallback={LOADING}>
         <Component />
       </Suspense>
     </>
@@ -71,54 +96,34 @@ function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  const previewEnabled = import.meta.env.VITE_FEATURE_PREVIEW === "true";
-  const internalPages = previewEnabled
-    ? ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo", "anteprima"]
-    : ["staff", "cassa", "cucina", "bar", "ordina", "ordina-nuovo", "tabellone", "gestione-programma", "gestione-menu", "gestione-torneo"];
+  // Le anteprime dimostrative vivono nel loro entry point (anteprima.html), non
+  // qui: non caricano Supabase né la sessione staff e non finiscono nel bundle.
   const hashRoute = hashPath.split("?")[0];
-  const internalPage = internalPages.includes(hashRoute) ? hashRoute : path.slice(1);
+  const publicPages = ["staff", "ordina", "ordina-nuovo", "tabellone"];
+  const internalPage = publicPages.includes(hashRoute) || staffPage(hashRoute) ? hashRoute : path.slice(1);
+  const protectedPage = staffPage(internalPage);
 
   return (
     <AuthProvider>
-      {internalPage === "staff" ? (
-        <Staff />
-      ) : internalPage === "cassa" ? (
-        <ProtectedOperationalPage allowedRoles={["cassa", "admin"]} component={Cassa} title="Casse" />
-      ) : internalPage === "cucina" ? (
-        <ProtectedOperationalPage allowedRoles={["cucina", "admin"]} component={Cucina} title="Cucina" />
-      ) : internalPage === "bar" ? (
-        <ProtectedOperationalPage allowedRoles={["bar", "admin"]} component={Bar} title="Bar" />
-      ) : internalPage === "ordina-nuovo" ? (
-        <OrderPage startFresh />
-      ) : internalPage === "ordina" ? (
-        <OrderPage key={hashPath} />
-      ) : internalPage === "tabellone" ? (
-        <TournamentBoard />
-      ) : internalPage === "gestione-programma" ? (
-        <ProtectedOperationalPage
-          allowedRoles={["staff", "admin"]}
-          component={ProgramManagement}
-          title="Gestione Scaletta"
-        />
-      ) : internalPage === "gestione-menu" ? (
-        <ProtectedOperationalPage
-          allowedRoles={["staff", "cucina", "admin"]}
-          component={MenuManagement}
-          title="Gestione Menu e Scorte"
-        />
-      ) : internalPage === "gestione-torneo" ? (
-        <ProtectedOperationalPage
-          allowedRoles={["tournament_manager", "admin"]}
-          component={TournamentManagement}
-          title="Gestione torneo"
-        />
-      ) : internalPage === "anteprima" && previewEnabled ? (
-        <Suspense fallback={<p className="p-8 text-sm text-[var(--text-secondary)]">Carico l’anteprima…</p>}>
-          <FeaturePreview />
-        </Suspense>
-      ) : (
-        <Home />
-      )}
+      <Suspense fallback={LOADING}>
+        {protectedPage ? (
+          <ProtectedOperationalPage
+            allowedRoles={protectedPage.roles}
+            component={PAGE_COMPONENTS[protectedPage.hash]}
+            title={protectedPage.title}
+          />
+        ) : internalPage === "staff" ? (
+          <Staff />
+        ) : internalPage === "ordina-nuovo" ? (
+          <OrderPage startFresh />
+        ) : internalPage === "ordina" ? (
+          <OrderPage key={hashPath} />
+        ) : internalPage === "tabellone" ? (
+          <TournamentBoard />
+        ) : (
+          <Home />
+        )}
+      </Suspense>
     </AuthProvider>
   );
 }
