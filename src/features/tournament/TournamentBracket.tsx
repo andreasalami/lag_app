@@ -439,16 +439,16 @@ export function TournamentBracket({ management = false }: { management?: boolean
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
       <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione torneo" : "Tabellone completo"}</h2>
-      <p className="mb-4 text-sm text-[var(--text-secondary)]">
+      <p className="mb-4 text-sm text-(--text-secondary)">
         {management
           ? "Aggiorna squadre e risultati, poi salva per pubblicare le modifiche."
           : "Tutti i turni del torneo a eliminazione diretta."}
       </p>
 
-      {loadError && <p className="mb-4 text-sm text-[var(--state-error)]">{loadError}</p>}
+      {loadError && <p className="mb-4 text-sm text-(--state-error)">{loadError}</p>}
 
       {!canEdit && (
-        <p className="mb-4 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-3 text-xs text-[var(--text-secondary)]">
+        <p className="mb-4 rounded-md border border-dashed border-(--surface-border) p-3 text-xs text-(--text-secondary)">
           Tabellone in sola lettura.
           {lastSyncedAt &&
             ` Aggiornato alle ${lastSyncedAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}.`}
@@ -465,15 +465,15 @@ export function TournamentBracket({ management = false }: { management?: boolean
             description="Scegli la dimensione e aggiorna i nomi delle squadre."
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-[var(--text-secondary)]">Squadre:</span>
+              <span className="text-sm text-(--text-secondary)">Squadre:</span>
               {BRACKET_SIZES.map((s) => (
                 <button
                   key={s}
                   onClick={() => requestSizeChange(s)}
-                  className={`rounded-[var(--radius-pill)] border px-3 py-1 text-sm transition-colors ${
+                  className={`rounded-(--radius-pill) border px-3 py-1 text-sm transition-colors ${
                     size === s
-                      ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
-                      : "border-[var(--surface-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      ? "border-(--accent-primary) bg-(--accent-primary) text-(--text-on-accent)"
+                      : "border-(--surface-border) text-(--text-secondary) hover:text-(--text-primary)"
                   }`}
                 >
                   {s}
@@ -485,7 +485,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
             </div>
 
             {editingTeams && (
-              <div className="mt-4 grid grid-cols-2 gap-2 border-t border-[var(--surface-border)] pt-4 sm:grid-cols-4">
+              <div className="mt-4 grid grid-cols-2 gap-2 border-t border-(--surface-border) pt-4 sm:grid-cols-4">
                 {teams.map((t, i) => {
                   const tooLong = teamNameTooLong(t);
                   return (
@@ -501,10 +501,10 @@ export function TournamentBracket({ management = false }: { management?: boolean
                           next[i] = e.target.value;
                           setTeams(next);
                         }}
-                        className={`field w-full py-2 ${tooLong ? "border-[var(--state-error)]" : ""}`}
+                        className={`field w-full py-2 ${tooLong ? "border-(--state-error)" : ""}`}
                       />
                       {tooLong && (
-                        <p id={`team-name-error-${i}`} role="alert" className="mt-1 text-xs text-[var(--state-error)]">
+                        <p id={`team-name-error-${i}`} role="alert" className="mt-1 text-xs text-(--state-error)">
                           Nome della squadra troppo lungo: massimo {TEAM_NAME_MAX_LENGTH} caratteri (ora {t.length}).
                         </p>
                       )}
@@ -514,12 +514,12 @@ export function TournamentBracket({ management = false }: { management?: boolean
               </div>
             )}
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--surface-border)] pt-4">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-(--surface-border) pt-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-(--text-secondary)">
                   Copia di sicurezza
                 </p>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                <p className="mt-1 text-sm text-(--text-secondary)">
                   {latestArchive
                     ? `${latestArchive.size} squadre · ${new Date(latestArchive.createdAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}`
                     : "Nessuna copia ancora disponibile."}
@@ -538,23 +538,23 @@ export function TournamentBracket({ management = false }: { management?: boolean
                 </Button>
               )}
             </div>
-            {archiveError && <p className="mt-3 text-xs text-[var(--state-error)]">{archiveError}</p>}
+            {archiveError && <p className="mt-3 text-xs text-(--state-error)">{archiveError}</p>}
           </StaffPanel>
         </>
       )}
 
-      <div className="max-h-[75vh] overflow-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="max-h-[75vh] overflow-auto pb-4 scrollbar-none [&::-webkit-scrollbar]:hidden">
         <div className="flex min-w-max gap-6 pr-4">
           {Array.from({ length: rounds }, (_, round) => (
             <div
               key={round}
-              className={`relative w-56 flex-shrink-0 ${
+              className={`relative w-56 shrink-0 ${
                 round < rounds - 1
-                  ? "after:absolute after:-right-3 after:top-0 after:h-full after:border-r after:border-[var(--surface-border)]"
+                  ? "after:absolute after:-right-3 after:top-0 after:h-full after:border-r after:border-(--surface-border)"
                   : ""
               }`}
             >
-              <h3 className="mb-1 text-center font-display text-sm text-[var(--accent-primary)]">
+              <h3 className="mb-1 text-center font-display text-sm text-(--accent-primary)">
                 {roundLabel(size, round)}
               </h3>
               <div className="relative" style={{ height: bracketHeight }}>
@@ -590,7 +590,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
           il messaggio resta specifico del Torneo perché qui "salvare"
           vuol dire pubblicare — chi guarda vede il tabellone solo dopo. */}
       {canEdit && publishError && (
-        <div role="alert" className="my-4 rounded-xl border border-[var(--state-warning)] p-4 text-sm">
+        <div role="alert" className="my-4 rounded-xl border border-(--state-warning) p-4 text-sm">
           <p>{publishError}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
@@ -670,7 +670,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
           Vuoi salvare prima una copia del torneo attuale? Potrai riaverlo con <strong>Ripristina ultima copia</strong>.
           Il tabellone pubblico non cambia finché non premi Salva.
         </p>
-        {archiveError && <p className="mt-3 text-[var(--state-error)]">{archiveError}</p>}
+        {archiveError && <p className="mt-3 text-(--state-error)">{archiveError}</p>}
       </Modal>
 
       <Modal
@@ -716,7 +716,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
           Anche lo stato corrente verrà archiviato prima del ripristino, così potrai tornare indietro. Per renderlo
           pubblico dovrai poi premere Salva.
         </p>
-        {archiveError && <p className="mt-3 text-[var(--state-error)]">{archiveError}</p>}
+        {archiveError && <p className="mt-3 text-(--state-error)">{archiveError}</p>}
       </Modal>
 
       <Modal
@@ -750,7 +750,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
           aggiornato, devi pubblicare ora — altrimenti restano solo su questo browser.
         </p>
         {hasTooLongNames && (
-          <p className="mt-2 text-[var(--state-error)]">
+          <p className="mt-2 text-(--state-error)">
             Prima accorcia i nomi squadra oltre i {TEAM_NAME_MAX_LENGTH} caratteri.
           </p>
         )}

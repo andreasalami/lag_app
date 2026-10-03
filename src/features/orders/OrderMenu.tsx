@@ -25,7 +25,7 @@ export function OrderMenu({
         if (sectionItems.length === 0) return null;
         return (
           <div key={section.key} className="mt-5">
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent-primary)]">
+            <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-(--accent-primary)">
               {section.label}
             </h3>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -44,26 +44,26 @@ export function OrderMenu({
                     type="button"
                     onClick={() => onAdd(item)}
                     disabled={finished || allInCart}
-                    className="surface-solid flex min-h-20 items-start justify-between gap-3 rounded-[var(--radius-md)] p-3 text-left transition-colors hover:bg-[var(--surface-solid-hover)] disabled:cursor-not-allowed disabled:opacity-55"
+                    className="surface-solid flex min-h-20 items-start justify-between gap-3 rounded-md p-3 text-left transition-colors hover:bg-(--surface-solid-hover) disabled:cursor-not-allowed disabled:opacity-55"
                   >
                     <span>
                       <span className="block text-sm font-semibold">{item.name}</span>
                       {item.allergens.length > 0 && (
-                        <span className="mt-1 block text-xs text-[var(--text-secondary)]">
+                        <span className="mt-1 block text-xs text-(--text-secondary)">
                           Allergeni: {item.allergens.join(", ")}
                         </span>
                       )}
                       {almostFinished && (
-                        <span className="mt-1 block text-xs text-[var(--state-warning)]">Quasi terminato</span>
+                        <span className="mt-1 block text-xs text-(--state-warning)">Quasi terminato</span>
                       )}
-                      {finished && <span className="mt-1 block text-xs text-[var(--state-error)]">Terminato</span>}
+                      {finished && <span className="mt-1 block text-xs text-(--state-error)">Terminato</span>}
                       {allInCart && (
-                        <span className="mt-1 block text-xs text-[var(--state-warning)]">
+                        <span className="mt-1 block text-xs text-(--state-warning)">
                           Hai nel carrello tutte le porzioni rimaste
                         </span>
                       )}
                     </span>
-                    <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">
+                    <span className="shrink-0 font-mono text-sm text-(--accent-primary)">
                       {priceFormatter.format(Number(item.price))}
                     </span>
                   </button>

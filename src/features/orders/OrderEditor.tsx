@@ -54,7 +54,7 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
               {item.name}
               {item.available_portions === 0 ? " — terminato" : ""}
             </span>
-            <span className="shrink-0 font-mono text-[var(--accent-primary)]">
+            <span className="shrink-0 font-mono text-(--accent-primary)">
               {priceFormatter.format(Number(item.price))}
             </span>
           </button>
@@ -63,7 +63,7 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
 
       <Card className="flex flex-col gap-2">
         <h3 className="text-lg">Righe da battere</h3>
-        {lines.length === 0 && <p className="text-sm text-[var(--text-secondary)]">Nessuna voce.</p>}
+        {lines.length === 0 && <p className="text-sm text-(--text-secondary)">Nessuna voce.</p>}
         {lines.map((line) => (
           <div key={line.id} className="flex items-center justify-between gap-3 text-sm">
             <span>
@@ -74,7 +74,7 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
               <button
                 type="button"
                 onClick={() => setCart((current) => removeOneFromCart(current, line.id))}
-                className="text-lg text-[var(--state-error)]"
+                className="text-lg text-(--state-error)"
                 aria-label={`Rimuovi una unità di ${line.name}`}
               >
                 −
@@ -82,7 +82,7 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
             </div>
           </div>
         ))}
-        <div className="mt-2 flex justify-between border-t border-[var(--surface-border)] pt-2 font-semibold">
+        <div className="mt-2 flex justify-between border-t border-(--surface-border) pt-2 font-semibold">
           <span>Totale</span>
           <span className="font-mono">{priceFormatter.format(total)}</span>
         </div>

@@ -75,7 +75,7 @@ export function QrScanner({
         event.preventDefault();
         onClose();
       }}
-      className="m-0 h-full max-h-none w-full max-w-none border-0 bg-black p-4 text-[var(--text-primary)] open:flex open:flex-col"
+      className="m-0 h-full max-h-none w-full max-w-none border-0 bg-black p-4 text-(--text-primary) open:flex open:flex-col"
     >
       <div className="mx-auto flex w-full max-w-xl items-center justify-between py-2">
         <h2 id={titleId} className="text-xl">
@@ -87,16 +87,16 @@ export function QrScanner({
       </div>
       <video
         ref={videoRef}
-        className="mx-auto mt-4 max-h-[70vh] w-full max-w-xl rounded-[var(--radius-lg)] bg-black object-cover"
+        className="mx-auto mt-4 max-h-[70vh] w-full max-w-xl rounded-lg bg-black object-cover"
         muted
         playsInline
       />
-      <p className="mx-auto mt-4 max-w-xl text-center text-sm text-[var(--text-secondary)]">{description}</p>
-      <p className="mx-auto mt-2 max-w-xl text-center text-xs text-[var(--text-secondary)]">
+      <p className="mx-auto mt-4 max-w-xl text-center text-sm text-(--text-secondary)">{description}</p>
+      <p className="mx-auto mt-2 max-w-xl text-center text-xs text-(--text-secondary)">
         Dopo il primo consenso verrà riutilizzata automaticamente la stessa fotocamera.
       </p>
       {error && (
-        <p role="alert" className="mx-auto mt-3 max-w-xl text-center text-sm text-[var(--state-error)]">
+        <p role="alert" className="mx-auto mt-3 max-w-xl text-center text-sm text-(--state-error)">
           {error}
         </p>
       )}

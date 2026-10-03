@@ -468,13 +468,13 @@ export function Cassa() {
             />
           )}
           {kitchenBlocked && (
-            <p role="status" className="mb-4 rounded-xl border border-[var(--state-warning)] p-3 text-sm">
+            <p role="status" className="mb-4 rounded-xl border border-(--state-warning) p-3 text-sm">
               Cucina al completo · Non incassare per la preparazione immediata. Attendi il prossimo posto oppure
               concorda la preparazione successiva. La disponibilità si aggiorna automaticamente.
             </p>
           )}
           {hasFood && activeOrder.kitchen_state === "reserved" && (
-            <p className="mb-4 text-sm text-[var(--state-success)]">
+            <p className="mb-4 text-sm text-(--state-success)">
               Posto in cucina riservato a questa cassa. Puoi procedere al pagamento finché il controllo dell’ordine è
               valido.
             </p>
@@ -483,7 +483,7 @@ export function Cassa() {
             {activeOrder.items.map((line) => (
               <div
                 key={line.id}
-                className="flex justify-between gap-3 border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0"
+                className="flex justify-between gap-3 border-b border-(--surface-border) pb-3 last:border-0 last:pb-0"
               >
                 <strong>
                   {line.qty}× {line.name}
@@ -491,21 +491,21 @@ export function Cassa() {
                 <span className="font-mono">{priceFormatter.format(lineTotal(line))}</span>
               </div>
             ))}
-            <div className="flex justify-between border-t border-[var(--surface-border)] pt-4 text-lg font-semibold">
+            <div className="flex justify-between border-t border-(--surface-border) pt-4 text-lg font-semibold">
               <span>Totale</span>
-              <span className="font-mono text-[var(--accent-primary)]">
+              <span className="font-mono text-(--accent-primary)">
                 {priceFormatter.format(Number(activeOrder.total))}
               </span>
             </div>
           </div>
         </StaffPanel>
         {!claimValid && (
-          <p role="alert" className="mt-3 text-sm text-[var(--state-warning)]">
+          <p role="alert" className="mt-3 text-sm text-(--state-warning)">
             Verifico che l’ordine sia ancora assegnato a questa cassa. Non incassare finché la conferma non torna
             disponibile.
           </p>
         )}
-        {message && <p className="mt-3 text-sm text-[var(--state-error)]">{message}</p>}
+        {message && <p className="mt-3 text-sm text-(--state-error)">{message}</p>}
         <div className="mt-5 flex flex-wrap justify-between gap-3">
           <Button variant="staff-danger" onClick={() => setCancelOrderModal(true)} disabled={actionBusy}>
             Annulla ordine
@@ -587,7 +587,7 @@ export function Cassa() {
           description="Scansiona il QR oppure cerca per numero e nome ordine."
         >
           {claimsUnavailable && (
-            <p role="status" className="mb-3 text-sm text-[var(--state-warning)]">
+            <p role="status" className="mb-3 text-sm text-(--state-warning)">
               Aggiornamento delle casse non disponibile. Verifico nuovamente tra pochi secondi.
             </p>
           )}
@@ -605,7 +605,7 @@ export function Cassa() {
                 className="field w-full py-2"
               />
             </label>
-            <label className="min-w-36 flex-[2]">
+            <label className="min-w-36 flex-2">
               <span className="mb-1 block text-xs">Alias</span>
               <input
                 value={aliasSearch}
@@ -614,11 +614,11 @@ export function Cassa() {
               />
             </label>
           </div>
-          <p className="mt-3 text-xs text-[var(--text-secondary)]">
+          <p className="mt-3 text-xs text-(--text-secondary)">
             {filteredOrders.length} ordini trovati. Numero e alias possono essere usati insieme.
           </p>
           {ordersLoading ? (
-            <p className="mt-4 text-sm text-[var(--text-secondary)]">Carico…</p>
+            <p className="mt-4 text-sm text-(--text-secondary)">Carico…</p>
           ) : (
             <div className="mt-3 flex flex-col gap-2">
               {filteredOrders.map((order) => {
@@ -630,20 +630,20 @@ export function Cassa() {
                 return (
                   <div
                     key={order.id}
-                    className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--surface-border)] p-3 text-left"
+                    className="flex items-center justify-between gap-3 rounded-md border border-(--surface-border) p-3 text-left"
                   >
                     <span>
                       <strong>
                         #{order.display_number} · {order.alias}
                       </strong>
-                      <span className="mt-1 block text-xs text-[var(--text-secondary)]">
+                      <span className="mt-1 block text-xs text-(--text-secondary)">
                         {claimed && order.claimed_station
                           ? `In gestione a ${cashStationLabel(order.claimed_station)}`
                           : orderAge(order.created_at)}
                       </span>
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-[var(--accent-primary)]">
+                      <span className="font-mono text-(--accent-primary)">
                         {priceFormatter.format(Number(order.total))}
                       </span>
                       {!claimed || ours ? (
@@ -664,7 +664,7 @@ export function Cassa() {
                 );
               })}
               {filteredOrders.length === 0 && (
-                <p className="text-sm text-[var(--text-secondary)]">Nessun ordine corrispondente.</p>
+                <p className="text-sm text-(--text-secondary)">Nessun ordine corrispondente.</p>
               )}
             </div>
           )}
@@ -679,7 +679,7 @@ export function Cassa() {
           description="L’ordine viene creato già pagato e inviato alle postazioni competenti."
         >
           {menuLoading ? (
-            <p className="text-sm text-[var(--text-secondary)]">Carico il menu…</p>
+            <p className="text-sm text-(--text-secondary)">Carico il menu…</p>
           ) : (
             <OrderEditor
               menuItems={menuItems}

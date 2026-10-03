@@ -205,7 +205,7 @@ export function EventManagement() {
           title="Carico l’evento…"
           description="Recupero apertura, chiusura e limite degli ordini."
         >
-          <p className="text-sm text-[var(--text-secondary)]">Attendi un momento.</p>
+          <p className="text-sm text-(--text-secondary)">Attendi un momento.</p>
         </StaffPanel>
       ) : (
         <StaffPanel
@@ -214,10 +214,10 @@ export function EventManagement() {
           description={`${eventState.pending_count} ordini in attesa su ${eventState.max_pending_orders}`}
           action={
             closed ? (
-              <span className="text-sm text-[var(--state-error)]">Evento chiuso definitivamente</span>
+              <span className="text-sm text-(--state-error)">Evento chiuso definitivamente</span>
             ) : (
               <span
-                className={`text-sm ${eventState.manual_closed ? "text-[var(--state-warning)]" : "text-[var(--state-success)]"}`}
+                className={`text-sm ${eventState.manual_closed ? "text-(--state-warning)" : "text-(--state-success)"}`}
               >
                 {eventState.manual_closed ? "Ordinazioni sospese" : "Gestione automatica attiva"}
               </span>
@@ -292,8 +292,8 @@ export function EventManagement() {
                     {eventState.manual_closed ? "Riapri ordinazioni" : "Chiudi ordinazioni ora"}
                   </Button>
                 </div>
-                <div className="mt-3 border-t border-[var(--surface-border)] pt-3">
-                  <p className="text-xs text-[var(--state-error)]">
+                <div className="mt-3 border-t border-(--surface-border) pt-3">
+                  <p className="text-xs text-(--state-error)">
                     La chiusura definitiva annulla gli ordini non pagati, anonimizza i dati e produce il CSV finale.
                   </p>
                   <Button
@@ -332,8 +332,8 @@ export function EventManagement() {
         }
       >
         <p>
-          L’operazione è irreversibile. Digita{" "}
-          <strong className="text-[var(--text-primary)]">{CLOSE_CONFIRMATION}</strong> per confermare.
+          L’operazione è irreversibile. Digita <strong className="text-(--text-primary)">{CLOSE_CONFIRMATION}</strong>{" "}
+          per confermare.
         </p>
         <input
           aria-label={`Digita ${CLOSE_CONFIRMATION}`}

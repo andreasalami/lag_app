@@ -23,18 +23,18 @@ type ButtonProps =
  */
 export function Button({ variant = "primary", className = "", children, ...props }: ButtonProps) {
   const base =
-    "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-[var(--radius-pill)] font-semibold text-sm transition-transform active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
+    "inline-flex items-center justify-center gap-2 px-5 py-3 rounded-(--radius-pill) font-semibold text-sm transition-transform active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
 
   const variantClasses = {
-    primary: "glass-elevated glass-elevated--strong signature-glow text-[var(--text-primary)] hover:brightness-110",
-    ghost: "border border-[var(--surface-border)] text-[var(--text-primary)] hover:bg-white/5",
-    back: "border border-[var(--surface-border)] bg-white/[0.03] text-[var(--text-secondary)] hover:bg-white/[0.07] hover:text-[var(--text-primary)]",
+    primary: "glass-elevated glass-elevated--strong signature-glow text-(--text-primary) hover:brightness-110",
+    ghost: "border border-(--surface-border) text-(--text-primary) hover:bg-white/5",
+    back: "border border-(--surface-border) bg-white/3 text-(--text-secondary) hover:bg-white/[0.07] hover:text-(--text-primary)",
     "staff-primary":
-      "signature-glow border border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)] hover:brightness-110",
+      "signature-glow border border-(--accent-primary) bg-(--accent-primary) text-(--text-on-accent) hover:brightness-110",
     "staff-secondary":
-      "border border-[rgba(242,128,46,0.45)] bg-[rgba(242,128,46,0.08)] text-[var(--accent-primary)] hover:bg-[rgba(242,128,46,0.16)]",
+      "border border-[rgba(242,128,46,0.45)] bg-[rgba(242,128,46,0.08)] text-(--accent-primary) hover:bg-[rgba(242,128,46,0.16)]",
     "staff-danger":
-      "border border-[rgba(229,88,75,0.55)] bg-[rgba(239,68,68,0.08)] text-[var(--state-error)] hover:bg-[rgba(239,68,68,0.16)]",
+      "border border-[rgba(229,88,75,0.55)] bg-[rgba(239,68,68,0.08)] text-(--state-error) hover:bg-[rgba(239,68,68,0.16)]",
   }[variant];
 
   const classes = `${base} ${variantClasses} ${className}`;

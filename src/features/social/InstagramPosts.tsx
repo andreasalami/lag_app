@@ -64,9 +64,9 @@ export function InstagramPosts() {
 
   if (total === 0) {
     return (
-      <p className="mt-6 rounded-[var(--radius-md)] border border-dashed border-[var(--surface-border)] p-4 text-center text-sm text-[var(--text-secondary)]">
+      <p className="mt-6 rounded-md border border-dashed border-(--surface-border) p-4 text-center text-sm text-(--text-secondary)">
         Nessun post selezionato ancora — aggiungi un permalink in{" "}
-        <code className="font-mono text-[var(--accent-primary)]">src/features/social/InstagramPosts.tsx</code>.
+        <code className="font-mono text-(--accent-primary)">src/features/social/InstagramPosts.tsx</code>.
       </p>
     );
   }
@@ -152,7 +152,7 @@ export function InstagramPosts() {
             <div
               key={idx}
               ref={isTop ? cardRef : undefined}
-              className="surface-solid absolute inset-0 overflow-hidden rounded-[var(--radius-lg)]"
+              className="surface-solid absolute inset-0 overflow-hidden rounded-lg"
               style={{
                 zIndex: depthCount - depth,
                 transform: `translateY(${depth * 10}px) scale(${1 - depth * 0.06}) rotate(${rotation}deg)`,
@@ -163,7 +163,7 @@ export function InstagramPosts() {
                   cross-origin di Instagram e non è stilizzabile. Lo spostiamo
                   sotto il bordo superiore della carta: il viewport quadrato
                   mostra così soltanto il contenuto visuale del post. */}
-              <div className="-translate-y-[54px]">
+              <div className="translate-y-[-54px]">
                 <InstagramEmbed url={CURATED_POSTS[idx]} />
               </div>
               {isTop && (
@@ -180,27 +180,25 @@ export function InstagramPosts() {
         })}
       </div>
 
-      <p className="mt-3 text-center text-xs text-[var(--text-secondary)]">
-        Scorri la carta per esplorare gli altri post
-      </p>
+      <p className="mt-3 text-center text-xs text-(--text-secondary)">Scorri la carta per esplorare gli altri post</p>
 
       <div className="mt-2 flex items-center justify-center gap-4">
         <button
           type="button"
           onClick={goPrev}
           aria-label="Post precedente"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--surface-border)] text-[var(--text-secondary)] hover:text-[var(--accent-primary)]"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-(--surface-border) text-(--text-secondary) hover:text-(--accent-primary)"
         >
           ‹
         </button>
-        <span className="font-mono text-xs text-[var(--text-secondary)]">
+        <span className="font-mono text-xs text-(--text-secondary)">
           {current + 1} / {total}
         </span>
         <button
           type="button"
           onClick={goNext}
           aria-label="Post successivo"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--surface-border)] text-[var(--text-secondary)] hover:text-[var(--accent-primary)]"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-(--surface-border) text-(--text-secondary) hover:text-(--accent-primary)"
         >
           ›
         </button>

@@ -49,7 +49,7 @@ export function CartPanel({
   return (
     <section
       ref={panel}
-      className="glass-elevated fixed inset-x-3 z-50 mx-auto max-w-xl rounded-[var(--radius-lg)] p-3"
+      className="glass-elevated fixed inset-x-3 z-50 mx-auto max-w-xl rounded-lg p-3"
       style={{ bottom: "calc(12px + env(safe-area-inset-bottom, 0px))" }}
     >
       <button
@@ -59,12 +59,12 @@ export function CartPanel({
         aria-expanded={expanded}
       >
         <span className="font-semibold">Carrello · {cartItemCount(lines)} articoli</span>
-        <span className="font-mono text-[var(--accent-primary)]">
+        <span className="font-mono text-(--accent-primary)">
           {priceFormatter.format(total)} {expanded ? "⌄" : "⌃"}
         </span>
       </button>
       {expanded && (
-        <div className="mt-3 max-h-[50dvh] overflow-y-auto overscroll-contain border-t border-[var(--surface-border)] pt-3">
+        <div className="mt-3 max-h-[50dvh] overflow-y-auto overscroll-contain border-t border-(--surface-border) pt-3">
           <div className="flex flex-col gap-2">
             {lines.map((line) => (
               <div key={line.id} className="flex items-center justify-between gap-3 text-sm">
@@ -76,7 +76,7 @@ export function CartPanel({
                   <button
                     type="button"
                     onClick={() => onDecrement(line.id)}
-                    className="text-lg text-[var(--state-error)]"
+                    className="text-lg text-(--state-error)"
                     aria-label={`Rimuovi una unità di ${line.name}`}
                   >
                     −
@@ -96,7 +96,7 @@ export function CartPanel({
               className="field mt-1 w-full resize-none"
             />
           </label>
-          {error && <p className="mt-2 text-xs text-[var(--state-error)]">{error}</p>}
+          {error && <p className="mt-2 text-xs text-(--state-error)">{error}</p>}
           <Button variant="primary" className="mt-3 w-full" onClick={onSubmit}>
             Invia ordine
           </Button>

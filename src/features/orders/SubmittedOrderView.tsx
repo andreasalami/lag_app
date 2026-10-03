@@ -107,10 +107,7 @@ export function SubmittedOrderView({
       </Button>
       {banner}
       {error && (
-        <p
-          role="alert"
-          className="mt-4 rounded-[var(--radius-sm)] border border-[var(--state-warning)] p-3 text-sm text-[var(--state-warning)]"
-        >
+        <p role="alert" className="mt-4 rounded-sm border border-(--state-warning) p-3 text-sm text-(--state-warning)">
           {error}
         </p>
       )}
@@ -132,7 +129,7 @@ export function SubmittedOrderView({
           </p>
         )}
         <p className="mt-1 text-xl font-semibold">{order.alias}</p>
-        <p className="mt-2 text-xs text-[var(--text-secondary)]">
+        <p className="mt-2 text-xs text-(--text-secondary)">
           {order.status === "in_attesa_pagamento"
             ? "Mostra QR, numero e alias alla cassa. Gli ordini non pagati scadono dopo 60 minuti."
             : order.status === "pagato" || order.status === "ritiro_parziale"
@@ -148,7 +145,7 @@ export function SubmittedOrderView({
             {order.progress.map((item) => (
               <div key={item.station} className="flex items-center justify-between gap-3 text-sm">
                 <span className="capitalize">{item.station}</span>
-                <strong className={item.delivered >= item.quantity ? "text-[var(--state-success)]" : ""}>
+                <strong className={item.delivered >= item.quantity ? "text-(--state-success)" : ""}>
                   {item.delivered}/{item.quantity}
                 </strong>
               </div>
@@ -160,7 +157,7 @@ export function SubmittedOrderView({
       <Card className="mt-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-semibold">I miei ordini</h2>
-          <span className="text-xs text-[var(--text-secondary)]">{history.length} totali</span>
+          <span className="text-xs text-(--text-secondary)">{history.length} totali</span>
         </div>
         <div className="mt-3 max-h-48 space-y-2 overflow-y-auto pr-1">
           {history.map((item) => (
@@ -169,17 +166,15 @@ export function SubmittedOrderView({
               type="button"
               onClick={() => onViewOrder(item)}
               aria-current={item.order_id === order.order_id ? "true" : undefined}
-              className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] border p-3 text-left ${
-                item.order_id === order.order_id
-                  ? "border-[var(--accent-primary)] bg-white/5"
-                  : "border-[var(--surface-border)]"
+              className={`flex w-full items-center justify-between gap-3 rounded-sm border p-3 text-left ${
+                item.order_id === order.order_id ? "border-(--accent-primary) bg-white/5" : "border-(--surface-border)"
               }`}
             >
               <span>
                 <strong>
                   #{item.display_number} · {item.alias}
                 </strong>
-                <span className="mt-0.5 block text-xs text-[var(--text-secondary)]">
+                <span className="mt-0.5 block text-xs text-(--text-secondary)">
                   {item.event_name} · {cartItemCount(item.items)} articoli · {priceFormatter.format(Number(item.total))}
                 </span>
               </span>
@@ -237,11 +232,11 @@ export function SubmittedOrderView({
               className="mx-auto w-full max-w-[300px] rounded-xl bg-white"
             />
           ) : qrError ? (
-            <p role="alert" className="py-10 text-sm text-[var(--state-warning)]">
+            <p role="alert" className="py-10 text-sm text-(--state-warning)">
               QR non generato. In cassa comunica numero e nome dell’ordine.
             </p>
           ) : (
-            <p className="py-16 text-sm text-[var(--text-secondary)]">Genero il QR…</p>
+            <p className="py-16 text-sm text-(--text-secondary)">Genero il QR…</p>
           )}
         </Card>
       ) : (
@@ -254,12 +249,12 @@ export function SubmittedOrderView({
               <span className="font-mono">{priceFormatter.format(lineTotal(line))}</span>
             </div>
           ))}
-          <div className="mt-2 flex justify-between border-t border-[var(--surface-border)] pt-2 font-semibold">
+          <div className="mt-2 flex justify-between border-t border-(--surface-border) pt-2 font-semibold">
             <span>{order.status === "in_attesa_pagamento" ? "Totale da pagare" : "Totale ordine"}</span>
             <span className="font-mono">{priceFormatter.format(Number(order.total))}</span>
           </div>
           {order.notes && (
-            <div className="mt-2 rounded-[var(--radius-sm)] border border-[var(--state-warning)] p-2 text-sm">
+            <div className="mt-2 rounded-sm border border-(--state-warning) p-2 text-sm">
               <strong>Note:</strong> {order.notes}
             </div>
           )}

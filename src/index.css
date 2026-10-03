@@ -1,72 +1,94 @@
-@import "./styles/tokens.css";
+/* Ordine dei layer dichiarato prima di tutto: i token (nel layer base) devono venire dopo
+   il tema di Tailwind, altrimenti --radius-sm/md/lg tornerebbero ai valori predefiniti. */
+@layer theme, base, components, utilities;
+@import "./styles/tokens.css" layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-* {
-  box-sizing: border-box;
+@theme {
+  --font-display: Fredoka, sans-serif;
+  --font-body: Manrope, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 }
 
-html,
-body,
-#root {
-  height: 100%;
-}
-
-body {
-  margin: 0;
-  background-color: var(--bg-base);
-  background-image: radial-gradient(circle at 50% -10%, var(--bg-base-alt) 0%, var(--bg-base) 55%);
-  background-repeat: no-repeat;
-  color: var(--text-primary);
-  font-family: "Manrope", sans-serif;
-  -webkit-font-smoothing: antialiased;
-  overflow-x: clip;
-}
-
-h1,
-h2,
-h3 {
-  font-family: "Fredoka", sans-serif;
-  font-weight: 600;
-}
-
-/* Le sezioni hanno 40px di padding superiore: fermandone l'inizio 48px
-   sotto il bordo alto, il titolo resta appena sotto la navbar sticky. */
-section[id] {
-  scroll-margin-top: 3rem;
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent-primary);
-  outline-offset: 2px;
-}
-
-/* Input/select/textarea: stesso identico stile ovunque nell'app —
-   qui in @layer components così le utility Tailwind aggiunte accanto
-   (es. "field text-xs w-20") vincono comunque sul default. */
-@layer components {
-  .field {
-    @apply rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-2 py-1 text-sm text-[var(--text-primary)];
-    max-width: 100%;
-    min-width: 0;
+/* In Tailwind 4 il colore predefinito dei bordi è currentcolor: questo mantiene il grigio di
+   Tailwind 3 per i pochi elementi con "border" senza un colore esplicito. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
   }
+}
 
-  .field::placeholder {
+@utility field {
+  @apply rounded-sm border border-(--surface-border) bg-transparent px-2 py-1 text-sm text-(--text-primary);
+  max-width: 100%;
+  min-width: 0;
+
+  &::placeholder {
     color: var(--text-secondary);
     opacity: 0.6;
   }
+}
 
+@utility panel-header {
   /* Intestazione arancione sfumata dei pannelli: StaffPanel, Menu, Torneo, Instagram. */
-  .panel-header {
-    @apply border-b border-[var(--surface-border)] bg-[linear-gradient(135deg,rgba(242,128,46,0.16),transparent_65%)] px-5 py-5 sm:px-6;
+  @apply border-b border-(--surface-border) bg-[linear-gradient(135deg,rgba(242,128,46,0.16),transparent_65%)] px-5 py-5 sm:px-6;
+}
+
+@utility tile {
+  /* Tessera arancione cliccabile: collegamenti staff, scelta postazione, coda ritiri. */
+  /* Arancione d'accento con opacità, scritto in rgba. */
+  @apply rounded-md border border-[rgba(242,128,46,0.45)] bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)];
+}
+
+/* Stili globali di pagina: nel layer base, così ogni classe Tailwind li può sovrascrivere. */
+@layer base {
+  * {
+    box-sizing: border-box;
   }
 
-  /* Tessera arancione cliccabile: collegamenti staff, scelta postazione, coda ritiri. */
-  .tile {
-    /* Colori scritti in rgba: Tailwind 3 ignora in silenzio l'opacità su una variabile CSS
-       (border-[var(--accent-primary)]/45 non genera alcuna regola). */
-    @apply rounded-[var(--radius-md)] border border-[rgba(242,128,46,0.45)] bg-[rgba(242,128,46,0.08)] p-4 text-left transition-colors hover:bg-[rgba(242,128,46,0.16)];
+  /* Tailwind 4 non mette più il cursore a mano sui pulsanti: lo ripristiniamo come in v3. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg-base);
+    background-image: radial-gradient(circle at 50% -10%, var(--bg-base-alt) 0%, var(--bg-base) 55%);
+    background-repeat: no-repeat;
+    color: var(--text-primary);
+    font-family: "Manrope", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: "Fredoka", sans-serif;
+    font-weight: 600;
+  }
+
+  /* Le sezioni hanno 40px di padding superiore: fermandone l'inizio 48px
+   sotto il bordo alto, il titolo resta appena sotto la navbar sticky. */
+  section[id] {
+    scroll-margin-top: 3rem;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
   }
 }

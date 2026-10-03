@@ -32,7 +32,7 @@ export function Modal({ open, title, children, actions, dismissible = false, onC
     <dialog
       ref={dialogRef}
       aria-labelledby={titleId}
-      className="glass-elevated glass-elevated--strong fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-md overflow-y-auto rounded-[var(--radius-lg)] border-0 p-5 text-[var(--text-primary)] backdrop:bg-black/70"
+      className="glass-elevated glass-elevated--strong fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-lg border-0 p-5 text-(--text-primary) backdrop:bg-black/70"
       onCancel={(event) => {
         event.preventDefault();
         if (dismissible) onClose?.();
@@ -52,7 +52,7 @@ export function Modal({ open, title, children, actions, dismissible = false, onC
       <h2 id={titleId} className="text-xl font-semibold">
         {title}
       </h2>
-      <div className="mt-3 text-sm text-[var(--text-secondary)]">{children}</div>
+      <div className="mt-3 text-sm text-(--text-secondary)">{children}</div>
       <div className="mt-5 flex flex-wrap justify-end gap-2">{actions}</div>
     </dialog>
   );

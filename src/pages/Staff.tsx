@@ -44,7 +44,7 @@ export function Staff() {
   if (loading) {
     return (
       <section className="mx-auto max-w-sm px-4 py-16 text-center">
-        <p className="text-sm text-[var(--text-secondary)]">Carico...</p>
+        <p className="text-sm text-(--text-secondary)">Carico...</p>
       </section>
     );
   }
@@ -58,7 +58,7 @@ export function Staff() {
           description="Accedi con l’account assegnato alla tua funzione."
         />
         {!isSupabaseConfigured && (
-          <p className="mb-4 text-center text-xs text-[var(--state-error)]">
+          <p className="mb-4 text-center text-xs text-(--state-error)">
             Accesso non disponibile: Supabase non è configurato nella build pubblicata.
           </p>
         )}
@@ -93,7 +93,7 @@ export function Staff() {
             >
               {submitting ? "..." : "Accedi"}
             </Button>
-            {error && <p className="text-xs text-[var(--state-error)]">{error}</p>}
+            {error && <p className="text-xs text-(--state-error)">{error}</p>}
           </form>
         </StaffPanel>
         <Button variant="back" href={appHref()} className="mt-4 w-full">
@@ -111,7 +111,7 @@ export function Staff() {
           description="Non è stato possibile caricare i permessi dell’account."
         />
         <StaffPanel eyebrow="Accesso interrotto" title="Controlla il profilo">
-          <p className="text-sm text-[var(--state-error)]">{profileError}</p>
+          <p className="text-sm text-(--state-error)">{profileError}</p>
           <Button variant="staff-secondary" className="mt-5" onClick={signOut}>
             Esci
           </Button>
@@ -123,7 +123,7 @@ export function Staff() {
   if (role === null || role === "tournament_manager") {
     return (
       <section className="mx-auto max-w-sm px-4 py-16 text-center">
-        <p className="text-sm text-[var(--text-secondary)]">Carico...</p>
+        <p className="text-sm text-(--text-secondary)">Carico...</p>
       </section>
     );
   }
@@ -133,9 +133,7 @@ export function Staff() {
       <section className="mx-auto max-w-md px-4 py-12">
         <StaffPageHeading title="Account in attesa" description="Il profilo esiste, ma deve ancora essere abilitato." />
         <StaffPanel eyebrow="Permessi staff" title="Ruolo non assegnato">
-          <p className="text-sm text-[var(--text-secondary)]">
-            Contatta l’amministratore per ricevere il ruolo necessario.
-          </p>
+          <p className="text-sm text-(--text-secondary)">Contatta l’amministratore per ricevere il ruolo necessario.</p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Button variant="staff-secondary" onClick={signOut}>
               Esci
@@ -172,10 +170,10 @@ export function Staff() {
                 <a
                   key={page.hash}
                   href={appHref(`#${page.hash}`)}
-                  className="tile font-semibold text-[var(--accent-primary)]"
+                  className="tile font-semibold text-(--accent-primary)"
                 >
                   {page.title}
-                  <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">
+                  <span className="mt-1 block text-xs font-normal text-(--text-secondary)">
                     Apri la pagina di gestione →
                   </span>
                 </a>
@@ -195,12 +193,10 @@ export function Staff() {
                 <a
                   key={page.hash}
                   href={appHref(`#${page.hash}`)}
-                  className="tile font-semibold text-[var(--accent-primary)]"
+                  className="tile font-semibold text-(--accent-primary)"
                 >
                   {page.title}
-                  <span className="mt-1 block text-xs font-normal text-[var(--text-secondary)]">
-                    Avvia postazione →
-                  </span>
+                  <span className="mt-1 block text-xs font-normal text-(--text-secondary)">Avvia postazione →</span>
                 </a>
               ))}
             </div>

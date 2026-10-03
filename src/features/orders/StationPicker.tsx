@@ -14,8 +14,8 @@ export function StationPicker<T extends string>({
     <div className="grid gap-3 sm:grid-cols-2">
       {options.map((option) => (
         <button key={option.key} type="button" onClick={() => onPick(option.key)} className="tile">
-          <strong className="font-display text-lg text-[var(--accent-primary)]">{option.label}</strong>
-          <span className="mt-1 block text-sm text-[var(--text-secondary)]">{option.description ?? hint}</span>
+          <strong className="font-display text-lg text-(--accent-primary)">{option.label}</strong>
+          <span className="mt-1 block text-sm text-(--text-secondary)">{option.description ?? hint}</span>
         </button>
       ))}
     </div>

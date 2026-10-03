@@ -1,6 +1,6 @@
 export function FreeWaterNotice() {
   return (
-    <div className="mt-4 rounded-[var(--radius-md)] border border-[rgba(242,128,46,0.4)] bg-[rgba(242,128,46,0.08)] px-4 py-3 text-sm font-semibold text-[var(--accent-primary)]">
+    <div className="mt-4 rounded-md border border-[rgba(242,128,46,0.4)] bg-[rgba(242,128,46,0.08)] px-4 py-3 text-sm font-semibold text-(--accent-primary)">
       Acqua Gratis
     </div>
   );

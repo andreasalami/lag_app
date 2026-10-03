@@ -11,7 +11,7 @@ Produzione:
 
 ## Stack
 
-- **Frontend**: React + TypeScript + Vite + Tailwind CSS
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS 4 (browser supportati: Safari/iOS 16.4+, Chrome 111+, Firefox 128+)
 - **Backend**: [Supabase](https://supabase.com) (Postgres + Auth + Realtime)
 - **Biglietti**: widget di checkout ufficiale Eventbrite (nessun backend richiesto per questa parte)
 

@@ -79,7 +79,7 @@ export function TurnstileChallenge({
   return (
     <div className="mt-4">
       <div ref={node} />
-      <p role="status" className="text-sm text-[var(--text-secondary)]">
+      <p role="status" className="text-sm text-(--text-secondary)">
         {message}
       </p>
       {failed && (

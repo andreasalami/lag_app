@@ -38,12 +38,12 @@ export function PendingRequestPanel({
     <section
       role="region"
       aria-labelledby="pending-request-title"
-      className="mt-4 rounded-[var(--radius-md)] border-2 border-[var(--state-warning)] p-4 text-left"
+      className="mt-4 rounded-md border-2 border-(--state-warning) p-4 text-left"
     >
       <h2 id="pending-request-title" className="text-lg">
         Un ordine non è stato confermato
       </h2>
-      <p className="mt-1 text-sm text-[var(--text-secondary)]">
+      <p className="mt-1 text-sm text-(--text-secondary)">
         {fromOldEvent
           ? "Questa richiesta è di un evento precedente e non può più essere inviata. Non hai pagato nulla: puoi eliminarla."
           : "La connessione si è interrotta durante l’invio. Verifichiamo se è arrivato in cassa, senza crearne un doppione."}
@@ -56,7 +56,7 @@ export function PendingRequestPanel({
         ))}
       </ul>
       {error && !fromOldEvent && (
-        <p role="alert" className="mb-3 text-sm text-[var(--state-warning)]">
+        <p role="alert" className="mb-3 text-sm text-(--state-warning)">
           {error}
         </p>
       )}

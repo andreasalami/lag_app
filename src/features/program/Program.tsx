@@ -145,7 +145,7 @@ export function Program({ management = false }: { management?: boolean }) {
     <section id="programma" className="mx-auto w-full max-w-3xl py-10 sm:px-4">
       <div className="px-4 sm:px-0">
         <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione Scaletta" : "Programma"}</h2>
-        <p className="mb-4 text-sm text-[var(--text-secondary)]">
+        <p className="mb-4 text-sm text-(--text-secondary)">
           {management
             ? "Modifica giorni, palchi e orari pubblicati nella Home."
             : "Due palchi in contemporanea — l’orario può continuare dopo mezzanotte."}
@@ -165,7 +165,7 @@ export function Program({ management = false }: { management?: boolean }) {
           description="Le modifiche restano in bozza finché non premi Salva."
           contentClassName="flex flex-col gap-3"
         >
-          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+          <label className="flex items-center gap-2 text-sm text-(--text-secondary)">
             Giorni dell’evento
             <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="field text-xs">
               {Array.from({ length: MAX_DAYS }, (_, index) => index + 1).map((dayCount) => (
@@ -178,7 +178,7 @@ export function Program({ management = false }: { management?: boolean }) {
           {slots.map((slot) => (
             <div
               key={slot.id}
-              className="grid gap-2 border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0 sm:flex sm:flex-wrap sm:items-center sm:pb-2"
+              className="grid gap-2 border-b border-(--surface-border) pb-3 last:border-0 last:pb-0 sm:flex sm:flex-wrap sm:items-center sm:pb-2"
             >
               <select
                 value={slot.day}
@@ -201,7 +201,7 @@ export function Program({ management = false }: { management?: boolean }) {
                 className="field min-w-0 text-xs sm:w-auto"
               >
                 {STAGES.map((s) => (
-                  <option key={s} value={s} className="bg-[var(--surface-solid)]">
+                  <option key={s} value={s} className="bg-(--surface-solid)">
                     {s}
                   </option>
                 ))}
@@ -224,7 +224,7 @@ export function Program({ management = false }: { management?: boolean }) {
                   }
                   className="field min-w-0 w-full text-xs"
                 />
-                <span className="text-center text-xs text-[var(--text-secondary)]">–</span>
+                <span className="text-center text-xs text-(--text-secondary)">–</span>
                 <input
                   type="time"
                   value={slot.end_time}
@@ -236,22 +236,22 @@ export function Program({ management = false }: { management?: boolean }) {
               </div>
               <button
                 onClick={() => draft.removeRow(slot.id)}
-                className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto"
+                className="justify-self-start text-xs text-(--state-error) hover:underline sm:justify-self-auto"
               >
                 Elimina
               </button>
             </div>
           ))}
-          <button onClick={addSlot} className="mt-1 self-start text-xs text-[var(--accent-primary)] hover:underline">
+          <button onClick={addSlot} className="mt-1 self-start text-xs text-(--accent-primary) hover:underline">
             + Aggiungi evento
           </button>
         </StaffPanel>
       )}
 
       {loadError ? (
-        <p className="px-4 text-sm text-[var(--state-error)] sm:px-0">Programma non disponibile. Ricarica la pagina.</p>
+        <p className="px-4 text-sm text-(--state-error) sm:px-0">Programma non disponibile. Ricarica la pagina.</p>
       ) : loading ? (
-        <p className="px-4 text-sm text-[var(--text-secondary)] sm:px-0">Carico il programma...</p>
+        <p className="px-4 text-sm text-(--text-secondary) sm:px-0">Carico il programma...</p>
       ) : (
         <ProgramGrid slots={slots} stages={STAGES} days={displayDays} />
       )}

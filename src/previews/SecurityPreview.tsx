@@ -8,7 +8,7 @@ export function SecurityPreview() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <p className="px-4 pt-3 text-center text-xs text-[var(--text-secondary)]">
+      <p className="px-4 pt-3 text-center text-xs text-(--text-secondary)">
         Anteprima locale · QR dimostrativo, senza ordini associati
       </p>
       <RecoveryCard

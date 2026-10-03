@@ -34,7 +34,7 @@ const PAGE_COMPONENTS: Record<StaffPageHash, ComponentType> = {
 };
 
 const LOADING = (
-  <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">Carico…</section>
+  <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-(--text-secondary)">Carico…</section>
 );
 
 function ProtectedOperationalPage({
@@ -50,7 +50,7 @@ function ProtectedOperationalPage({
 
   if (loading) {
     return (
-      <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-[var(--text-secondary)]">
+      <section className="mx-auto max-w-sm px-4 py-16 text-center text-sm text-(--text-secondary)">
         Verifico l’accesso…
       </section>
     );
@@ -60,7 +60,7 @@ function ProtectedOperationalPage({
     return (
       <section className="mx-auto max-w-sm px-4 py-16 text-center">
         <h1 className="font-display text-2xl">{title}: accesso riservato</h1>
-        <p className="mt-3 text-sm text-[var(--text-secondary)]">
+        <p className="mt-3 text-sm text-(--text-secondary)">
           Questa sezione non è pubblica. Serve un account con il ruolo corretto.
         </p>
         <Button href={appHref("#staff")} variant="staff-primary" className="mt-6">

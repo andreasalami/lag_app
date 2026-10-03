@@ -262,18 +262,18 @@ export function OrderExperiencePreview() {
     <main className="preview-shell px-4 pb-12 pt-6 sm:px-8 lg:px-12">
       <header className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-primary)] font-display text-lg text-[var(--text-on-accent)]">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-(--accent-primary) font-display text-lg text-(--text-on-accent)">
             LAG
           </span>
           <span className="text-sm font-semibold">
             L’Agro ai Giovani{" "}
-            <span className="ml-2 hidden font-normal text-[var(--text-secondary)] sm:inline">
+            <span className="ml-2 hidden font-normal text-(--text-secondary) sm:inline">
               / Il nuovo modo di ordinare
             </span>
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="rounded-full border border-[rgba(242,128,46,0.3)] px-3 py-1.5 text-[10px] uppercase tracking-widest text-[var(--accent-primary)]">
+          <span className="rounded-full border border-[rgba(242,128,46,0.3)] px-3 py-1.5 text-[10px] uppercase tracking-widest text-(--accent-primary)">
             Anteprima · dati di esempio
           </span>
           <button type="button" className="order-quiet-action" onClick={resetDemo}>
@@ -286,7 +286,7 @@ export function OrderExperiencePreview() {
         <h1 className="preview-heading mt-3 max-w-3xl text-3xl sm:text-5xl">
           Ordina. Ritira quando vuoi.
           <br />
-          <span className="text-[var(--accent-primary)]">Il resto rimane sul tuo QR.</span>
+          <span className="text-(--accent-primary)">Il resto rimane sul tuo QR.</span>
         </h1>
       </div>
       <div className="mx-auto grid max-w-[1280px] items-start gap-7 md:grid-cols-[220px_minmax(0,440px)] lg:grid-cols-[240px_minmax(0,440px)_minmax(200px,1fr)] lg:gap-10">
@@ -300,12 +300,12 @@ export function OrderExperiencePreview() {
               className={`rounded-2xl border p-4 text-left transition-colors ${view === entry.id ? "border-[rgba(242,128,46,0.4)] bg-[rgba(242,128,46,0.07)]" : "border-transparent hover:bg-white/5"}`}
             >
               <span
-                className={`font-mono text-[10px] ${view === entry.id ? "text-[var(--accent-primary)]" : "text-[var(--text-secondary)]"}`}
+                className={`font-mono text-[10px] ${view === entry.id ? "text-(--accent-primary)" : "text-(--text-secondary)"}`}
               >
                 {entry.number}
               </span>
               <strong className="mt-2 block text-sm leading-snug">{entry.title}</strong>
-              <span className="mt-1 hidden text-xs leading-relaxed text-[var(--text-secondary)] md:block">
+              <span className="mt-1 hidden text-xs leading-relaxed text-(--text-secondary) md:block">
                 {entry.description}
               </span>
             </button>
@@ -315,12 +315,12 @@ export function OrderExperiencePreview() {
           <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
             <span className="font-display text-lg">
               LAG
-              <span className="ml-2 font-sans text-xs text-[var(--text-secondary)]">
+              <span className="ml-2 font-sans text-xs text-(--text-secondary)">
                 {view === "ritiro" ? "Staff · Ritiro" : "La tua serata"}
               </span>
             </span>
-            <span className="flex items-center gap-1.5 text-[10px] text-[var(--text-secondary)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-primary)]" />
+            <span className="flex items-center gap-1.5 text-[10px] text-(--text-secondary)">
+              <span className="h-1.5 w-1.5 rounded-full bg-(--accent-primary)" />
               Anteprima
             </span>
           </div>
@@ -329,25 +329,25 @@ export function OrderExperiencePreview() {
               <>
                 <SectionLabel>{review ? "Un ultimo controllo" : "Il menu della serata"}</SectionLabel>
                 <h2 className="mt-2 text-3xl">{review ? "Tutto giusto?" : "Cosa ti va?"}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
+                <p className="mt-2 text-sm leading-relaxed text-(--text-secondary)">
                   {review
                     ? "Controlla quantità e totale. Pagherai in cassa."
                     : "Scegli qui, paga in cassa e ritira con il QR."}
                 </p>
                 {draftRestored && !review && (
-                  <p className="mt-3 text-xs text-[var(--state-success)]">✓ Abbiamo ritrovato il tuo carrello.</p>
+                  <p className="mt-3 text-xs text-(--state-success)">✓ Abbiamo ritrovato il tuo carrello.</p>
                 )}
                 {review && (
                   <label className="mt-5 block">
                     <span className="text-sm font-semibold">Un nome per il tuo ordine</span>
                     <input
-                      className="field mt-2 min-h-12 w-full !px-3 !text-base"
+                      className="field mt-2 min-h-12 w-full px-3! text-base!"
                       maxLength={32}
                       value={alias}
                       onChange={(event) => setAlias(event.target.value)}
                       placeholder="Es. Tavolo Girasole"
                     />
-                    <span className="mt-1 block text-xs text-[var(--text-secondary)]">
+                    <span className="mt-1 block text-xs text-(--text-secondary)">
                       Basta un soprannome. Non serve un account.
                     </span>
                   </label>
@@ -360,7 +360,7 @@ export function OrderExperiencePreview() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold">{item.name}</p>
-                        <p className="mt-1 font-mono text-xs text-[var(--text-secondary)]">{euro(item.price)}</p>
+                        <p className="mt-1 font-mono text-xs text-(--text-secondary)">{euro(item.price)}</p>
                       </div>
                       <div className="order-stepper order-stepper--compact">
                         <button
@@ -389,12 +389,12 @@ export function OrderExperiencePreview() {
                 {review && (
                   <details className="mt-4">
                     <summary className="preview-disclosure">Aggiungi una nota · facoltativo</summary>
-                    <textarea className="field min-h-20 w-full !p-3" placeholder="Es. senza cipolla" maxLength={300} />
+                    <textarea className="field min-h-20 w-full p-3!" placeholder="Es. senza cipolla" maxLength={300} />
                   </details>
                 )}
-                <div className="mt-5 rounded-2xl bg-[var(--surface-solid)] p-4">
+                <div className="mt-5 rounded-2xl bg-(--surface-solid) p-4">
                   <div className="mb-4 flex items-end justify-between">
-                    <span className="text-sm text-[var(--text-secondary)]">{cartCount} articoli</span>
+                    <span className="text-sm text-(--text-secondary)">{cartCount} articoli</span>
                     <strong className="font-mono text-xl">{euro(cartTotal)}</strong>
                   </div>
                   <button
@@ -407,7 +407,7 @@ export function OrderExperiencePreview() {
                     <span aria-hidden="true">→</span>
                   </button>
                   <p
-                    className={`mt-3 text-center text-[10px] ${draftError ? "text-[var(--state-error)]" : "text-[var(--text-secondary)]"}`}
+                    className={`mt-3 text-center text-[10px] ${draftError ? "text-(--state-error)" : "text-(--text-secondary)"}`}
                   >
                     {draftError ? "Salvataggio sul dispositivo non disponibile." : "✓ Il carrello si salva da solo"}
                   </p>
@@ -437,7 +437,7 @@ export function OrderExperiencePreview() {
                 <div className="mt-2 flex items-end justify-between">
                   <div>
                     <h2 className="font-mono text-5xl font-semibold tracking-tight">#42</h2>
-                    <p className="mt-2 text-sm text-[var(--text-secondary)]">{alias}</p>
+                    <p className="mt-2 text-sm text-(--text-secondary)">{alias}</p>
                   </div>
                   <span className="pb-1 font-mono text-lg">{euro(total)}</span>
                 </div>
@@ -457,7 +457,7 @@ export function OrderExperiencePreview() {
                 </div>
                 <div className="mt-5 flex items-center justify-between">
                   <h3 className="text-base">{paid ? "Ti resta da ritirare" : "Il tuo ordine"}</h3>
-                  <span className="text-xs text-[var(--text-secondary)]">
+                  <span className="text-xs text-(--text-secondary)">
                     {paid ? remaining : items.reduce((sum, item) => sum + item.quantity, 0)} articoli
                   </span>
                 </div>
@@ -466,17 +466,17 @@ export function OrderExperiencePreview() {
                     <div key={item.id} className="preview-line flex items-center justify-between gap-3 py-3">
                       <div>
                         <p
-                          className={`text-sm ${item.quantity === item.delivered_quantity ? "text-[var(--text-secondary)] line-through" : "font-semibold"}`}
+                          className={`text-sm ${item.quantity === item.delivered_quantity ? "text-(--text-secondary) line-through" : "font-semibold"}`}
                         >
                           {item.name}
                         </p>
-                        <p className="mt-1 text-[10px] text-[var(--text-secondary)]">
+                        <p className="mt-1 text-[10px] text-(--text-secondary)">
                           {item.station}
                           {item.delivered_quantity > 0 ? ` · ${item.delivered_quantity} già ritirati` : ""}
                         </p>
                       </div>
                       <span
-                        className={`font-mono text-lg ${item.quantity === item.delivered_quantity ? "text-[var(--state-success)]" : "text-[var(--accent-primary)]"}`}
+                        className={`font-mono text-lg ${item.quantity === item.delivered_quantity ? "text-(--state-success)" : "text-(--accent-primary)"}`}
                       >
                         {item.quantity === item.delivered_quantity ? "✓" : item.quantity - item.delivered_quantity}
                       </span>
@@ -490,7 +490,7 @@ export function OrderExperiencePreview() {
                 >
                   Conserva i miei ordini <TinyArrow />
                 </button>
-                <p className="mt-2 text-center text-[10px] text-[var(--text-secondary)]">
+                <p className="mt-2 text-center text-[10px] text-(--text-secondary)">
                   Per ritrovarli anche se cancelli i dati del browser.
                 </p>
                 <details className="mt-4">
@@ -514,9 +514,7 @@ export function OrderExperiencePreview() {
                   </span>
                 </div>
                 <h2 className="mt-2 text-2xl">{alias}</h2>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  Anche una parte adesso. Il resto quando vuole.
-                </p>
+                <p className="mt-1 text-sm text-(--text-secondary)">Anche una parte adesso. Il resto quando vuole.</p>
                 <fieldset className="preview-stations">
                   <legend>Postazione di esempio</legend>
                   <div className="preview-station-options">
@@ -541,9 +539,7 @@ export function OrderExperiencePreview() {
                 {notice && (
                   <div role="status" className="preview-notice mb-4">
                     <strong className="block text-sm text-[#9ed3a8]">✓ {notice}</strong>
-                    <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                      Le quantità rimaste sono già aggiornate.
-                    </p>
+                    <p className="mt-1 text-xs text-(--text-secondary)">Le quantità rimaste sono già aggiornate.</p>
                     {lastItems && (
                       <button
                         type="button"
@@ -574,7 +570,7 @@ export function OrderExperiencePreview() {
                   <div className="rounded-2xl border border-[#6fa97a]/30 p-6 text-center">
                     <span className="text-3xl text-[#9ed3a8]">✓</span>
                     <h3 className="mt-3 text-lg">Tutto ritirato qui</h3>
-                    <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                    <p className="mt-2 text-sm text-(--text-secondary)">
                       {remaining
                         ? "Gli altri prodotti restano nelle rispettive postazioni."
                         : "Questo ordine è completo."}
@@ -595,7 +591,7 @@ export function OrderExperiencePreview() {
                   <br />
                   sempre con te.
                 </h2>
-                <p className="mb-5 mt-3 text-sm leading-relaxed text-[var(--text-secondary)]">
+                <p className="mb-5 mt-3 text-sm leading-relaxed text-(--text-secondary)">
                   Fai uno screenshot di questa scheda e conservalo. Basta una volta per tutto l’evento.
                 </p>
                 <div ref={recoveryRef} className="preview-recovery">
@@ -626,7 +622,7 @@ export function OrderExperiencePreview() {
                 >
                   Scarica l’immagine <span aria-hidden="true">↓</span>
                 </button>
-                <p className="mt-3 text-center text-xs leading-relaxed text-[var(--text-secondary)]">
+                <p className="mt-3 text-center text-xs leading-relaxed text-(--text-secondary)">
                   Oppure usa lo screenshot del telefono.
                   <br />
                   Nessun account e nessuna password da ricordare.
@@ -644,7 +640,7 @@ export function OrderExperiencePreview() {
           <div className="rounded-2xl border border-white/10 p-5">
             <SectionLabel>Da provare nell’anteprima</SectionLabel>
             <h2 className="mt-3 text-xl">{view === "ritiro" ? "2 birre. Due tocchi." : activeView.title}</h2>
-            <p className="mt-3 text-sm leading-relaxed text-[var(--text-secondary)]">
+            <p className="mt-3 text-sm leading-relaxed text-(--text-secondary)">
               {view === "ritiro"
                 ? "Premi 2, poi Consegna 2 × Birra media. Le 8 birre rimaste saranno ancora disponibili. Apri la vista del cliente per vedere il risultato."
                 : view === "qr"
@@ -666,19 +662,19 @@ export function OrderExperiencePreview() {
           </div>
           <div className="mt-5 px-1">
             <SectionLabel>Come funziona</SectionLabel>
-            <ul className="mt-4 space-y-3 text-xs leading-relaxed text-[var(--text-secondary)]">
+            <ul className="mt-4 space-y-3 text-xs leading-relaxed text-(--text-secondary)">
               <li>
-                <span className="mr-2 text-[var(--accent-primary)]">01</span>L’addetto conferma solo ciò che consegna.
+                <span className="mr-2 text-(--accent-primary)">01</span>L’addetto conferma solo ciò che consegna.
               </li>
               <li>
-                <span className="mr-2 text-[var(--accent-primary)]">02</span>Quantità indipendenti per ogni prodotto.
+                <span className="mr-2 text-(--accent-primary)">02</span>Quantità indipendenti per ogni prodotto.
               </li>
               <li>
-                <span className="mr-2 text-[var(--accent-primary)]">03</span>Un solo QR per tutti i ritiri.
+                <span className="mr-2 text-(--accent-primary)">03</span>Un solo QR per tutti i ritiri.
               </li>
             </ul>
           </div>
-          <p className="mt-6 border-t border-white/10 pt-4 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+          <p className="mt-6 border-t border-white/10 pt-4 text-[11px] leading-relaxed text-(--text-secondary)">
             Questa anteprima usa solo dati di esempio. Non crea ordini reali. Il recupero dal server è rappresentato
             graficamente: il codice dimostrativo non recupera dati. Nella versione operativa ogni addetto mantiene i
             permessi della propria area.

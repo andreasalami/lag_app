@@ -59,7 +59,7 @@ export function RecoveryCard({ token, eventName, onBack }: { token: string; even
       >
         Scarica il QR di recupero
       </Button>
-      <p className="mt-3 text-center text-xs text-[var(--text-secondary)]">
+      <p className="mt-3 text-center text-xs text-(--text-secondary)">
         Basta una copia per gli ordini di questo evento associati a questo dispositivo. Nessun account.
       </p>
     </main>

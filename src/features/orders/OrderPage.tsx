@@ -440,7 +440,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       </div>
       {pendingPanel}
       <h1 className="mt-5 text-3xl">Ordina qui</h1>
-      <label className="mt-5 block rounded-[var(--radius-md)] border-2 border-[var(--accent-primary)] bg-white/5 p-4">
+      <label className="mt-5 block rounded-md border-2 border-(--accent-primary) bg-white/5 p-4">
         <span className="mb-2 block text-lg font-semibold">Inserisci qui il nome del tuo ordine</span>
         <input
           value={alias}
@@ -450,7 +450,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
           autoComplete="off"
           className="field w-full py-3 text-base"
         />
-        <span className="mt-1 block text-xs text-[var(--text-secondary)]">
+        <span className="mt-1 block text-xs text-(--text-secondary)">
           Usa uno pseudonimo, non inserire telefono, email o altri dati personali.
         </span>
       </label>
@@ -465,23 +465,23 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       />
 
       {loadError ? (
-        <div className="mt-6 text-sm text-[var(--state-error)]">
+        <div className="mt-6 text-sm text-(--state-error)">
           <p>{loadError}</p>
           <Button variant="ghost" className="mt-3" onClick={() => void loadCatalog()}>
             Riprova
           </Button>
         </div>
       ) : loading ? (
-        <p className="mt-6 text-sm text-[var(--text-secondary)]">Carico il menu…</p>
+        <p className="mt-6 text-sm text-(--text-secondary)">Carico il menu…</p>
       ) : !catalog?.accepting ? (
-        <p className="mt-6 text-sm text-[var(--state-warning)]">
+        <p className="mt-6 text-sm text-(--state-warning)">
           {orderingReasonMessage(catalog?.reason ?? null, catalog?.opens_at)}
         </p>
       ) : (
         <OrderMenu catalog={catalog} cart={cart} onAdd={addItem} />
       )}
 
-      <details className="mt-8 text-xs text-[var(--text-secondary)]">
+      <details className="mt-8 text-xs text-(--text-secondary)">
         <summary className="cursor-pointer">Legenda allergeni 1–14</summary>
         <ol className="mt-2 grid gap-1 sm:grid-cols-2">
           {ALLERGENS.map((allergen, index) => (
@@ -544,7 +544,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         {lines.some((line) => line.category === "cibo") && (
           <PreparationChoice value={preparationMode} onChange={setPreparationMode} disabled={submitting} />
         )}
-        <p className="mt-2 font-semibold text-[var(--text-primary)]">
+        <p className="mt-2 font-semibold text-(--text-primary)">
           Totale da pagare in cassa: {priceFormatter.format(total)}
         </p>
       </Modal>

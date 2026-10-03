@@ -187,7 +187,7 @@ export function Menu({ management = false }: { management?: boolean }) {
   return (
     <section id="menu" className="mx-auto max-w-3xl px-4 py-10">
       <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione Menu e Scorte" : "Menu"}</h2>
-      <p className="mb-4 text-sm text-[var(--text-secondary)]">
+      <p className="mb-4 text-sm text-(--text-secondary)">
         {management
           ? "Aggiorna prodotti, prezzi, disponibilità e allergeni."
           : "Cucina e Bar disponibili durante l’evento."}
@@ -200,16 +200,16 @@ export function Menu({ management = false }: { management?: boolean }) {
       )}
 
       {loadError ? (
-        <p className="text-sm text-[var(--state-error)]">Menu non disponibile. Ricarica la pagina.</p>
+        <p className="text-sm text-(--state-error)">Menu non disponibile. Ricarica la pagina.</p>
       ) : loading ? (
-        <p className="text-sm text-[var(--text-secondary)]">Carico il menu...</p>
+        <p className="text-sm text-(--text-secondary)">Carico il menu...</p>
       ) : (
         categories.map((category) => (
-          <Card key={category} className="mb-6 overflow-hidden !p-0">
+          <Card key={category} className="mb-6 overflow-hidden p-0!">
             <div className="panel-header">
-              <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-secondary)]">Menu dell’evento</p>
-              <h3 className="mt-1 font-display text-2xl text-[var(--accent-primary)]">{CATEGORY_LABEL[category]}</h3>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">{CATEGORY_DESCRIPTION[category]}</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-(--text-secondary)">Menu dell’evento</p>
+              <h3 className="mt-1 font-display text-2xl text-(--accent-primary)">{CATEGORY_LABEL[category]}</h3>
+              <p className="mt-1 text-sm text-(--text-secondary)">{CATEGORY_DESCRIPTION[category]}</p>
             </div>
 
             <div className="px-4 py-2 sm:px-6">
@@ -221,19 +221,19 @@ export function Menu({ management = false }: { management?: boolean }) {
                 );
 
                 return (
-                  <div key={section.key} className="border-b border-[var(--surface-border)] py-4 last:border-0">
-                    <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+                  <div key={section.key} className="border-b border-(--surface-border) py-4 last:border-0">
+                    <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-(--text-secondary)">
                       {section.label}
                     </h4>
                     {sectionItems.length === 0 ? (
-                      <p className="text-sm text-[var(--text-secondary)]">Nessuna proposta al momento.</p>
+                      <p className="text-sm text-(--text-secondary)">Nessuna proposta al momento.</p>
                     ) : (
                       <div className="space-y-3">
                         {sectionItems.map((item) =>
                           canEdit ? (
                             <div
                               key={item.id}
-                              className="border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0"
+                              className="border-b border-(--surface-border) pb-3 last:border-0 last:pb-0"
                             >
                               <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:items-center">
                                 <input
@@ -295,12 +295,12 @@ export function Menu({ management = false }: { management?: boolean }) {
                                 <button
                                   type="button"
                                   onClick={() => draft.removeRow(item.id)}
-                                  className="justify-self-start text-xs text-[var(--state-error)] hover:underline sm:justify-self-auto"
+                                  className="justify-self-start text-xs text-(--state-error) hover:underline sm:justify-self-auto"
                                 >
                                   Elimina
                                 </button>
                               </div>
-                              <label className="mt-2 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                              <label className="mt-2 flex items-center gap-2 text-xs text-(--text-secondary)">
                                 Sezione
                                 <select
                                   value={`${item.category}:${item.subcategory}`}
@@ -347,8 +347,8 @@ export function Menu({ management = false }: { management?: boolean }) {
                                       }
                                       className={`h-7 w-7 rounded-full border text-xs ${
                                         selected
-                                          ? "border-[var(--accent-primary)] bg-[var(--accent-primary)] text-[var(--text-on-accent)]"
-                                          : "border-[var(--surface-border)] text-[var(--text-secondary)]"
+                                          ? "border-(--accent-primary) bg-(--accent-primary) text-(--text-on-accent)"
+                                          : "border-(--surface-border) text-(--text-secondary)"
                                       }`}
                                     >
                                       {number}
@@ -359,15 +359,15 @@ export function Menu({ management = false }: { management?: boolean }) {
                             </div>
                           ) : (
                             <div key={item.id} className="flex items-start justify-between gap-3">
-                              <span className="text-sm text-[var(--text-primary)]">
+                              <span className="text-sm text-(--text-primary)">
                                 {item.name}
                                 {item.allergens.length > 0 && (
-                                  <span className="ml-2 text-xs text-[var(--text-secondary)]">
+                                  <span className="ml-2 text-xs text-(--text-secondary)">
                                     Allergeni: {item.allergens.join(", ")}
                                   </span>
                                 )}
                               </span>
-                              <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">
+                              <span className="shrink-0 font-mono text-sm text-(--accent-primary)">
                                 {priceFormatter.format(item.price)}
                               </span>
                             </div>
@@ -379,7 +379,7 @@ export function Menu({ management = false }: { management?: boolean }) {
                       <button
                         type="button"
                         onClick={() => addItem(category, section.key)}
-                        className="mt-3 text-xs text-[var(--accent-primary)] hover:underline"
+                        className="mt-3 text-xs text-(--accent-primary) hover:underline"
                       >
                         + Aggiungi in {section.label}
                       </button>

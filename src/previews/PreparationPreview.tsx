@@ -12,22 +12,22 @@ export function PreparationPreview() {
   const [scanned, setScanned] = useState(false);
   return (
     <main className="mx-auto max-w-lg px-4 py-6">
-      <p className="mb-4 text-center text-xs text-[var(--text-secondary)]">
+      <p className="mb-4 text-center text-xs text-(--text-secondary)">
         Anteprima interattiva · dati dimostrativi · nessun pagamento reale
       </p>
       <h1 className="text-3xl">Subito o più tardi</h1>
-      <p className="mt-2 text-sm text-[var(--text-secondary)]">Ordine #42 · Tavolo Girasole</p>
+      <p className="mt-2 text-sm text-(--text-secondary)">Ordine #42 · Tavolo Girasole</p>
       <Card className="mt-5">
         <p>2 × Panino salamella</p>
         <p>2 × Birra media</p>
-        <p className="mt-3 border-t border-[var(--surface-border)] pt-3 font-semibold">
+        <p className="mt-3 border-t border-(--surface-border) pt-3 font-semibold">
           Quantità già riservate nelle scorte
         </p>
         {!paid ? (
           <>
             <PreparationChoice value={mode} onChange={setMode} />
             {full && mode === "immediate" && (
-              <p role="status" className="mb-3 text-sm text-[var(--state-warning)]">
+              <p role="status" className="mb-3 text-sm text-(--state-warning)">
                 Cucina al completo · 100 / 100. La cassa attende un posto oppure concorda la preparazione successiva.
               </p>
             )}
@@ -44,7 +44,7 @@ export function PreparationPreview() {
           </>
         ) : (
           <>
-            <p className="mt-4 text-sm text-[var(--state-success)]">Pagamento registrato · Bevande ritirabili</p>
+            <p className="mt-4 text-sm text-(--state-success)">Pagamento registrato · Bevande ritirabili</p>
             <PreparationStatus state={state} />
             {state === "dormant" && (
               <Button className="mt-4 w-full" onClick={() => setScanned(true)}>

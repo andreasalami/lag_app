@@ -14,7 +14,7 @@ export function SegmentedControl<T extends string>({
 }) {
   return (
     <div
-      className={`grid rounded-[var(--radius-pill)] border border-[var(--surface-border)] p-1 ${className}`}
+      className={`grid rounded-(--radius-pill) border border-(--surface-border) p-1 ${className}`}
       style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       {options.map((option) => (
@@ -23,7 +23,7 @@ export function SegmentedControl<T extends string>({
           type="button"
           aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
-          className={`rounded-[var(--radius-pill)] px-3 py-2 text-sm ${value === option.value ? "bg-[var(--accent-primary)] text-[var(--text-on-accent)]" : "text-[var(--text-secondary)]"}`}
+          className={`rounded-(--radius-pill) px-3 py-2 text-sm ${value === option.value ? "bg-(--accent-primary) text-(--text-on-accent)" : "text-(--text-secondary)"}`}
         >
           {option.label}
         </button>

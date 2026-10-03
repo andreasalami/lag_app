@@ -39,10 +39,10 @@ function SlotRow({ name, isWinner, score, editable, onScoreChange, onOverride }:
             if (e.key === "Enter") commit();
             if (e.key === "Escape") setEditing(false);
           }}
-          className={`field w-full ${tooLong ? "border-[var(--state-error)]" : ""}`}
+          className={`field w-full ${tooLong ? "border-(--state-error)" : ""}`}
         />
         {tooLong && (
-          <p id={errorId} role="alert" className="mt-0.5 text-[11px] text-[var(--state-error)]">
+          <p id={errorId} role="alert" className="mt-0.5 text-[11px] text-(--state-error)">
             Nome troppo lungo: max {TEAM_NAME_MAX_LENGTH}
           </p>
         )}
@@ -53,12 +53,12 @@ function SlotRow({ name, isWinner, score, editable, onScoreChange, onOverride }:
   return (
     <div className="flex items-center gap-2 py-1">
       <div
-        className={`flex-1 truncate rounded-[var(--radius-sm)] px-2 py-1 text-left text-sm transition-colors ${
+        className={`flex-1 truncate rounded-sm px-2 py-1 text-left text-sm transition-colors ${
           isWinner
-            ? "font-semibold text-[var(--accent-primary)]"
+            ? "font-semibold text-(--accent-primary)"
             : name
-              ? "text-[var(--text-primary)]"
-              : "text-[var(--text-secondary)]"
+              ? "text-(--text-primary)"
+              : "text-(--text-secondary)"
         } ${editable && name ? "hover:bg-white/5" : ""}`}
       >
         {name ?? "In attesa"}
@@ -89,7 +89,7 @@ function SlotRow({ name, isWinner, score, editable, onScoreChange, onOverride }:
               setEditing(true);
             }}
             title="Modifica / ripesca squadra in questo slot"
-            className="text-xs text-[var(--text-secondary)] hover:text-[var(--accent-primary)]"
+            className="text-xs text-(--text-secondary) hover:text-(--accent-primary)"
           >
             ✎
           </button>
@@ -112,7 +112,7 @@ interface MatchCardProps {
 
 export function MatchCard({ nameA, nameB, scoreA, scoreB, winner, editable, onSetScore, onOverride }: MatchCardProps) {
   return (
-    <Card className="h-full !p-3">
+    <Card className="h-full p-3!">
       <SlotRow
         name={nameA}
         isWinner={winner === "A"}
@@ -121,7 +121,7 @@ export function MatchCard({ nameA, nameB, scoreA, scoreB, winner, editable, onSe
         onScoreChange={(v) => onSetScore("A", v)}
         onOverride={(name) => onOverride("A", name)}
       />
-      <div className="my-1 h-px bg-[var(--surface-border)]" />
+      <div className="my-1 h-px bg-(--surface-border)" />
       <SlotRow
         name={nameB}
         isWinner={winner === "B"}

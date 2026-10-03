@@ -104,10 +104,10 @@ export function isPublicOrderStatus(value: unknown): value is PublicOrderStatus 
 }
 
 export function orderStatusClassName(status: PublicOrderStatus) {
-  if (status === "consegnato") return "text-[var(--state-success)]";
-  if (status === "annullato") return "text-[var(--state-error)]";
-  if (status === "pagato" || status === "ritiro_parziale") return "text-[var(--state-warning)]";
-  return "text-[var(--accent-primary)]";
+  if (status === "consegnato") return "text-(--state-success)";
+  if (status === "annullato") return "text-(--state-error)";
+  if (status === "pagato" || status === "ritiro_parziale") return "text-(--state-warning)";
+  return "text-(--accent-primary)";
 }
 
 type StatusUpdate = Pick<StoredOrder, "status" | "progress"> &

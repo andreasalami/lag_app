@@ -328,7 +328,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
         >
           <OrderNotes notes={activeOrder.notes} />
           {foodDormant && (
-            <div className="mb-4 rounded-2xl border border-[var(--accent-primary)] p-4">
+            <div className="mb-4 rounded-2xl border border-(--accent-primary) p-4">
               <p className="text-sm">{kitchenMessage(activeOrder.kitchen_state)}</p>
               {activeOrder.kitchen_state === "dormant" && (
                 <Button
@@ -349,11 +349,11 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
                 return (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-3 border-b border-[var(--surface-border)] pb-3 last:border-0 last:pb-0"
+                    className="flex items-center justify-between gap-3 border-b border-(--surface-border) pb-3 last:border-0 last:pb-0"
                   >
                     <div>
                       <strong>{item.name}</strong>
-                      <span className="block text-xs text-[var(--text-secondary)]">
+                      <span className="block text-xs text-(--text-secondary)">
                         Da ritirare: {remaining} su {item.quantity}
                       </span>
                     </div>
@@ -371,7 +371,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
             />
           )}
           {overview ? (
-            <p className="mt-4 border-t border-[var(--surface-border)] pt-4 text-sm text-[var(--text-secondary)]">
+            <p className="mt-4 border-t border-(--surface-border) pt-4 text-sm text-(--text-secondary)">
               La consegna viene registrata dalle singole postazioni.
             </p>
           ) : null}
@@ -434,7 +434,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
               className="field w-full py-2"
             />
           </label>
-          <label className="min-w-36 flex-[2]">
+          <label className="min-w-36 flex-2">
             <span className="mb-1 block text-xs">Nome ordine</span>
             <input
               value={aliasSearch}
@@ -446,21 +446,19 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {filtered.map((order) => (
             <button key={order.id} type="button" onClick={() => selectOrder(order)} className="tile">
-              <strong className="font-display text-xl text-[var(--accent-primary)]">
+              <strong className="font-display text-xl text-(--accent-primary)">
                 #{order.display_number} · {order.alias}
               </strong>
               <span className="mt-2 block text-sm">
                 {order.items.map((item) => `${remainingToPickUp(item)}× ${item.name}`).join(" · ")}
               </span>
               {order.notes && (
-                <span className="mt-2 block text-sm font-semibold text-[var(--state-warning)]">
-                  NOTE: {order.notes}
-                </span>
+                <span className="mt-2 block text-sm font-semibold text-(--state-warning)">NOTE: {order.notes}</span>
               )}
             </button>
           ))}
           {!loading && filtered.length === 0 && (
-            <p className="text-sm text-[var(--text-secondary)]">Nessun ordine in questa postazione.</p>
+            <p className="text-sm text-(--text-secondary)">Nessun ordine in questa postazione.</p>
           )}
         </div>
       </StaffPanel>
@@ -476,7 +474,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
             {recent.map((delivery) => (
               <div
                 key={delivery.id}
-                className="flex items-center justify-between gap-3 border-b border-[var(--surface-border)] py-2 last:border-0"
+                className="flex items-center justify-between gap-3 border-b border-(--surface-border) py-2 last:border-0"
               >
                 <span>
                   #{delivery.display_number} · {delivery.alias}

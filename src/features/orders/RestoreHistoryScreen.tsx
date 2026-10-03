@@ -49,7 +49,7 @@ export function RestoreHistoryScreen({
   return (
     <main className="mx-auto max-w-md px-4 py-8">
       <h1 className="text-2xl">Ritrova i tuoi ordini</h1>
-      <p className="my-4 text-sm text-[var(--text-secondary)]">
+      <p className="my-4 text-sm text-(--text-secondary)">
         Il tuo codice permette di recuperare lo storico, senza account.
       </p>
       {error && (

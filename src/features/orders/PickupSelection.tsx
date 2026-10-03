@@ -60,7 +60,7 @@ export function PickupSelection({ items, selection, onChange, onConfirm, busy = 
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="font-sans text-base font-semibold">{item.name}</h3>
-                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  <p className="mt-1 text-xs text-(--text-secondary)">
                     {item.quantity} ordinati · {item.delivered_quantity} già ritirati
                   </p>
                 </div>
@@ -85,7 +85,7 @@ export function PickupSelection({ items, selection, onChange, onConfirm, busy = 
                     >
                       {quantity}
                     </output>
-                    <span className="text-xs text-[var(--text-secondary)]">da consegnare ora</span>
+                    <span className="text-xs text-(--text-secondary)">da consegnare ora</span>
                   </div>
                   <button
                     type="button"
@@ -122,13 +122,11 @@ export function PickupSelection({ items, selection, onChange, onConfirm, busy = 
                   </button>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-[var(--text-secondary)]">
+              <p className="mt-3 text-xs text-(--text-secondary)">
                 {quantity > 0 ? (
                   <>
                     Dopo questo ritiro:{" "}
-                    <strong className="text-[var(--text-primary)]">
-                      {Math.max(0, remaining - quantity)} da ritirare
-                    </strong>
+                    <strong className="text-(--text-primary)">{Math.max(0, remaining - quantity)} da ritirare</strong>
                   </>
                 ) : (
                   "Nessuno da consegnare adesso"
@@ -146,9 +144,9 @@ export function PickupSelection({ items, selection, onChange, onConfirm, busy = 
           </button>
         </div>
       )}
-      <div className="mt-5 border-t border-[var(--surface-border)] pt-4">
+      <div className="mt-5 border-t border-(--surface-border) pt-4">
         <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
-          <p aria-live="polite" className="text-sm text-[var(--text-secondary)]">
+          <p aria-live="polite" className="text-sm text-(--text-secondary)">
             {selected === 0
               ? "Scegli le quantità da consegnare."
               : `${selected} ${selected === 1 ? "articolo selezionato" : "articoli selezionati"}`}
@@ -168,7 +166,7 @@ export function PickupSelection({ items, selection, onChange, onConfirm, busy = 
         >
           {busy ? "Registro il ritiro…" : selected > 0 ? confirmation : "Conferma ritiro"}
         </Button>
-        <p className="mt-3 text-center text-xs leading-relaxed text-[var(--text-secondary)]">
+        <p className="mt-3 text-center text-xs leading-relaxed text-(--text-secondary)">
           Gli altri prodotti restano disponibili sullo stesso QR.
         </p>
       </div>

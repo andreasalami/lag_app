@@ -13,7 +13,7 @@ export function PreparationChoice({
   const group = useId();
   return (
     <fieldset disabled={disabled} className="my-4">
-      <legend className="mb-2 font-semibold text-[var(--text-primary)]">Quando prepariamo il cibo?</legend>
+      <legend className="mb-2 font-semibold text-(--text-primary)">Quando prepariamo il cibo?</legend>
       <div className="grid gap-2 sm:grid-cols-2">
         {(
           [
@@ -27,7 +27,7 @@ export function PreparationChoice({
         ).map(([mode, title, description]) => (
           <label
             key={mode}
-            className={`cursor-pointer rounded-2xl border p-3 transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-[var(--accent-primary)] ${value === mode ? "border-[var(--accent-primary)] bg-[rgba(242,128,46,0.12)]" : "border-[var(--surface-border)] bg-white/5"} ${disabled ? "opacity-60" : ""}`}
+            className={`cursor-pointer rounded-2xl border p-3 transition-colors focus-within:outline-solid focus-within:outline-2 focus-within:outline-(--accent-primary) ${value === mode ? "border-(--accent-primary) bg-[rgba(242,128,46,0.12)]" : "border-(--surface-border) bg-white/5"} ${disabled ? "opacity-60" : ""}`}
           >
             <input
               className="sr-only"
@@ -36,11 +36,11 @@ export function PreparationChoice({
               checked={value === mode}
               onChange={() => onChange(mode)}
             />
-            <span className="block text-sm font-semibold text-[var(--text-primary)]">
+            <span className="block text-sm font-semibold text-(--text-primary)">
               {value === mode ? "✓ " : ""}
               {title}
             </span>
-            <span className="mt-1 block text-xs text-[var(--text-secondary)]">{description}</span>
+            <span className="mt-1 block text-xs text-(--text-secondary)">{description}</span>
           </label>
         ))}
       </div>
@@ -75,8 +75,8 @@ export function PreparationStatus({ state }: { state: KitchenState | undefined }
       className="my-4 rounded-2xl border border-[rgba(242,128,46,0.4)] bg-[rgba(242,128,46,0.08)] p-4 text-left"
     >
       <h2 className="text-lg">{title}</h2>
-      <p className="mt-2 text-sm text-[var(--text-secondary)]">{message}</p>
-      <p className="mt-3 text-xs text-[var(--text-secondary)]">
+      <p className="mt-2 text-sm text-(--text-secondary)">{message}</p>
+      <p className="mt-3 text-xs text-(--text-secondary)">
         Se hai ordinato bevande, puoi ritirarle separatamente con lo stesso QR.
       </p>
     </section>

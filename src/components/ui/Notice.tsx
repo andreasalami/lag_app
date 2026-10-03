@@ -15,7 +15,7 @@ export function Notice({
   return (
     <div
       role={tone === "error" ? "alert" : "status"}
-      className={`flex items-start justify-between gap-3 rounded-[var(--radius-sm)] border p-3 text-sm ${tone === "error" ? "border-[rgba(229,88,75,0.5)]" : "border-[var(--surface-border)]"} ${className}`}
+      className={`flex items-start justify-between gap-3 rounded-sm border p-3 text-sm ${tone === "error" ? "border-[rgba(229,88,75,0.5)]" : "border-(--surface-border)"} ${className}`}
     >
       <span>{children}</span>
       {onDismiss && (

@@ -93,7 +93,7 @@ export function TournamentBroadcast() {
         </Button>
       }
     >
-      <p className="mb-3 text-xs text-[var(--text-secondary)]">
+      <p className="mb-3 text-xs text-(--text-secondary)">
         Per una prova completa su iPhone, chiudi la Web App sul telefono e invia qui un messaggio di test.
       </p>
       <textarea
@@ -106,7 +106,7 @@ export function TournamentBroadcast() {
         aria-label="Testo della notifica torneo"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs text-[var(--text-secondary)]">{message.length}/240</span>
+        <span className="text-xs text-(--text-secondary)">{message.length}/240</span>
         <Button
           variant="staff-primary"
           onClick={() => void sendBroadcast()}
@@ -115,8 +115,8 @@ export function TournamentBroadcast() {
           {sending ? "Invio…" : pendingJob ? "Riprendi invio" : "Invia avviso a tutti"}
         </Button>
       </div>
-      {feedback && <p className="mt-3 text-xs text-[var(--state-success)]">{feedback}</p>}
-      {error && <p className="mt-3 text-xs text-[var(--state-error)]">{error}</p>}
+      {feedback && <p className="mt-3 text-xs text-(--state-success)">{feedback}</p>}
+      {error && <p className="mt-3 text-xs text-(--state-error)">{error}</p>}
     </StaffPanel>
   );
 }
