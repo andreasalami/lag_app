@@ -1,56 +1,37 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
 import { Modal } from "../../components/ui/Modal";
-import { SegmentedControl } from "../../components/ui/SegmentedControl";
+import { TurnstileChallenge } from "../../components/ui/TurnstileChallenge";
+import { appHref, pollWhileVisible } from "../../lib/browser";
 import { supabase } from "../../lib/supabaseClient";
-import { ALLERGENS, downloadOrderPdf, orderingReasonMessage, priceFormatter, submitFailure } from "./orderUtils";
-import { addToCart, cartItemCount, cartTotal, lineTotal, remainingStock, removeOneFromCart, type Cart } from "./cart";
+import { addToCart, cartTotal, removeOneFromCart, type Cart } from "./cart";
+import { CartPanel } from "./CartPanel";
 import {
-  ORDER_STATUS_LABELS,
   addOrderToHistory,
   applyStatusUpdates,
   fetchOrderStatusUpdates,
   isPublicOrderStatus,
-  orderStatusClassName,
   ordersForEvent,
   readOrderHistory,
   saveOrderHistory,
   type PublicOrderStatus,
   type StoredOrder,
 } from "./orderHistory";
-import type { OrderMenuItem, OrderingCatalog, SubmittedOrder } from "./types";
+import { OrderMenu } from "./OrderMenu";
+import { getOrCreateRecoveryToken, recoveryOrderQr, saveRecoveryToken } from "./orderRecovery";
+import { ALLERGENS, orderingReasonMessage, priceFormatter, submitFailure } from "./orderUtils";
 import { clearPendingOrder, readPendingOrder, savePendingOrder, type PendingOrderRequest } from "./pendingOrder";
-import {
-  getOrCreateRecoveryToken,
-  readRecoveryToken,
-  recoveryOrderQr,
-  saveRecoveryToken,
-  validRecoveryToken,
-} from "./orderRecovery";
-import { TurnstileChallenge } from "../../components/ui/TurnstileChallenge";
-import { RecoveryCard } from "./RecoveryCard";
-import { PreparationChoice, PreparationStatus } from "./PreparationChoice";
-import type { PreparationMode } from "./types";
-import { MENU_SECTIONS } from "../menu/menuSections";
-import { FreeWaterNotice } from "../menu/FreeWaterNotice";
-import { appHref, pollWhileVisible } from "../../lib/browser";
+import { PendingRequestPanel } from "./PendingRequestPanel";
+import { PreparationChoice } from "./PreparationChoice";
+import { RestoreHistoryScreen } from "./RestoreHistoryScreen";
+import { SubmittedOrderView } from "./SubmittedOrderView";
+import type { OrderMenuItem, OrderingCatalog, PreparationMode, SubmittedOrder } from "./types";
 
-function statusMessage(status: PublicOrderStatus) {
-  switch (status) {
-    case "pagato":
-      return "Pagamento registrato. Il tuo ordine è in preparazione.";
-    case "ritiro_parziale":
-      return "Hai ritirato una parte dell’ordine. Conserva il QR per le altre postazioni.";
-    case "consegnato":
-      return "Ordine consegnato. Grazie!";
-    case "annullato":
-      return "Questo ordine è stato annullato.";
-    default:
-      return "Ordine inviato. Ora raggiungi la cassa per pagare.";
-  }
-}
-
+/*
+  Contenitore della pagina ordini: tiene lo stato condiviso (menu, carrello, storico,
+  richiesta in sospeso) e la logica di invio. Le viste sono componenti separati:
+  RestoreHistoryScreen, SubmittedOrderView, PendingRequestPanel, OrderMenu, CartPanel.
+*/
 export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [orderHistory, setOrderHistory] = useState<StoredOrder[]>(readOrderHistory);
   const [catalog, setCatalog] = useState<OrderingCatalog | null>(null);
@@ -61,20 +42,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [notes, setNotes] = useState("");
   const [cart, setCart] = useState<Cart>({});
   const [cartExpanded, setCartExpanded] = useState(false);
-  const [cartElement, setCartElement] = useState<HTMLElement | null>(null);
   const [cartHeight, setCartHeight] = useState(0);
-
-  useLayoutEffect(() => {
-    if (!cartElement) {
-      setCartHeight(0);
-      return;
-    }
-    const measure = () => setCartHeight(cartElement.getBoundingClientRect().height);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(cartElement);
-    return () => observer.disconnect();
-  }, [cartElement]);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [preparationMode, setPreparationMode] = useState<PreparationMode>("immediate");
   const submitBusy = useRef(false);
@@ -88,25 +56,16 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   const [submittedOrder, setSubmittedOrder] = useState<StoredOrder | null>(() =>
     startFresh ? null : (readOrderHistory()[0] ?? null),
   );
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [qrError, setQrError] = useState(false);
-  const [finalTab, setFinalTab] = useState<"qr" | "summary">("qr");
   const [showCopyPrompt, setShowCopyPrompt] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
   const [botField, setBotField] = useState("");
   const [startingNewOrder, setStartingNewOrder] = useState(false);
-  const [refreshingStatuses, setRefreshingStatuses] = useState(false);
   const [newOrderMessage, setNewOrderMessage] = useState<string | null>(null);
   const requestIdentityRef = useRef({ requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() });
   const historyRef = useRef(orderHistory);
   const [restoreToken, setRestoreToken] = useState(() =>
     new URLSearchParams(location.hash.split("?")[1] ?? "").get("recupero"),
   );
-  const [restoreBusy, setRestoreBusy] = useState(false);
-  const [restoreError, setRestoreError] = useState<string | null>(null);
-  const [showRecovery, setShowRecovery] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<PendingOrderRequest | null>(readPendingOrder);
-  const [showAbandonConfirmation, setShowAbandonConfirmation] = useState(false);
 
   useEffect(() => {
     historyRef.current = orderHistory;
@@ -157,33 +116,6 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   }, [startFresh]);
 
   useEffect(() => pollWhileVisible(() => void refreshOrderStatuses(), 30_000), [refreshOrderStatuses]);
-
-  useEffect(() => {
-    if (!submittedOrder) {
-      setQrDataUrl(null);
-      return;
-    }
-    setQrDataUrl(null);
-    setQrError(false);
-    let cancelled = false;
-    void import("qrcode")
-      .then((module) =>
-        module.default.toDataURL(`LAGORDER:${submittedOrder.qr_token}`, {
-          width: 360,
-          margin: 2,
-          errorCorrectionLevel: "M",
-        }),
-      )
-      .then((url) => {
-        if (!cancelled) setQrDataUrl(url);
-      })
-      .catch(() => {
-        if (!cancelled) setQrError(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [submittedOrder]);
 
   const lines = useMemo(() => Object.values(cart), [cart]);
   const total = cartTotal(lines);
@@ -388,7 +320,6 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
 
   function viewOrder(order: StoredOrder) {
     setSubmittedOrder(order);
-    setFinalTab("qr");
     setSubmitError(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
     void refreshOrderStatuses();
@@ -416,97 +347,30 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     setBotField("");
     setShowIntro(false);
     setShowCopyPrompt(false);
-    setFinalTab("qr");
     requestIdentityRef.current = { requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() };
     setSubmittedOrder(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function handlePdfDownload() {
-    if (!submittedOrder || !qrDataUrl) return;
-    setPdfLoading(true);
-    try {
-      await downloadOrderPdf(submittedOrder, qrDataUrl);
-      setShowCopyPrompt(false);
-    } finally {
-      setPdfLoading(false);
-    }
+  function mergeRestoredOrders(restored: StoredOrder[]) {
+    if (!restoreToken) return;
+    const merged = [
+      ...restored,
+      ...historyRef.current.filter((order) => !restored.some((item) => item.order_id === order.order_id)),
+    ];
+    const saved = saveOrderHistory(merged);
+    for (const order of restored) saveRecoveryToken(order.event_id, restoreToken);
+    historyRef.current = merged;
+    setOrderHistory(merged);
+    setSubmittedOrder(restored[0]);
+    setShowIntro(false);
+    if (!saved) setSubmitError("Ordini recuperati, ma non salvati dal browser. Conserva la scheda di recupero.");
+    setRestoreToken(null);
+    history.replaceState(null, "", `${location.pathname}${location.search}#ordina`);
+    setLoading(false);
   }
 
-  async function restoreHistory() {
-    if (!validRecoveryToken(restoreToken)) {
-      setRestoreError("Codice di recupero non valido.");
-      return;
-    }
-    setRestoreBusy(true);
-    setRestoreError(null);
-    try {
-      const restored: StoredOrder[] = [];
-      let cursor: string | null = null;
-      while (true) {
-        const response = await supabase.rpc("recover_order_history", { p_token: restoreToken, p_before: cursor });
-        if (response.error) throw new Error("restore_failed");
-        const page = response.data as Array<StoredOrder & { created_at: string }>;
-        for (const order of page) restored.push({ ...order, saved_at: order.created_at, recovery_enabled: true });
-        if (page.length < 50) break;
-        cursor = page[page.length - 1].order_id;
-      }
-      if (!restored.length) {
-        setRestoreError("Non ci sono ordini associati a questo codice.");
-        return;
-      }
-      const merged = [
-        ...restored,
-        ...historyRef.current.filter((order) => !restored.some((item) => item.order_id === order.order_id)),
-      ];
-      const saved = saveOrderHistory(merged);
-      for (const order of restored) saveRecoveryToken(order.event_id, restoreToken);
-      historyRef.current = merged;
-      setOrderHistory(merged);
-      setSubmittedOrder(restored[0]);
-      setShowIntro(false);
-      if (!saved) setSubmitError("Ordini recuperati, ma non salvati dal browser. Conserva la scheda di recupero.");
-      setRestoreToken(null);
-      history.replaceState(null, "", `${location.pathname}${location.search}#ordina`);
-      setLoading(false);
-    } catch {
-      setRestoreError("Recupero non riuscito. Controlla la connessione e riprova: il codice resta valido.");
-    } finally {
-      setRestoreBusy(false);
-    }
-  }
-
-  if (restoreToken)
-    return (
-      <main className="mx-auto max-w-md px-4 py-8">
-        <h1 className="text-2xl">Ritrova i tuoi ordini</h1>
-        <p className="my-4 text-sm text-[var(--text-secondary)]">
-          Il tuo codice permette di recuperare lo storico, senza account.
-        </p>
-        {restoreError && (
-          <p role="alert" className="mb-4 text-sm">
-            {restoreError}
-          </p>
-        )}
-        <Button className="w-full" disabled={restoreBusy} onClick={() => void restoreHistory()}>
-          {restoreBusy ? "Recupero gli ordini…" : "Recupera i miei ordini"}
-        </Button>
-        {/* Un link rovinato non deve lasciare il cliente senza via d'uscita. */}
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <Button variant="ghost" href={appHref("#ordina")}>
-            Torna agli ordini
-          </Button>
-          <Button variant="ghost" href={appHref()}>
-            Vai alla Home
-          </Button>
-        </div>
-      </main>
-    );
-  const recoveryToken = submittedOrder ? readRecoveryToken(submittedOrder.event_id) : null;
-  if (showRecovery && submittedOrder && recoveryToken)
-    return (
-      <RecoveryCard token={recoveryToken} eventName={submittedOrder.event_name} onBack={() => setShowRecovery(false)} />
-    );
+  if (restoreToken) return <RestoreHistoryScreen token={restoreToken} onRestored={mergeRestoredOrders} />;
 
   function abandonPendingRequest() {
     if (!pendingRequest) return;
@@ -514,7 +378,6 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     setPendingRequest(readPendingOrder());
     requestIdentityRef.current = { requestId: crypto.randomUUID(), qrToken: crypto.randomUUID() };
     setSubmitError(null);
-    setShowAbandonConfirmation(false);
   }
 
   // Una richiesta interrotta (per esempio rete caduta) non blocca più la pagina: resta in
@@ -527,296 +390,36 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     pendingRequest && catalog?.event_id && pendingRequest.eventId !== catalog.event_id,
   );
   const pendingPanel = pendingRequest && !showConfirmation && (
-    <section
-      role="region"
-      aria-labelledby="pending-request-title"
-      className="mt-4 rounded-[var(--radius-md)] border-2 border-[var(--state-warning)] p-4 text-left"
-    >
-      <h2 id="pending-request-title" className="text-lg">
-        Un ordine non è stato confermato
-      </h2>
-      <p className="mt-1 text-sm text-[var(--text-secondary)]">
-        {pendingFromOldEvent
-          ? "Questa richiesta è di un evento precedente e non può più essere inviata. Non hai pagato nulla: puoi eliminarla."
-          : "La connessione si è interrotta durante l’invio. Verifichiamo se è arrivato in cassa, senza crearne un doppione."}
-      </p>
-      <ul className="my-3 space-y-1 text-sm">
-        {pendingRequest.items.map((line) => (
-          <li key={line.id}>
-            {line.qty} × {line.name}
-          </li>
-        ))}
-      </ul>
-      {submitError && !pendingFromOldEvent && (
-        <p role="alert" className="mb-3 text-sm text-[var(--state-warning)]">
-          {submitError}
-        </p>
-      )}
-      {pendingFromOldEvent ? (
-        <Button variant="ghost" className="w-full" onClick={abandonPendingRequest}>
-          Elimina questa richiesta
-        </Button>
-      ) : (
-        <>
-          <TurnstileChallenge key={challengeAttempt} onToken={setChallengeToken} />
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <Button className="w-full" disabled={submitting || !challengeToken} onClick={() => void submitOrder()}>
-              {submitting ? "Verifico l’ordine…" : "Recupera ordine"}
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full"
-              disabled={submitting}
-              onClick={() => setShowAbandonConfirmation(true)}
-            >
-              Rinuncia a questa richiesta
-            </Button>
-          </div>
-        </>
-      )}
-      <Modal
-        open={showAbandonConfirmation}
-        title="Rinunciare alla richiesta?"
-        dismissible
-        onClose={() => setShowAbandonConfirmation(false)}
-        actions={
-          <>
-            <Button variant="ghost" onClick={() => setShowAbandonConfirmation(false)}>
-              No, riprovo
-            </Button>
-            <Button variant="primary" onClick={abandonPendingRequest}>
-              Sì, rinuncio
-            </Button>
-          </>
-        }
-      >
-        <p>
-          Se l’ordine era comunque arrivato in cassa, resterà in attesa di pagamento per 60 minuti e poi scadrà da solo:
-          non paghi nulla finché non passi in cassa.
-        </p>
-      </Modal>
-    </section>
+    <PendingRequestPanel
+      request={pendingRequest}
+      fromOldEvent={pendingFromOldEvent}
+      error={submitError}
+      submitting={submitting}
+      challengeAttempt={challengeAttempt}
+      challengeToken={challengeToken}
+      onChallengeToken={setChallengeToken}
+      onRecover={() => void submitOrder()}
+      onAbandon={abandonPendingRequest}
+    />
   );
 
   if (submittedOrder) {
     return (
-      <main className="mx-auto min-h-full max-w-xl px-4 py-8">
-        <Button href={appHref("#menu")} variant="back" className="min-h-10 px-4 py-2">
-          ← Indietro
-        </Button>
-        {pendingPanel}
-        {submitError && !pendingRequest && (
-          <p
-            role="alert"
-            className="mt-4 rounded-[var(--radius-sm)] border border-[var(--state-warning)] p-3 text-sm text-[var(--state-warning)]"
-          >
-            {submitError}
-          </p>
-        )}
-        <section className="mt-5 text-center">
-          <p className={`text-sm ${orderStatusClassName(submittedOrder.status)}`}>
-            {submittedOrder.event_closed_at
-              ? "Evento concluso. Questo ordine resta nello storico; il QR non è più utilizzabile per il ritiro."
-              : submittedOrder.status === "pagato" &&
-                  (submittedOrder.kitchen_state === "dormant" || submittedOrder.kitchen_state === "waiting")
-                ? "Pagamento registrato."
-                : statusMessage(submittedOrder.status)}
-          </p>
-          <h1 className="mt-2 text-4xl">#{submittedOrder.display_number}</h1>
-          {!submittedOrder.event_closed_at &&
-            (submittedOrder.status === "pagato" || submittedOrder.status === "ritiro_parziale") && (
-              <PreparationStatus state={submittedOrder.kitchen_state} />
-            )}
-          {submittedOrder.status === "in_attesa_pagamento" && submittedOrder.preparation_mode === "deferred" && (
-            <p className="mt-2 text-sm">
-              Hai scelto di preparare il cibo più tardi. Paga entro 60 minuti per mantenere le quantità riservate.
-            </p>
-          )}
-          <p className="mt-1 text-xl font-semibold">{submittedOrder.alias}</p>
-          <p className="mt-2 text-xs text-[var(--text-secondary)]">
-            {submittedOrder.status === "in_attesa_pagamento"
-              ? "Mostra QR, numero e alias alla cassa. Gli ordini non pagati scadono dopo 60 minuti."
-              : submittedOrder.status === "pagato" || submittedOrder.status === "ritiro_parziale"
-                ? "Mostra lo stesso QR in ogni postazione in cui devi ritirare."
-                : "Il QR e il riepilogo restano disponibili per tutta la durata dell’evento."}
-          </p>
-        </section>
-
-        {submittedOrder.progress && submittedOrder.progress.length > 0 && (
-          <Card className="mt-5">
-            <h2 className="font-semibold">Ritiro per postazione</h2>
-            <div className="mt-3 flex flex-col gap-2">
-              {submittedOrder.progress.map((item) => (
-                <div key={item.station} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="capitalize">{item.station}</span>
-                  <strong className={item.delivered >= item.quantity ? "text-[var(--state-success)]" : ""}>
-                    {item.delivered}/{item.quantity}
-                  </strong>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        <Card className="mt-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-semibold">I miei ordini</h2>
-            <span className="text-xs text-[var(--text-secondary)]">{orderHistory.length} totali</span>
-          </div>
-          <div className="mt-3 max-h-48 space-y-2 overflow-y-auto pr-1">
-            {orderHistory.map((order) => (
-              <button
-                key={order.order_id}
-                type="button"
-                onClick={() => viewOrder(order)}
-                aria-current={order.order_id === submittedOrder.order_id ? "true" : undefined}
-                className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] border p-3 text-left ${
-                  order.order_id === submittedOrder.order_id
-                    ? "border-[var(--accent-primary)] bg-white/5"
-                    : "border-[var(--surface-border)]"
-                }`}
-              >
-                <span>
-                  <strong>
-                    #{order.display_number} · {order.alias}
-                  </strong>
-                  <span className="mt-0.5 block text-xs text-[var(--text-secondary)]">
-                    {order.event_name} · {cartItemCount(order.items)} articoli ·{" "}
-                    {priceFormatter.format(Number(order.total))}
-                  </span>
-                </span>
-                <span className={`shrink-0 text-xs font-semibold ${orderStatusClassName(order.status)}`}>
-                  {order.event_closed_at ? "Evento concluso" : ORDER_STATUS_LABELS[order.status]}
-                </span>
-              </button>
-            ))}
-          </div>
-        </Card>
-
-        {submittedOrder.recovery_enabled && recoveryToken && (
-          <Button
-            variant="ghost"
-            className="mt-3 w-full"
-            onClick={() => {
-              setShowRecovery(true);
-              window.scrollTo({ top: 0 });
-            }}
-          >
-            Conserva i miei ordini
-          </Button>
-        )}
-        <Button
-          variant="ghost"
-          className="mt-3 w-full"
-          onClick={async () => {
-            setRefreshingStatuses(true);
-            await refreshOrderStatuses();
-            setRefreshingStatuses(false);
-          }}
-          disabled={refreshingStatuses}
-        >
-          {refreshingStatuses ? "Aggiorno lo stato…" : "Aggiorna stato ordini"}
-        </Button>
-
-        <SegmentedControl
-          className="mx-auto mt-5 max-w-xs"
-          value={finalTab}
-          onChange={setFinalTab}
-          options={[
-            { value: "qr", label: "QR code" },
-            { value: "summary", label: "Riepilogo" },
-          ]}
-        />
-
-        {finalTab === "qr" ? (
-          <Card className="mx-auto mt-4 max-w-sm text-center">
-            {submittedOrder.event_closed_at ? (
-              <p className="py-6 text-sm">Evento concluso: puoi consultare il riepilogo dell’ordine.</p>
-            ) : qrDataUrl ? (
-              <img
-                src={qrDataUrl}
-                alt={`QR dell’ordine ${submittedOrder.display_number}`}
-                className="mx-auto w-full max-w-[300px] rounded-xl bg-white"
-              />
-            ) : qrError ? (
-              <p role="alert" className="py-10 text-sm text-[var(--state-warning)]">
-                QR non generato. In cassa comunica numero e nome dell’ordine.
-              </p>
-            ) : (
-              <p className="py-16 text-sm text-[var(--text-secondary)]">Genero il QR…</p>
-            )}
-          </Card>
-        ) : (
-          <Card className="mt-4 flex flex-col gap-2">
-            {submittedOrder.items.map((line) => (
-              <div key={line.id} className="flex justify-between gap-3 text-sm">
-                <span>
-                  {line.qty}× {line.name}
-                </span>
-                <span className="font-mono">{priceFormatter.format(lineTotal(line))}</span>
-              </div>
-            ))}
-            <div className="mt-2 flex justify-between border-t border-[var(--surface-border)] pt-2 font-semibold">
-              <span>{submittedOrder.status === "in_attesa_pagamento" ? "Totale da pagare" : "Totale ordine"}</span>
-              <span className="font-mono">{priceFormatter.format(Number(submittedOrder.total))}</span>
-            </div>
-            {submittedOrder.notes && (
-              <div className="mt-2 rounded-[var(--radius-sm)] border border-[var(--state-warning)] p-2 text-sm">
-                <strong>Note:</strong> {submittedOrder.notes}
-              </div>
-            )}
-          </Card>
-        )}
-
-        <div className="mt-5 grid gap-2 sm:grid-cols-2">
-          <Button variant="primary" className="w-full" onClick={() => void startNewOrder()} disabled={startingNewOrder}>
-            {startingNewOrder ? "Verifico…" : "Ordina di nuovo"}
-          </Button>
-          <Button variant="ghost" className="w-full" href={appHref("#programma")}>
-            Torna al programma
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full sm:col-span-2"
-            onClick={() => void handlePdfDownload()}
-            disabled={!qrDataUrl || pdfLoading}
-          >
-            {pdfLoading ? "Preparo il PDF…" : "Scarica copia PDF"}
-          </Button>
-        </div>
-
-        <Modal
-          open={showCopyPrompt}
-          title="Vuoi una copia?"
-          actions={
-            <>
-              <Button variant="ghost" onClick={() => setShowCopyPrompt(false)}>
-                No, grazie
-              </Button>
-              <Button variant="primary" onClick={() => void handlePdfDownload()} disabled={!qrDataUrl || pdfLoading}>
-                {pdfLoading ? "Preparo…" : "Scarica PDF"}
-              </Button>
-            </>
-          }
-        >
-          <p>Puoi scaricare un riepilogo non fiscale dell’ordine. Lo scontrino sarà emesso in cassa.</p>
-        </Modal>
-
-        <Modal
-          open={newOrderMessage !== null}
-          title="Nuovo ordine non disponibile"
-          dismissible
-          onClose={() => setNewOrderMessage(null)}
-          actions={
-            <Button variant="primary" onClick={() => setNewOrderMessage(null)}>
-              Ho capito
-            </Button>
-          }
-        >
-          <p>{newOrderMessage}</p>
-          <p className="mt-2">I tuoi ordini precedenti restano consultabili qui.</p>
-        </Modal>
-      </main>
+      <SubmittedOrderView
+        key={submittedOrder.order_id}
+        order={submittedOrder}
+        history={orderHistory}
+        banner={pendingPanel}
+        error={pendingRequest ? null : submitError}
+        offerCopy={showCopyPrompt}
+        onCopyHandled={() => setShowCopyPrompt(false)}
+        onViewOrder={viewOrder}
+        onRefreshStatuses={() => refreshOrderStatuses()}
+        onStartNewOrder={() => void startNewOrder()}
+        startingNewOrder={startingNewOrder}
+        newOrderMessage={newOrderMessage}
+        onDismissNewOrderMessage={() => setNewOrderMessage(null)}
+      />
     );
   }
 
@@ -875,69 +478,7 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
           {orderingReasonMessage(catalog?.reason ?? null, catalog?.opens_at)}
         </p>
       ) : (
-        (["cibo", "bevande"] as const).map((category) => (
-          <section key={category} className="mt-8">
-            <h2 className="text-2xl">{category === "cibo" ? "Cucina" : "Bar"}</h2>
-            {category === "bevande" && <FreeWaterNotice />}
-            {MENU_SECTIONS[category].map((section) => {
-              const sectionItems = catalog.items.filter(
-                (item) => item.category === category && item.subcategory === section.key,
-              );
-              if (sectionItems.length === 0) return null;
-              return (
-                <div key={section.key} className="mt-5">
-                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent-primary)]">
-                    {section.label}
-                  </h3>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {sectionItems.map((item) => {
-                      const almostFinished =
-                        item.available_portions !== null &&
-                        item.stock_capacity !== null &&
-                        item.available_portions > 0 &&
-                        item.available_portions <= Math.ceil(item.stock_capacity * 0.2);
-                      const finished = item.available_portions === 0;
-                      // Le scorte compaiono solo qui: il menu pubblico resta fisso per la serata.
-                      const allInCart = !finished && remainingStock(cart, item) === 0;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => addItem(item)}
-                          disabled={finished || allInCart}
-                          className="surface-solid flex min-h-20 items-start justify-between gap-3 rounded-[var(--radius-md)] p-3 text-left transition-colors hover:bg-[var(--surface-solid-hover)] disabled:cursor-not-allowed disabled:opacity-55"
-                        >
-                          <span>
-                            <span className="block text-sm font-semibold">{item.name}</span>
-                            {item.allergens.length > 0 && (
-                              <span className="mt-1 block text-xs text-[var(--text-secondary)]">
-                                Allergeni: {item.allergens.join(", ")}
-                              </span>
-                            )}
-                            {almostFinished && (
-                              <span className="mt-1 block text-xs text-[var(--state-warning)]">Quasi terminato</span>
-                            )}
-                            {finished && (
-                              <span className="mt-1 block text-xs text-[var(--state-error)]">Terminato</span>
-                            )}
-                            {allInCart && (
-                              <span className="mt-1 block text-xs text-[var(--state-warning)]">
-                                Hai nel carrello tutte le porzioni rimaste
-                              </span>
-                            )}
-                          </span>
-                          <span className="shrink-0 font-mono text-sm text-[var(--accent-primary)]">
-                            {priceFormatter.format(Number(item.price))}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-        ))
+        <OrderMenu catalog={catalog} cart={cart} onAdd={addItem} />
       )}
 
       <details className="mt-8 text-xs text-[var(--text-secondary)]">
@@ -952,64 +493,18 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
       </details>
 
       {lines.length > 0 && (
-        <section
-          ref={setCartElement}
-          className="glass-elevated fixed inset-x-3 z-50 mx-auto max-w-xl rounded-[var(--radius-lg)] p-3"
-          style={{ bottom: "calc(12px + env(safe-area-inset-bottom, 0px))" }}
-        >
-          <button
-            type="button"
-            onClick={() => setCartExpanded((value) => !value)}
-            className="flex w-full items-center justify-between text-left"
-            aria-expanded={cartExpanded}
-          >
-            <span className="font-semibold">Carrello · {cartItemCount(lines)} articoli</span>
-            <span className="font-mono text-[var(--accent-primary)]">
-              {priceFormatter.format(total)} {cartExpanded ? "⌄" : "⌃"}
-            </span>
-          </button>
-          {cartExpanded && (
-            <div className="mt-3 max-h-[50dvh] overflow-y-auto overscroll-contain border-t border-[var(--surface-border)] pt-3">
-              <div className="flex flex-col gap-2">
-                {lines.map((line) => (
-                  <div key={line.id} className="flex items-center justify-between gap-3 text-sm">
-                    <span>
-                      {line.qty}× {line.name}
-                    </span>
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono">{priceFormatter.format(lineTotal(line))}</span>
-                      <button
-                        type="button"
-                        onClick={() => decrementItem(line.id)}
-                        className="text-lg text-[var(--state-error)]"
-                        aria-label={`Rimuovi una unità di ${line.name}`}
-                      >
-                        −
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <label className="mt-3 block">
-                <span className="text-xs font-semibold">Note per la cucina</span>
-                <textarea
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  maxLength={300}
-                  rows={2}
-                  placeholder="Es. senza cipolla. Non inserire dati personali."
-                  className="field mt-1 w-full resize-none"
-                />
-              </label>
-              {(cartError ?? (pendingRequest ? null : submitError)) && (
-                <p className="mt-2 text-xs text-[var(--state-error)]">{cartError ?? submitError}</p>
-              )}
-              <Button variant="primary" className="mt-3 w-full" onClick={requestSubmit}>
-                Invia ordine
-              </Button>
-            </div>
-          )}
-        </section>
+        <CartPanel
+          lines={lines}
+          total={total}
+          expanded={cartExpanded}
+          onToggle={() => setCartExpanded((value) => !value)}
+          onDecrement={decrementItem}
+          notes={notes}
+          onNotesChange={setNotes}
+          error={cartError ?? (pendingRequest ? null : submitError)}
+          onSubmit={requestSubmit}
+          onHeightChange={setCartHeight}
+        />
       )}
 
       <Modal
