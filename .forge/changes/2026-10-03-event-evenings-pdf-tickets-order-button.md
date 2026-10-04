@@ -1,6 +1,6 @@
 # Intervento: PDF per serata, Biglietti condizionati, bottone "Ordina qui"
 
-- Stato: branch `feat/event-evenings-pdf`, non unito; migrazione `20261003120000` **non** applicata in produzione.
+- Stato: unito su `main` tramite PR #8; migrazione `20261003120000` applicata in produzione il 2026-10-04.
 - Data e perimetro: 2026-10-03 — Gestione evento, sezione Biglietti, bottone "Ordina qui" nel menu.
 - Profilo: [PROJECT_PROFILE.md](../PROJECT_PROFILE.md)
 - Piano e approvazione: piano e 5 animazioni presentati in chat; Andrea sceglie "4 · Riempimento",
@@ -42,8 +42,23 @@ viewport 375px): niente Biglietti senza Event ID, TabBar a 3 voci, bottone 343×
 portate, stato "Verifico…" e modale di errore. Non provati: PDF generato da dati reali, doppio
 download su Safari iOS.
 
-## Produzione (da fare, con conferma separata)
+## Produzione e incidente (2026-10-03/04)
 
-1. Applicare `schema.sql` (o la migrazione `20261003120000`) **prima** del deploy del frontend:
-   il nuovo client invia `p_evening_count` e richiede `evenings` nello snapshot.
-2. Impostare la durata in Gestione evento.
+- L'esecuzione della migrazione da parte di Claude è stata bloccata dal classificatore dei permessi:
+  l'SQL è stato eseguito da Andrea nell'SQL Editor.
+- **Incidente**: nell'SQL Editor era salvata una query con lo `schema.sql` del 2026-08-13 (`07e8843`,
+  1.566 righe, SHA-256 `96238c08…`), aperta di default da Supabase. È stata eseguita due volte al posto
+  della migrazione: 105 differenze di catalogo, fra cui le 7 funzioni di cassa ritirate, la tabella
+  `announcements` e la `submit_public_order` a 6 parametri eseguibile da `anon` senza Turnstile.
+  Dati intatti (32 ordini); nessun ordine creato durante l'esposizione (ultimo: 2026-09-23).
+- **Ripristino**: incidente riprodotto su PGlite (catena fino a `20261003110000`, poi schema di agosto,
+  poi `schema.sql` attuale: 0 differenze dallo stato finale). Eseguito lo `schema.sql` del commit
+  `b159cbd` più la registrazione di `20261003120000` (2.420 righe, SHA-256 `8487bf85…`, verificata
+  nell'editor prima del Run). La query salvata ora contiene solo quel testo: lo schema di agosto non
+  è più nell'SQL Editor.
+- Verifica dopo (sola lettura): migrazioni fino a `20261003120000`, `evening_count` con vincolo 1–3,
+  nessuna funzione ritirata, solo la `submit_public_order` attuale (non eseguibile da anon/authenticated),
+  niente `announcements`, `order_event_snapshot_part` privata, push solo torneo, 3 policy del bar,
+  evento "Prova sett 26" intatto, snapshot funzionante.
+- Lezione: prima di ogni Run nell'SQL Editor verificare l'impronta del testo caricato; Supabase
+  riapre l'ultima query salvata.

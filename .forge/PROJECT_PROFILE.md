@@ -6,11 +6,9 @@ l'app restano nel [README](../README.md).
 ## Stato dello studio
 
 - `main`: `bc70c9c` (merge della PR #7, 2026-10-03); deploy su GitHub Pages avviato al merge.
-- Database di produzione (Supabase `lagapp`): aggiornato il 2026-10-03 con `schema.sql`; migrazioni
-  registrate fino a `20261003100000`. Il piano gratuito non ha backup automatici.
-- Lavoro in corso: branch `feat/event-evenings-pdf` (PDF per serata, Biglietti condizionati, bottone
-  "Ordina qui"; migrazione `20261003120000` da applicare in produzione prima del deploy).
-- Da verificare: se la migrazione `20261003110000` (notifiche solo torneo) è stata applicata in produzione.
+- Database di produzione (Supabase `lagapp`): ripristinato e aggiornato il 2026-10-04 con `schema.sql`
+  (commit `b159cbd`); migrazioni registrate fino a `20261003120000`. Il piano gratuito non ha backup
+  automatici.
 - Copertura della disamina: tutto `src/`, tutte le Edge Functions, `schema.sql` e migrazioni, CI,
   configurazione. Non letti: i documenti di audit in `docs/`. Comportamento nel browser verificato
   con un finto backend locale (ordini) e confronto degli stili calcolati (Tailwind 4).
@@ -30,6 +28,8 @@ l'app restano nel [README](../README.md).
   verifica di M6. M4 (schema ruoli) e M7 (OrderPage) solo come spiegazione.
 - 2026-10-03 — PDF per serata (durata 1–3 serate), Biglietti solo con Eventbrite, "Ordina qui" con
   animazione "Riempimento": approvato con "Sì, procedi", produzione esclusa.
+- 2026-10-04 — Produzione: Andrea chiede di aggiornare lo schema e unire la PR #8 su `main`; SQL eseguito
+  da Andrea (incidente schema di agosto e ripristino nel registro dell'intervento).
 - Fuori dall'approvazione: migrazioni sul database di produzione, merge su `main`, deploy.
 
 ## Architettura in breve
