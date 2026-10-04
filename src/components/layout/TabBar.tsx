@@ -1,3 +1,5 @@
+import { TICKETS_ENABLED } from "../../features/tickets/EventbriteTickets";
+
 interface Tab {
   label: string;
   href: string;
@@ -59,6 +61,9 @@ const tabs: Tab[] = [
   },
 ];
 
+// Biglietti compare solo con Eventbrite configurato (vedi EventbriteTickets.tsx).
+const visibleTabs = tabs.filter((tab) => tab.href !== "#biglietti" || TICKETS_ENABLED);
+
 /**
  * Tab bar flottante: vive nello strato più alto della UI (sopra tutto
  * il contenuto), quindi è vetro puro. Su desktop resta comunque
@@ -69,7 +74,7 @@ export function TabBar() {
   return (
     <nav className="fixed inset-x-0 bottom-4 z-50 px-4">
       <div className="glass-elevated mx-auto flex max-w-sm items-center justify-between rounded-(--radius-pill) px-3 py-2">
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <a
             key={tab.label}
             href={tab.href}

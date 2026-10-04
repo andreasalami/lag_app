@@ -91,10 +91,40 @@ console.log(
   "PASS: snapshot counts only paid orders, uses local hours, lists unsold items and hides customer data; kitchen and public denied.",
 );
 
+assert.deepEqual(snapshot.evenings, [], "a one-evening event has only the total");
+// 23:30 UTC on 3 October is 01:30 on the 4th in Cremona: it still belongs to the second evening.
+await paidOrder([{ id: risotto, qty: 2 }], "2026-10-03T23:30:00Z");
+await asUser(cashier, () =>
+  rpc("update_order_event", ["Due serate", "2026-10-02T16:00:00Z", "2026-10-05T03:00:00Z", 100, 2]),
+);
+const twoEvenings = await asUser(cashier, () => rpc("get_order_event_snapshot"));
+assert.deepEqual(
+  twoEvenings.evenings.map((part) => [part.evening, part.date, part.orders_paid, Number(part.revenue_total)]),
+  [
+    [1, "2026-10-02", 3, Number(snapshot.revenue_total)],
+    [2, "2026-10-03", 1, 18],
+  ],
+);
+assert.equal(twoEvenings.orders_paid, 4);
+assert.equal(twoEvenings.evenings[1].products.find((row) => row.name === "Pasta").quantity, 0);
+assert.deepEqual(twoEvenings.evenings[1].hours, [{ hour: "2026-10-04T01:00:00", orders: 1, revenue: 18 }]);
+await assert.rejects(
+  asUser(cashier, () => rpc("update_order_event", ["Quattro", "2026-10-02T16:00:00Z", "2026-10-05T03:00:00Z", 100, 4])),
+  /invalid_event_settings/,
+);
+await assert.rejects(
+  asUser(cashier, () => rpc("order_event_snapshot_part", [crypto.randomUUID(), null])),
+  /permission denied/,
+);
+console.log(
+  "PASS: two-evening snapshot splits paid orders by evening (after midnight included) and adds up to the total; part function private.",
+);
+
 await asUser(admin, () => rpc("close_order_event"));
 const afterClose = await asUser(admin, () => rpc("get_order_event_snapshot"));
-assert.equal(Number(afterClose.revenue_total), Number(snapshot.revenue_total));
-assert.deepEqual(afterClose.hours, snapshot.hours);
+assert.equal(Number(afterClose.revenue_total), Number(twoEvenings.revenue_total));
+assert.deepEqual(afterClose.hours, twoEvenings.hours);
+assert.deepEqual(afterClose.evenings, twoEvenings.evenings);
 console.log("PASS: snapshot unchanged after the event is closed and anonymised.");
 
 const teams = (name) => JSON.stringify([name, ...Array.from({ length: 7 }, (_, i) => `Squadra ${i + 2}`)]);

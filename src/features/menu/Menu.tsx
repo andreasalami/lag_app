@@ -193,6 +193,8 @@ export function Menu({ management = false }: { management?: boolean }) {
           : "Cucina e Bar disponibili durante l’evento."}
       </p>
 
+      {!management && <OrderEntryButton />}
+
       {!management && canManage && (
         <Button href={appHref("#gestione-menu")} className="mb-5 w-full justify-start sm:w-64">
           Gestione Menu e Scorte
@@ -391,8 +393,6 @@ export function Menu({ management = false }: { management?: boolean }) {
           </Card>
         ))
       )}
-
-      {!management && <OrderEntryButton />}
 
       {/* Banner di salvataggio condiviso (vedi SaveBanner.tsx): appare solo
           con modifiche in sospeso, fisso in basso così resta visibile

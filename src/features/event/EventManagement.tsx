@@ -16,10 +16,17 @@ type EventState = {
   manual_closed: boolean;
   permanently_closed_at: string | null;
   max_pending_orders: number;
+  evening_count: number;
   pending_count: number;
 };
 
-type EventSettings = { p_name: string; p_opens_at: string; p_closes_at: string; p_max_pending_orders: number };
+type EventSettings = {
+  p_name: string;
+  p_opens_at: string;
+  p_closes_at: string;
+  p_max_pending_orders: number;
+  p_evening_count: number;
+};
 
 const CLOSE_CONFIRMATION = "CHIUDI EVENTO";
 
@@ -36,6 +43,7 @@ export function EventManagement() {
   const [eventOpens, setEventOpens] = useState("");
   const [eventCloses, setEventCloses] = useState("");
   const [eventLimit, setEventLimit] = useState("100");
+  const [eveningCount, setEveningCount] = useState(1);
   const [busy, setBusy] = useState(false);
   const [snapshotBusy, setSnapshotBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -54,6 +62,7 @@ export function EventManagement() {
     setEventOpens(toLocalDateTime(next.opens_at));
     setEventCloses(toLocalDateTime(next.closes_at));
     setEventLimit(String(next.max_pending_orders));
+    setEveningCount(next.evening_count);
   }, []);
 
   useEffect(() => {
@@ -76,6 +85,7 @@ export function EventManagement() {
       p_opens_at: opens.toISOString(),
       p_closes_at: closes.toISOString(),
       p_max_pending_orders: limit,
+      p_evening_count: eveningCount,
     };
   }
 
@@ -145,6 +155,8 @@ export function EventManagement() {
       downloadCsv(data as EventReport);
       setMessage("Evento chiuso e report anonimo scaricato.");
       await loadEventState();
+      // Il PDF finale parte da solo; se fallisce resta il bottone "Scarica la situazione incassi".
+      if (await downloadSnapshot()) setMessage("Evento chiuso: scaricati il CSV e il PDF della situazione incassi.");
     });
   }
 
@@ -154,6 +166,7 @@ export function EventManagement() {
     else downloadCsv(data as EventReport);
   }
 
+  /** true se il PDF è stato scaricato; altrimenti il messaggio spiega cosa è andato storto. */
   async function downloadSnapshot() {
     setSnapshotBusy(true);
     try {
@@ -161,11 +174,13 @@ export function EventManagement() {
       const snapshot = error ? null : parseIncomeSnapshot(data);
       if (!snapshot) {
         setMessage("Situazione incassi non disponibile. Controlla la connessione e riprova.");
-        return;
+        return false;
       }
       await downloadIncomeSnapshotPdf(snapshot);
+      return true;
     } catch {
       setMessage("PDF non creato. Riprova tra qualche secondo.");
+      return false;
     } finally {
       setSnapshotBusy(false);
     }
@@ -192,7 +207,7 @@ export function EventManagement() {
         className="mb-6"
         eyebrow="Situazione incassi"
         title="Come sta andando"
-        description="Un PDF semplice con incasso, andamento ora per ora e prodotti più e meno venduti. Puoi scaricarlo in qualsiasi momento: non contiene nomi o note dei clienti."
+        description="Un PDF semplice con incasso, andamento ora per ora e prodotti più e meno venduti: una parte per ogni serata e il totale dell’evento. Puoi scaricarlo in qualsiasi momento e si scarica da solo alla chiusura definitiva. Non contiene nomi o note dei clienti."
       >
         <Button variant="staff-primary" onClick={() => void downloadSnapshot()} disabled={snapshotBusy}>
           {snapshotBusy ? "Preparo il PDF…" : "Scarica la situazione incassi (PDF)"}
@@ -256,6 +271,21 @@ export function EventManagement() {
               </label>
             </div>
             <label>
+              <span className="mb-1 block text-xs">Durata dell’evento</span>
+              <select
+                value={eveningCount}
+                onChange={(event) => setEveningCount(Number(event.target.value))}
+                className="field w-full py-2 sm:w-40"
+              >
+                <option value={1}>1 serata</option>
+                <option value={2}>2 serate</option>
+                <option value={3}>3 serate</option>
+              </select>
+              <span className="mt-1 block text-xs text-(--text-secondary)">
+                La serata 1 è quella dell’apertura ordini; gli ordini dopo mezzanotte contano per la serata prima.
+              </span>
+            </label>
+            <label>
               <span className="mb-1 block text-xs">Massimo ordini contemporaneamente in attesa</span>
               <input
                 type="number"
@@ -282,7 +312,7 @@ export function EventManagement() {
               <>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="staff-primary" onClick={saveEventSettings} disabled={busy}>
-                    Salva orari e limite
+                    Salva orari, durata e limite
                   </Button>
                   <Button
                     variant={eventState.manual_closed ? "staff-primary" : "staff-secondary"}
@@ -294,7 +324,8 @@ export function EventManagement() {
                 </div>
                 <div className="mt-3 border-t border-(--surface-border) pt-3">
                   <p className="text-xs text-(--state-error)">
-                    La chiusura definitiva annulla gli ordini non pagati, anonimizza i dati e produce il CSV finale.
+                    La chiusura definitiva annulla gli ordini non pagati, anonimizza i dati e produce il CSV finale e il
+                    PDF della situazione incassi.
                   </p>
                   <Button
                     variant="staff-danger"
@@ -326,7 +357,7 @@ export function EventManagement() {
               onClick={closeEventPermanently}
               disabled={closeEventText !== CLOSE_CONFIRMATION || busy}
             >
-              Chiudi e scarica CSV
+              Chiudi e scarica CSV e PDF
             </Button>
           </>
         }
