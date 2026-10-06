@@ -127,29 +127,4 @@ assert.deepEqual(afterClose.hours, twoEvenings.hours);
 assert.deepEqual(afterClose.evenings, twoEvenings.evenings);
 console.log("PASS: snapshot unchanged after the event is closed and anonymised.");
 
-const teams = (name) => JSON.stringify([name, ...Array.from({ length: 7 }, (_, i) => `Squadra ${i + 2}`)]);
-const twenty = "A".repeat(20);
-const revision = await asUser(admin, () => rpc("publish_tournament", [0, 8, teams(twenty), "{}", "{}"]));
-assert.equal(revision, 1);
-await assert.rejects(
-  asUser(admin, () => rpc("publish_tournament", [1, 8, teams(twenty + "B"), "{}", "{}"])),
-  /team_name_too_long/,
-);
-await assert.rejects(
-  asUser(admin, () =>
-    rpc("publish_tournament", [1, 8, teams(twenty), "{}", JSON.stringify({ "1-0-A": twenty + "B" })]),
-  ),
-  /team_name_too_long/,
-);
-await assert.rejects(
-  asUser(admin, () => rpc("publish_tournament", [1, 8, JSON.stringify([1, 2]), "{}", "{}"])),
-  /invalid_tournament/,
-);
-assert.deepEqual(
-  (await db.query("select teams->>0 as first, revision from tournament_state where id='main'")).rows[0],
-  { first: twenty, revision: 1 },
-);
-console.log(
-  "PASS: tournament names up to 20 characters published; longer names and overrides rejected without changes.",
-);
 await db.close();

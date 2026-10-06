@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
-import { SaveBanner } from "../../components/ui/SaveBanner";
 import { StaffPanel } from "../../components/ui/StaffPanel";
 import { useAuth } from "../auth/AuthContext";
 import { TournamentBroadcast } from "./TournamentBroadcast";
@@ -28,19 +27,17 @@ import {
   EMPTY_TOURNAMENT_SNAPSHOT,
   fetchPublishedRevision,
   fetchPublishedTournament,
-  parseTournamentArchive,
+  fetchTournamentSaves,
   parseTournamentSnapshot,
+  sameTournament,
   TEAM_NAME_MAX_LENGTH,
   teamNameTooLong,
-  type TournamentArchive,
+  type TournamentSave,
   type TournamentSnapshot,
 } from "./tournamentState";
 
-// Bozza di lavoro di chi gestisce il torneo: sempre e solo in questo
-// browser, mai su Supabase finché non premi "Pubblica". Sopravvive a
-// refresh, crash del tab, chiusura accidentale — è la rete di
-// sicurezza per il lavoro in corso, non per la condivisione tra
-// dispositivi (per quella serve pubblicare).
+// Modifiche non ancora salvate, solo in questo browser: se la pagina si ricarica per
+// sbaglio a metà partita si riprendono da qui, sul salvataggio da cui erano partite.
 const DRAFT_KEY = "lag-tournament-draft";
 // Ogni quanto chi guarda (non gestisce) ricontrolla se c'è un turno
 // nuovo pubblicato. Un tabellone eliminazione diretta non ha bisogno
@@ -49,6 +46,20 @@ const DRAFT_KEY = "lag-tournament-draft";
 // siano 10 o 3000 persone a guardare, è comunque solo una select su
 // una riga sola ogni 30s a testa, sospesa quando il tab non è visibile.
 const POLL_INTERVAL_MS = 30_000;
+const SAVE_NAME_MAX_LENGTH = 60;
+
+const formatDate = (value: string) =>
+  new Date(value).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" });
+
+function readDraft(key: string) {
+  try {
+    const draft = JSON.parse(localStorage.getItem(key) ?? "null") as { saveId?: unknown } | null;
+    const snapshot = parseTournamentSnapshot(draft);
+    return snapshot && typeof draft?.saveId === "string" ? { ...snapshot, saveId: draft.saveId } : null;
+  } catch {
+    return null; // Storage disabilitato o bozza corrotta: si riparte dal salvataggio.
+  }
+}
 
 /*
   Torneo a tabellone — a eliminazione diretta, dimensione scelta tra
@@ -62,24 +73,19 @@ const POLL_INTERVAL_MS = 30_000;
   regola rigida, e con lo stesso gesto correggi anche un errore di
   battitura o un turno segnato per sbaglio.
 
-  PERSISTENZA A DUE LIVELLI, deliberata:
-  - Chi gestisce (canEdit) lavora su una bozza locale (localStorage):
-    ogni tocco è salvato lì all'istante, zero rete, sopravvive a un
-    refresh o a un crash del browser. Il DB non viene toccato ad ogni
-    punteggio segnato — solo quando premi "Pubblica".
-  - Chi guarda (!canEdit) non ha mai una bozza: legge solo l'ultimo
-    stato pubblicato su Supabase, via polling (non realtime — vedi il
-    commento sopra tournament_state in schema.sql sul perché).
+  SALVATAGGI: chi gestisce lavora su un salvataggio scelto dall'elenco
+  (tournament_snapshots). Le modifiche restano nell'editor finché non
+  preme "Salva modifiche"; uno solo dei salvataggi è "in onda" e salvarlo
+  aggiorna anche il tabellone pubblico (RPC save_tournament). Gli altri
+  restano privati finché non vengono messi in onda.
 
-  Cambiare dispositivo a metà torneo funziona SOLO se hai premuto
-  Pubblica prima di cambiare: il device nuovo riparte dall'ultimo
-  pubblicato, non da quello che avevi scritto e non ancora mandato.
-  Da qui l'avviso beforeunload quando ci sono modifiche in sospeso.
+  Chi guarda (!canEdit) legge solo l'ultimo stato pubblicato, via
+  polling (non realtime — vedi il commento sopra tournament_state in
+  schema.sql sul perché).
 */
 export function TournamentBracket({ management = false }: { management?: boolean }) {
   const { role, session } = useAuth();
   const draftKey = `${DRAFT_KEY}:${session?.user.id ?? "local"}`;
-  const [revision, setRevision] = useState<number | null>(null);
   const loadedDraftKey = useRef<string | null>(null);
   const canEdit = management && (role === "tournament_manager" || role === "admin");
   const matchHeight = 116;
@@ -91,90 +97,76 @@ export function TournamentBracket({ management = false }: { management?: boolean
   const [overrides, setOverrides] = useState<OverridesMap>({});
   const [editingTeams, setEditingTeams] = useState(true);
 
-  const [savedSnapshot, setSavedSnapshot] = useState<TournamentSnapshot | null>(null);
-  const [hydratedMode, setHydratedMode] = useState<boolean | null>(null);
-  const [publishing, setPublishing] = useState(false);
-  const [publishError, setPublishError] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
-  const [showCloseWarning, setShowCloseWarning] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [latestArchive, setLatestArchive] = useState<TournamentArchive | null>(null);
-  const [archiveLoading, setArchiveLoading] = useState(false);
-  const [archiveError, setArchiveError] = useState<string | null>(null);
   const [pendingSize, setPendingSize] = useState<BracketSize | null>(null);
-  const [showRestoreWarning, setShowRestoreWarning] = useState(false);
 
-  // Caricamento iniziale: per l'editor, la bozza locale (se esiste)
-  // vince sull'ultimo pubblicato, perché rappresenta lavoro più
-  // recente di quando hai premuto Pubblica l'ultima volta. Per chi
-  // guarda, invece, niente bozza: solo l'ultimo pubblicato.
+  const [saves, setSaves] = useState<TournamentSave[]>([]);
+  const [liveId, setLiveId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveConflict, setSaveConflict] = useState(false);
+  const [newSaveName, setNewSaveName] = useState<string | null>(null);
+  const [pendingSelectId, setPendingSelectId] = useState<string | null>(null);
+
+  const selected = saves.find((save) => save.id === selectedId) ?? null;
+  const current: TournamentSnapshot = { size, teams, matches, overrides };
+
+  function applySnapshot(snapshot: TournamentSnapshot) {
+    setSize(snapshot.size);
+    setTeams(snapshot.teams);
+    setMatches(snapshot.matches);
+    setOverrides(snapshot.overrides);
+  }
+
+  // Caricamento iniziale. Per chi gestisce: l'elenco dei salvataggi e, se c'è,
+  // la bozza rimasta da una ricarica; altrimenti il salvataggio in onda.
+  // Per chi guarda: solo l'ultimo pubblicato.
   useEffect(() => {
     let cancelled = false;
     loadedDraftKey.current = null;
 
     async function load() {
       if (!isSupabaseConfigured) {
-        setSavedSnapshot(EMPTY_TOURNAMENT_SNAPSHOT);
-        setSize(EMPTY_TOURNAMENT_SNAPSHOT.size);
-        setTeams(EMPTY_TOURNAMENT_SNAPSHOT.teams);
-        setMatches(EMPTY_TOURNAMENT_SNAPSHOT.matches);
-        setOverrides(EMPTY_TOURNAMENT_SNAPSHOT.overrides);
-        setHydratedMode(canEdit);
+        applySnapshot(EMPTY_TOURNAMENT_SNAPSHOT);
+        setHydrated(true);
         return;
       }
 
-      const latest = await fetchPublishedTournament();
-      if (cancelled) return;
-      if (latest.error) {
-        setLoadError("Tabellone non disponibile. Ricarica prima di modificare il torneo.");
-        return;
-      }
-
-      const published = latest.snapshot ?? EMPTY_TOURNAMENT_SNAPSHOT;
-      setLoadError(null);
-      setSavedSnapshot(published);
-      setLastSyncedAt(new Date());
-
-      let starting = published;
-      let baseRevision = latest.revision;
-      if (canEdit) {
-        try {
-          const draftRaw = localStorage.getItem(draftKey) ?? localStorage.getItem(DRAFT_KEY);
-          if (draftRaw) {
-            const draft = JSON.parse(draftRaw);
-            const parsed = parseTournamentSnapshot(draft);
-            if (parsed) {
-              starting = parsed;
-              baseRevision = typeof draft.revision === "number" ? draft.revision : null;
-              if (baseRevision !== latest.revision)
-                setPublishError(
-                  "La bozza parte da una versione precedente. La pubblicazione è protetta: confronta la bozza con il tabellone aggiornato prima di sostituirla.",
-                );
-            }
-          }
-        } catch {
-          // Storage disabilitato o bozza corrotta: riparti dal pubblicato.
-        }
-      }
-      setRevision(baseRevision);
-      setSize(starting.size);
-      setTeams(starting.teams);
-      setMatches(starting.matches);
-      setOverrides(starting.overrides);
-      loadedDraftKey.current = draftKey;
-      setHydratedMode(canEdit);
-
-      if (canEdit) {
-        const { data: archiveData, error: archiveLoadError } = await supabase
-          .from("tournament_snapshots")
-          .select("id, size, teams, matches, overrides, reason, target_size, created_at")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      if (!canEdit) {
+        const latest = await fetchPublishedTournament();
         if (cancelled) return;
-        setLatestArchive(parseTournamentArchive(archiveData));
-        setArchiveError(archiveLoadError ? "Archivio del torneo non disponibile." : null);
+        if (latest.error) {
+          setLoadError("Tabellone non disponibile. Riprova tra poco.");
+          return;
+        }
+        applySnapshot(latest.snapshot ?? EMPTY_TOURNAMENT_SNAPSHOT);
+        setLastSyncedAt(new Date());
+        setHydrated(true);
+        return;
       }
+
+      const list = await fetchTournamentSaves();
+      if (cancelled) return;
+      if (list.error) {
+        setLoadError("Salvataggi del torneo non disponibili. Ricarica prima di modificare il torneo.");
+        return;
+      }
+      const draft = readDraft(draftKey);
+      const start =
+        list.saves.find((save) => save.id === draft?.saveId) ??
+        list.saves.find((save) => save.id === list.liveId) ??
+        list.saves[0] ??
+        null;
+      setLoadError(null);
+      setSaves(list.saves);
+      setLiveId(list.liveId);
+      setSelectedId(start?.id ?? null);
+      applySnapshot(draft && draft.saveId === start?.id ? draft : (start ?? EMPTY_TOURNAMENT_SNAPSHOT));
+      loadedDraftKey.current = draftKey;
+      setHydrated(true);
     }
 
     load();
@@ -203,10 +195,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
         const { error, snapshot, revision } = await fetchPublishedTournament();
         if (cancelled || error || !snapshot) return;
         seenRevision = revision;
-        setSize(snapshot.size);
-        setTeams(snapshot.teams);
-        setMatches(snapshot.matches);
-        setOverrides(snapshot.overrides);
+        applySnapshot(snapshot);
         setLastSyncedAt(new Date());
       } finally {
         busy = false;
@@ -220,30 +209,26 @@ export function TournamentBracket({ management = false }: { management?: boolean
     };
   }, [canEdit]);
 
-  // Auto-salvataggio della bozza locale ad ogni modifica — solo
-  // dopo l'hydration iniziale, altrimenti sovrascriveresti una bozza
-  // buona con lo stato-zero di partenza del render prima ancora di
-  // averla letta.
-  useEffect(() => {
-    if (!canEdit || hydratedMode !== canEdit || loadedDraftKey.current !== draftKey) return;
-    try {
-      localStorage.setItem(draftKey, JSON.stringify({ size, teams, matches, overrides, revision }));
-    } catch {
-      setPublishError("Bozza locale non disponibile: salva prima di chiudere la pagina.");
-    }
-  }, [canEdit, hydratedMode, size, teams, matches, overrides, revision, draftKey]);
+  const isDirty = canEdit && hydrated && (selected ? !sameTournament(current, selected) : false);
 
-  const isDirty =
-    canEdit &&
-    savedSnapshot !== null &&
-    JSON.stringify({ size, teams, matches, overrides }) !== JSON.stringify(savedSnapshot);
+  // La bozza esiste solo finché ci sono modifiche da salvare.
+  useEffect(() => {
+    if (!canEdit || loadedDraftKey.current !== draftKey) return;
+    try {
+      if (isDirty && selected) {
+        localStorage.setItem(draftKey, JSON.stringify({ saveId: selected.id, size, teams, matches, overrides }));
+      } else {
+        localStorage.removeItem(draftKey);
+      }
+    } catch {
+      // Senza memoria locale le modifiche restano solo nell'editor finché non si salva.
+    }
+  }, [canEdit, isDirty, selected, size, teams, matches, overrides, draftKey]);
 
   // I ripescaggi vengono salvati già senza spazi esterni (vedi setOverride).
   const hasTooLongNames = [...teams, ...Object.values(overrides)].some(teamNameTooLong);
 
-  // Avviso del browser se provi a chiudere/ricaricare con modifiche
-  // non ancora pubblicate — la rete di sicurezza per non perderle
-  // cambiando device senza accorgertene.
+  // Avviso del browser se provi a chiudere/ricaricare con modifiche non salvate.
   useEffect(() => {
     if (!isDirty) return;
     function handler(e: BeforeUnloadEvent) {
@@ -254,79 +239,79 @@ export function TournamentBracket({ management = false }: { management?: boolean
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
 
-  async function handlePublish(): Promise<boolean> {
-    if (hasTooLongNames) return false;
-    setPublishing(true);
-    setPublishError(null);
-    const { data: nextRevision, error } = await supabase.rpc("publish_tournament", {
-      p_expected_revision: revision,
+  /** Salva sul salvataggio scelto, oppure ne crea uno nuovo con `asNew` come nome. */
+  async function save({ asNew, publish = false }: { asNew?: string; publish?: boolean }) {
+    if (hasTooLongNames || saving) return false;
+    const target = asNew === undefined ? selected : null;
+    setSaving(true);
+    setSaveError(null);
+    setSaveConflict(false);
+    const { data, error } = await supabase.rpc("save_tournament", {
+      p_id: target?.id ?? null,
+      p_name: asNew ?? target?.name ?? "",
+      p_expected_updated_at: target?.updatedAt ?? null,
       p_size: size,
       p_teams: teams,
       p_matches: matches,
       p_overrides: overrides,
+      p_publish: publish,
     });
-
-    if (error) {
-      console.error("[Torneo] Errore pubblicazione:", error.message);
-      setPublishError(
-        /tournament_conflict|revision_required/.test(error.message)
-          ? "Un’altra postazione ha aggiornato il torneo. La tua bozza è conservata: carica la versione aggiornata prima di riprendere le modifiche."
-          : "Pubblicazione non riuscita. Riprova.",
+    setSaving(false);
+    const row = data as { id?: unknown; name?: unknown; updated_at?: unknown; live?: unknown } | null;
+    if (error || typeof row?.id !== "string" || typeof row.name !== "string" || typeof row.updated_at !== "string") {
+      console.error("[Torneo] Salvataggio non riuscito:", error?.message);
+      const conflict = Boolean(error?.message.includes("save_conflict"));
+      setSaveConflict(conflict);
+      setSaveError(
+        conflict
+          ? "Un’altra postazione ha salvato questo torneo nel frattempo. Ricaricalo per vedere la versione aggiornata: le tue modifiche andranno perse."
+          : "Salvataggio non riuscito. Le modifiche sono ancora qui: riprova.",
       );
-      setPublishing(false);
       return false;
     }
-    setRevision(Number(nextRevision));
-    setSavedSnapshot({ size, teams, matches, overrides });
-    setLastSyncedAt(new Date());
-    setPublishing(false);
+    // L'editor tiene i dati come li ha scritti: il confronto con sameTournament ignora l'ordine del database.
+    const saved: TournamentSave = { ...current, id: row.id, name: row.name, updatedAt: row.updated_at };
+    setSaves((list) => [saved, ...list.filter((item) => item.id !== saved.id)]);
+    setSelectedId(saved.id);
+    if (row.live === true) setLiveId(saved.id);
     return true;
   }
 
-  async function loadLatestPublished() {
-    setPublishing(true);
-    try {
-      localStorage.setItem(`${draftKey}:before-reload`, JSON.stringify({ size, teams, matches, overrides, revision }));
-      const { error, snapshot: latest, revision: latestRevision } = await fetchPublishedTournament();
-      if (error || !latest) throw new Error("load_failed");
-      setSize(latest.size);
-      setTeams(latest.teams);
-      setMatches(latest.matches);
-      setOverrides(latest.overrides);
-      setRevision(latestRevision);
-      setSavedSnapshot(latest);
-      setPublishError(null);
-    } catch {
-      setPublishError(
-        "Impossibile conservare la bozza o caricare il tabellone. Le modifiche attuali sono ancora aperte.",
-      );
-    } finally {
-      setPublishing(false);
-    }
-  }
-
-  // Chiudere il pannello nomi squadre con modifiche in sospeso è
-  // esattamente il momento in cui si rischia di cambiare dispositivo
-  // (o aspettarsi che il tabellone sia aggiornato per il pubblico)
-  // senza aver pubblicato: da qui l'avviso invece del toggle diretto.
-  function handleCloseClick() {
-    if (editingTeams && isDirty) {
-      setShowCloseWarning(true);
+  async function reloadSaves(openId: string | null) {
+    const list = await fetchTournamentSaves();
+    if (list.error) {
+      setSaveError("Salvataggi non disponibili. Controlla la connessione e riprova.");
       return;
     }
-    setEditingTeams((v) => !v);
+    setSaves(list.saves);
+    setLiveId(list.liveId);
+    const next = list.saves.find((item) => item.id === openId) ?? list.saves[0] ?? null;
+    setSelectedId(next?.id ?? null);
+    if (next) applySnapshot(next);
+    setSaveError(null);
+    setSaveConflict(false);
   }
 
-  async function handlePublishAndClose() {
-    const published = await handlePublish();
-    if (!published) return;
-    setShowCloseWarning(false);
-    setEditingTeams(false);
+  function openSave(id: string) {
+    const next = saves.find((item) => item.id === id);
+    if (!next) return;
+    applySnapshot(next);
+    setSelectedId(id);
+    setSaveError(null);
+    setSaveConflict(false);
+    setPendingSelectId(null);
   }
 
-  function handleCloseWithoutSaving() {
-    setShowCloseWarning(false);
-    setEditingTeams(false);
+  function requestOpenSave(id: string) {
+    if (id === selectedId) return;
+    if (isDirty) setPendingSelectId(id);
+    else openSave(id);
+  }
+
+  async function confirmNewSave() {
+    const name = newSaveName?.trim() ?? "";
+    if (!name) return;
+    if (await save({ asNew: name })) setNewSaveName(null);
   }
 
   const rounds = totalRounds(size);
@@ -334,75 +319,17 @@ export function TournamentBracket({ management = false }: { management?: boolean
   const matchStep = matchHeight + matchGap;
   const bracketHeight = firstRoundMatches * matchHeight + (firstRoundMatches - 1) * matchGap;
 
-  async function archiveCurrentState(
-    reason: TournamentArchive["reason"],
-    targetSize: BracketSize,
-  ): Promise<TournamentArchive | null> {
-    if (!isSupabaseConfigured) {
-      setArchiveError(
-        "Archivio non disponibile: la copia non può essere salvata. Il tabellone non è stato modificato.",
-      );
-      return null;
-    }
-    setArchiveLoading(true);
-    setArchiveError(null);
-    const { data, error } = await supabase
-      .from("tournament_snapshots")
-      .insert({
-        size,
-        teams,
-        matches,
-        overrides,
-        reason,
-        target_size: targetSize,
-      })
-      .select("id, size, teams, matches, overrides, reason, target_size, created_at")
-      .single();
-    const archive = parseTournamentArchive(data);
-    setArchiveLoading(false);
-    if (error || !archive) {
-      setArchiveError("Copia di sicurezza non creata. Il tabellone non è stato modificato.");
-      return null;
-    }
-    setLatestArchive(archive);
-    return archive;
-  }
-
   function requestSizeChange(newSize: BracketSize) {
     if (newSize === size) return;
-    setArchiveError(null);
     // Senza nomi né risultati non c'è niente da perdere: si cambia subito, senza domande.
     if (isUntouchedBracket(size, teams, matches, overrides)) applySizeChange(newSize);
     else setPendingSize(newSize);
   }
 
-  // La copia si crea solo se il gestore la chiede.
-  async function confirmSizeChange(saveCopy: boolean) {
-    if (!pendingSize) return;
-    if (saveCopy && !(await archiveCurrentState("size_change", pendingSize))) return;
-    applySizeChange(pendingSize);
-  }
-
   function applySizeChange(nextSize: BracketSize) {
-    setSize(nextSize);
-    setTeams(defaultTeams(nextSize));
-    setMatches({});
-    setOverrides({});
+    applySnapshot({ size: nextSize, teams: defaultTeams(nextSize), matches: {}, overrides: {} });
     setEditingTeams(true);
     setPendingSize(null);
-  }
-
-  async function confirmRestore() {
-    const archiveToRestore = latestArchive;
-    if (!archiveToRestore) return;
-    const safeguarded = await archiveCurrentState("restore", archiveToRestore.size);
-    if (!safeguarded) return;
-    setSize(archiveToRestore.size);
-    setTeams(archiveToRestore.teams);
-    setMatches(archiveToRestore.matches);
-    setOverrides(archiveToRestore.overrides);
-    setEditingTeams(true);
-    setShowRestoreWarning(false);
   }
 
   function setScore(round: number, index: number, side: Side, value: number | null) {
@@ -436,12 +363,14 @@ export function TournamentBracket({ management = false }: { management?: boolean
     });
   }
 
+  const isLive = selected !== null && selected.id === liveId;
+
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
       <h2 className="mb-1 text-2xl font-semibold">{management ? "Gestione torneo" : "Tabellone completo"}</h2>
       <p className="mb-4 text-sm text-(--text-secondary)">
         {management
-          ? "Aggiorna squadre e risultati, poi salva per pubblicare le modifiche."
+          ? "Aggiorna squadre e risultati e salvali: il pubblico vede il salvataggio in onda."
           : "Tutti i turni del torneo a eliminazione diretta."}
       </p>
 
@@ -479,7 +408,11 @@ export function TournamentBracket({ management = false }: { management?: boolean
                   {s}
                 </button>
               ))}
-              <Button variant="staff-secondary" className="ml-auto px-4 py-2 text-xs" onClick={handleCloseClick}>
+              <Button
+                variant="staff-secondary"
+                className="ml-auto px-4 py-2 text-xs"
+                onClick={() => setEditingTeams((v) => !v)}
+              >
                 {editingTeams ? "Chiudi nomi" : "Modifica nomi"}
               </Button>
             </div>
@@ -514,31 +447,93 @@ export function TournamentBracket({ management = false }: { management?: boolean
               </div>
             )}
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-(--surface-border) pt-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-(--text-secondary)">
-                  Copia di sicurezza
-                </p>
+            <div className="mt-4 border-t border-(--surface-border) pt-4">
+              <label
+                htmlFor="tournament-save"
+                className="text-xs font-semibold uppercase tracking-[0.12em] text-(--text-secondary)"
+              >
+                Salvataggi
+              </label>
+              {saves.length > 0 ? (
+                <select
+                  id="tournament-save"
+                  value={selectedId ?? ""}
+                  onChange={(e) => requestOpenSave(e.target.value)}
+                  disabled={saving}
+                  className="field mt-2 w-full py-2"
+                >
+                  {saves.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                      {item.id === liveId ? " · in onda" : ""} — {formatDate(item.updatedAt)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
                 <p className="mt-1 text-sm text-(--text-secondary)">
-                  {latestArchive
-                    ? `${latestArchive.size} squadre · ${new Date(latestArchive.createdAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}`
-                    : "Nessuna copia ancora disponibile."}
+                  Nessun salvataggio: usa “Salva come nuovo” per crearne uno.
                 </p>
-              </div>
-              {latestArchive && (
+              )}
+              {selected && (
+                <p className="mt-2 text-xs text-(--text-secondary)" aria-live="polite">
+                  {isLive
+                    ? "In onda: quando salvi, il pubblico vede subito le modifiche."
+                    : "Privato: il pubblico non lo vede finché non lo metti in onda."}
+                  {isDirty && <strong className="text-(--state-warning)"> Ci sono modifiche non salvate.</strong>}
+                </p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {isDirty && (
+                  <Button
+                    variant="staff-primary"
+                    className="px-4 py-2 text-xs"
+                    disabled={saving || hasTooLongNames}
+                    onClick={() => void save({})}
+                  >
+                    {saving ? "Salvo…" : "Salva modifiche"}
+                  </Button>
+                )}
+                {selected && !isLive && (
+                  <Button
+                    variant="staff-secondary"
+                    className="px-4 py-2 text-xs"
+                    disabled={saving || hasTooLongNames}
+                    onClick={() => void save({ publish: true })}
+                  >
+                    {isDirty ? "Salva e metti in onda" : "Metti in onda"}
+                  </Button>
+                )}
                 <Button
                   variant="staff-secondary"
                   className="px-4 py-2 text-xs"
-                  onClick={() => {
-                    setArchiveError(null);
-                    setShowRestoreWarning(true);
-                  }}
+                  disabled={saving || hasTooLongNames}
+                  onClick={() =>
+                    setNewSaveName((selected ? `${selected.name} (copia)` : "Torneo").slice(0, SAVE_NAME_MAX_LENGTH))
+                  }
                 >
-                  Ripristina ultima copia
+                  Salva come nuovo
                 </Button>
+              </div>
+              {hasTooLongNames && (
+                <p role="alert" className="mt-3 text-xs text-(--state-error)">
+                  Un nome squadra supera i {TEAM_NAME_MAX_LENGTH} caratteri: accorcialo per poter salvare.
+                </p>
+              )}
+              {saveError && (
+                <div role="alert" className="mt-3 text-xs text-(--state-error)">
+                  <p>{saveError}</p>
+                  {saveConflict && (
+                    <Button
+                      variant="staff-secondary"
+                      className="mt-2 px-4 py-2 text-xs"
+                      onClick={() => void reloadSaves(selectedId)}
+                    >
+                      Ricarica il salvataggio
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
-            {archiveError && <p className="mt-3 text-xs text-(--state-error)">{archiveError}</p>}
           </StaffPanel>
         </>
       )}
@@ -585,79 +580,18 @@ export function TournamentBracket({ management = false }: { management?: boolean
         </div>
       </div>
 
-      {/* Stesso banner condiviso di Programma e Menu (vedi SaveBanner.tsx):
-          l'etichetta del bottone è "Salva" ovunque nell'app per coerenza,
-          il messaggio resta specifico del Torneo perché qui "salvare"
-          vuol dire pubblicare — chi guarda vede il tabellone solo dopo. */}
-      {canEdit && publishError && (
-        <div role="alert" className="my-4 rounded-xl border border-(--state-warning) p-4 text-sm">
-          <p>{publishError}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              variant="staff-secondary"
-              disabled={publishing}
-              onClick={() => {
-                const url = URL.createObjectURL(
-                  new Blob([JSON.stringify({ size, teams, matches, overrides, revision }, null, 2)], {
-                    type: "application/json",
-                  }),
-                );
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = "bozza-torneo.json";
-                link.click();
-                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-              }}
-            >
-              Scarica la mia bozza
-            </Button>
-            <Button variant="staff-secondary" disabled={publishing} onClick={() => void loadLatestPublished()}>
-              Carica versione aggiornata
-            </Button>
-          </div>
-        </div>
-      )}
-      {canEdit && isDirty && (
-        <SaveBanner
-          message="Ci sono modifiche al Torneo non ancora salvate — chi guarda vede ancora l'ultimo turno pubblicato."
-          saving={publishing}
-          error={
-            hasTooLongNames
-              ? `Un nome squadra supera i ${TEAM_NAME_MAX_LENGTH} caratteri: accorcialo per poter salvare.`
-              : publishError
-          }
-          disabled={hasTooLongNames}
-          onSave={handlePublish}
-        />
-      )}
-
       <Modal
         open={pendingSize !== null}
         title="Cambiare numero di squadre?"
-        dismissible={!archiveLoading}
-        onClose={() => {
-          if (!archiveLoading) {
-            setPendingSize(null);
-            setArchiveError(null);
-          }
-        }}
+        dismissible
+        onClose={() => setPendingSize(null)}
         actions={
           <>
-            <Button
-              variant="staff-secondary"
-              onClick={() => {
-                setPendingSize(null);
-                setArchiveError(null);
-              }}
-              disabled={archiveLoading}
-            >
+            <Button variant="staff-secondary" onClick={() => setPendingSize(null)}>
               Annulla
             </Button>
-            <Button variant="staff-secondary" onClick={() => void confirmSizeChange(false)} disabled={archiveLoading}>
-              Cambia senza salvare
-            </Button>
-            <Button variant="staff-primary" onClick={() => void confirmSizeChange(true)} disabled={archiveLoading}>
-              {archiveLoading ? "Salvo la copia…" : "Salva una copia e cambia"}
+            <Button variant="staff-primary" onClick={() => pendingSize && applySizeChange(pendingSize)}>
+              Cambia
             </Button>
           </>
         }
@@ -667,93 +601,73 @@ export function TournamentBracket({ management = false }: { management?: boolean
           spariscono dall’editor.
         </p>
         <p className="mt-2">
-          Vuoi salvare prima una copia del torneo attuale? Potrai riaverlo con <strong>Ripristina ultima copia</strong>.
-          Il tabellone pubblico non cambia finché non premi Salva.
+          Il salvataggio resta com’era finché non premi <strong>Salva modifiche</strong>: per tenerli entrambi usa
+          <strong> Salva come nuovo</strong>.
         </p>
-        {archiveError && <p className="mt-3 text-(--state-error)">{archiveError}</p>}
       </Modal>
 
       <Modal
-        open={showRestoreWarning}
-        title="Ripristinare l’ultima copia?"
-        dismissible={!archiveLoading}
-        onClose={() => {
-          if (!archiveLoading) {
-            setShowRestoreWarning(false);
-            setArchiveError(null);
-          }
-        }}
+        open={pendingSelectId !== null}
+        title="Scartare le modifiche?"
+        dismissible
+        onClose={() => setPendingSelectId(null)}
         actions={
           <>
-            <Button
-              variant="staff-secondary"
-              onClick={() => {
-                setShowRestoreWarning(false);
-                setArchiveError(null);
-              }}
-              disabled={archiveLoading}
-            >
+            <Button variant="staff-secondary" onClick={() => setPendingSelectId(null)}>
+              Annulla
+            </Button>
+            <Button variant="staff-danger" onClick={() => pendingSelectId && openSave(pendingSelectId)}>
+              Scarta e apri
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Le modifiche a <strong>{selected?.name}</strong> non sono state salvate. Aprendo un altro salvataggio andranno
+          perse.
+        </p>
+      </Modal>
+
+      <Modal
+        open={newSaveName !== null}
+        title="Nuovo salvataggio"
+        dismissible={!saving}
+        onClose={() => setNewSaveName(null)}
+        actions={
+          <>
+            <Button variant="staff-secondary" onClick={() => setNewSaveName(null)} disabled={saving}>
               Annulla
             </Button>
             <Button
               variant="staff-primary"
-              onClick={() => void confirmRestore()}
-              disabled={archiveLoading || !latestArchive}
+              onClick={() => void confirmNewSave()}
+              disabled={saving || !newSaveName?.trim()}
             >
-              {archiveLoading ? "Proteggo lo stato attuale…" : "Proteggi e ripristina"}
+              {saving ? "Salvo…" : "Salva"}
             </Button>
           </>
         }
       >
-        <p>
-          Verrà ripristinata la copia da <strong>{latestArchive?.size ?? size} squadre</strong>
-          {latestArchive
-            ? ` del ${new Date(latestArchive.createdAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}`
-            : ""}
-          .
-        </p>
-        <p className="mt-2">
-          Anche lo stato corrente verrà archiviato prima del ripristino, così potrai tornare indietro. Per renderlo
-          pubblico dovrai poi premere Salva.
-        </p>
-        {archiveError && <p className="mt-3 text-(--state-error)">{archiveError}</p>}
-      </Modal>
-
-      <Modal
-        open={showCloseWarning}
-        title="Modifiche non pubblicate"
-        dismissible={!publishing}
-        onClose={() => setShowCloseWarning(false)}
-        actions={
-          <>
-            <Button
-              variant="staff-danger"
-              onClick={handleCloseWithoutSaving}
-              disabled={publishing}
-              className="px-4 py-2 text-xs"
-            >
-              Chiudi senza pubblicare
-            </Button>
-            <Button
-              variant="staff-primary"
-              onClick={() => void handlePublishAndClose()}
-              disabled={publishing || hasTooLongNames}
-              className="px-4 py-2 text-xs"
-            >
-              {publishing ? "Salvo..." : "Salva ora"}
-            </Button>
-          </>
-        }
-      >
-        <p>
-          Hai punteggi o nomi non ancora pubblicati. Se cambi dispositivo o serve che il pubblico veda il tabellone
-          aggiornato, devi pubblicare ora — altrimenti restano solo su questo browser.
-        </p>
-        {hasTooLongNames && (
-          <p className="mt-2 text-(--state-error)">
-            Prima accorcia i nomi squadra oltre i {TEAM_NAME_MAX_LENGTH} caratteri.
-          </p>
-        )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void confirmNewSave();
+          }}
+        >
+          <label htmlFor="tournament-save-name" className="block">
+            Nome del salvataggio
+          </label>
+          <input
+            id="tournament-save-name"
+            autoFocus
+            maxLength={SAVE_NAME_MAX_LENGTH}
+            value={newSaveName ?? ""}
+            onChange={(e) => setNewSaveName(e.target.value)}
+            className="field mt-2 w-full py-2"
+          />
+          <p className="mt-2 text-xs">Resta privato: potrai metterlo in onda quando vuoi.</p>
+          {saveError && <p className="mt-2 text-xs text-(--state-error)">{saveError}</p>}
+        </form>
       </Modal>
     </section>
   );

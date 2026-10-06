@@ -58,6 +58,7 @@ jobs:
           node scripts/security/verify-event-snapshot.mjs
           node scripts/security/verify-partial-pickup.mjs
           node scripts/security/verify-roles.mjs
+          node scripts/security/verify-tournament-saves.mjs
 
       - name: Setup Deno
         uses: denoland/setup-deno@v2
