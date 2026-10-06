@@ -5,10 +5,9 @@ l'app restano nel [README](../README.md).
 
 ## Stato dello studio
 
-- `main`: `e37e14d` (merge della PR #8, 2026-10-04); deploy su GitHub Pages avviato al merge.
-- Branch aperto: `feat/october-update` (2026-10-06), richiede la migrazione `20261006120000` in produzione.
+- `main`: `036f111` (merge della PR #9, 2026-10-06); deploy su GitHub Pages riuscito.
 - Database di produzione (Supabase `lagapp`): ripristinato e aggiornato il 2026-10-04 con `schema.sql`
-  (commit `b159cbd`); migrazioni registrate fino a `20261003120000`. Il piano gratuito non ha backup
+  (commit `b159cbd`); migrazione `20261006120000` applicata il 2026-10-06 (registrazione da confermare). Il piano gratuito non ha backup
   automatici.
 - Copertura della disamina: tutto `src/`, tutte le Edge Functions, `schema.sql` e migrazioni, CI,
   configurazione. Non letti: i documenti di audit in `docs/`. Comportamento nel browser verificato
@@ -33,6 +32,7 @@ l'app restano nel [README](../README.md).
   da Andrea (incidente schema di agosto e ripristino nel registro dell'intervento).
 - 2026-10-06 — Aggiornamento di ottobre: piano in 6 punti approvato con "sì, procedi e ok download";
   scelte "un salvataggio in onda" e "immagini statiche"; filtro DB sulla coda cassa escluso.
+  Andrea esegue la migrazione in produzione e chiede il merge della PR #9 ("fai il merge della PR 9").
 - Fuori dall'approvazione: migrazioni sul database di produzione, merge su `main`, deploy.
 
 ## Architettura in breve
