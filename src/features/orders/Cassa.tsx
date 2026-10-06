@@ -4,7 +4,7 @@ import { Modal } from "../../components/ui/Modal";
 import { Notice } from "../../components/ui/Notice";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { StaffPageHeading, StaffPanel } from "../../components/ui/StaffPanel";
-import { pollWhileVisible, readStorage, removeStorage, writeStorage } from "../../lib/browser";
+import { pollWhileVisible, readStorage, writeStorage } from "../../lib/browser";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
 import { lineTotal, type Cart } from "./cart";
@@ -14,12 +14,12 @@ import { parseQrPayload, priceFormatter } from "./orderUtils";
 import { PreparationChoice } from "./PreparationChoice";
 import { QrScanner } from "./QrScanner";
 import { StationPicker } from "./StationPicker";
+import { useEventStation } from "./stationMemory";
 import type { OrderMenuItem, PreparationMode, StaffOrder } from "./types";
 import {
   CASH_STATIONS,
   STATION_STORAGE_KEYS,
   cashStationLabel,
-  isCashStation,
   matchesOrderSearch,
   type CashStation,
 } from "./workflow";
@@ -40,11 +40,6 @@ function orderAge(createdAt: string) {
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min fa`;
 }
 
-function savedCashStation() {
-  const saved = readStorage(STATION_STORAGE_KEYS.cassa);
-  return isCashStation(saved) ? saved : null;
-}
-
 export function Cassa() {
   const [tab, setTab] = useState<Tab>("ordini");
   const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
@@ -53,7 +48,7 @@ export function Cassa() {
   const [aliasSearch, setAliasSearch] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<StaffOrder | null>(null);
-  const [cashStation, setCashStation] = useState<CashStation | null>(savedCashStation);
+  const [cashStation, chooseStation, stationChecked] = useEventStation(STATION_STORAGE_KEYS.cassa, CASH_STATIONS);
   const [actionBusy, setActionBusy] = useState(false);
   const [claimValidUntil, setClaimValidUntil] = useState(0);
   const [claimsUnavailable, setClaimsUnavailable] = useState(false);
@@ -90,12 +85,6 @@ export function Cassa() {
     else setPendingOrders((data ?? []) as PendingOrder[]);
     setOrdersLoading(false);
   }, []);
-
-  function chooseStation(station: CashStation | null) {
-    if (station) writeStorage(STATION_STORAGE_KEYS.cassa, station);
-    else removeStorage(STATION_STORAGE_KEYS.cassa);
-    setCashStation(station);
-  }
 
   useEffect(() => {
     if (!writeStorage(DEVICE_ID_KEY, deviceIdRef.current)) {
@@ -394,6 +383,8 @@ export function Cassa() {
     void refetchMenu();
   }
 
+  if (!stationChecked) return <p className="py-16 text-center text-sm text-(--text-secondary)">Carico...</p>;
+
   if (!cashStation) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
@@ -411,7 +402,7 @@ export function Cassa() {
           <StationPicker
             options={CASH_STATIONS}
             onPick={chooseStation}
-            hint="La scelta resta memorizzata su questo dispositivo"
+            hint="La scelta resta memorizzata su questo dispositivo fino alla chiusura dell’evento"
           />
         </StaffPanel>
       </main>

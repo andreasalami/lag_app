@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { cashStationLabel, isCashStation, matchesOrderSearch } from "./workflow";
+import { cashStationLabel, matchesOrderSearch } from "./workflow";
 
 describe("order workflow", () => {
-  it("consente soltanto le cinque casse configurabili", () => {
-    expect(isCashStation("cassa_1")).toBe(true);
-    expect(isCashStation("cassa_5")).toBe(true);
-    expect(isCashStation("cassa_6")).toBe(false);
-    expect(isCashStation(null)).toBe(false);
+  it("dà un nome leggibile alle casse", () => {
     expect(cashStationLabel("cassa_5")).toBe("Cassa Esterna");
   });
 
