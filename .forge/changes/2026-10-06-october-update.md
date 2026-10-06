@@ -68,6 +68,6 @@ login e database con la migrazione), pulizia dello storico con rete reale.
 - Dopo (sola lettura): `live_save_id` valorizzato; salvataggi "Torneo pubblicato" (manual, in onda) più
   8 vecchie copie rinominate "Copia del …"; `save_tournament` presente, `publish_tournament` assente.
 - Registrazione in `supabase_migrations.schema_migrations` (`20261006120000`, `tournament_saves`):
-  riga fornita ad Andrea, esito da confermare.
+  eseguita da Andrea, "Success. No rows returned".
 - Sito pubblico dopo il deploy: bundle con `save_tournament`, senza `publish_tournament`; immagini
   Instagram servite da `/lag_app/instagram/`.

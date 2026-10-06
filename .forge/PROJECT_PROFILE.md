@@ -7,7 +7,7 @@ l'app restano nel [README](../README.md).
 
 - `main`: `036f111` (merge della PR #9, 2026-10-06); deploy su GitHub Pages riuscito.
 - Database di produzione (Supabase `lagapp`): ripristinato e aggiornato il 2026-10-04 con `schema.sql`
-  (commit `b159cbd`); migrazione `20261006120000` applicata il 2026-10-06 (registrazione da confermare). Il piano gratuito non ha backup
+  (commit `b159cbd`); migrazione `20261006120000` applicata e registrata il 2026-10-06. Il piano gratuito non ha backup
   automatici.
 - Copertura della disamina: tutto `src/`, tutte le Edge Functions, `schema.sql` e migrazioni, CI,
   configurazione. Non letti: i documenti di audit in `docs/`. Comportamento nel browser verificato
