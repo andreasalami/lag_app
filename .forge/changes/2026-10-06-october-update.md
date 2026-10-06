@@ -1,7 +1,7 @@
 # Intervento: aggiornamento di ottobre (ordini, postazioni, torneo, Instagram)
 
-- Stato: branch `feat/october-update`, PR aperta; migrazione `20261006120000` **da applicare in
-  produzione da Andrea** prima del merge (il client nuovo usa `save_tournament`).
+- Stato: unito su `main` tramite PR #9 (`036f111`, deploy GitHub Pages riuscito il 2026-10-06);
+  migrazione `20261006120000` applicata in produzione da Andrea il 2026-10-06.
 - Data e perimetro: 2026-10-06 — menu mobile, ordini dopo la chiusura, memoria postazioni, area
   riservata, salvataggi del torneo, carosello Instagram.
 - Profilo: [PROJECT_PROFILE.md](../PROJECT_PROFILE.md)
@@ -59,8 +59,15 @@ Supabase segnaposto, 375px): pillola "Ordini" e menu senza Programma, 8 immagini
 post 2 senza aprire Instagram. **Non provati nel browser**: area riservata e gestione torneo (servono
 login e database con la migrazione), pulizia dello storico con rete reale.
 
-## Produzione
+## Produzione (2026-10-06)
 
-Da fare da Andrea, prima del merge: eseguire `supabase/schema.sql` di questo branch nell'SQL Editor,
-verificando prima l'impronta del testo caricato (lezione dell'incidente del 2026-10-03), oppure la sola
-migrazione `20261006120000_tournament_saves.sql`.
+- L'apertura del pannello Supabase da parte di Claude è stata bloccata dal classificatore dei permessi
+  ("Production Deploy"): l'SQL è stato eseguito da Andrea nell'SQL Editor, in una query nuova.
+- Prima (sola lettura): ultime migrazioni registrate `20261003120000`, `20261003110000`, `20261003100000`.
+- Eseguita la sola migrazione `20261006120000_tournament_saves.sql` (99 righe, SHA-256 `c24fadca…`).
+- Dopo (sola lettura): `live_save_id` valorizzato; salvataggi "Torneo pubblicato" (manual, in onda) più
+  8 vecchie copie rinominate "Copia del …"; `save_tournament` presente, `publish_tournament` assente.
+- Registrazione in `supabase_migrations.schema_migrations` (`20261006120000`, `tournament_saves`):
+  eseguita da Andrea, "Success. No rows returned".
+- Sito pubblico dopo il deploy: bundle con `save_tournament`, senza `publish_tournament`; immagini
+  Instagram servite da `/lag_app/instagram/`.
