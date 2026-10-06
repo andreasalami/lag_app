@@ -36,7 +36,8 @@ export function StaffPanel({
 }
 
 type StaffPageHeadingProps = {
-  eyebrow?: string;
+  /** null nasconde la riga arancione sopra il titolo. */
+  eyebrow?: string | null;
   title: string;
   description: string;
   action?: ReactNode;
@@ -46,7 +47,9 @@ export function StaffPageHeading({ eyebrow = "Area riservata", title, descriptio
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-(--accent-primary)">{eyebrow}</p>
+        {eyebrow && (
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-(--accent-primary)">{eyebrow}</p>
+        )}
         <h1 className="text-2xl font-semibold">{title}</h1>
         <p className="mt-1 text-sm text-(--text-secondary)">{description}</p>
       </div>
