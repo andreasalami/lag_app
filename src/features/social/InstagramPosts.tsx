@@ -1,202 +1,194 @@
-import { useEffect, useRef, useState } from "react";
-import { InstagramEmbed } from "./InstagramEmbed";
+import { useRef, useState, type PointerEvent } from "react";
+import { flushSync } from "react-dom";
+import { appHref } from "../../lib/browser";
 
 /*
-  Post curati a mano, stessi permalink di prima — solo la presentazione
-  cambia: da riga scorrevole a mazzo di carte sovrapposte, swipe a
-  sinistra per andare avanti, a destra per tornare indietro.
+  Post curati a mano, mostrati come mazzo di carte: swipe a sinistra per andare
+  avanti, a destra per tornare indietro, tocco per aprire il post su Instagram.
 
-  Perché un overlay trasparente sopra ogni carta: l'embed Instagram è
-  un iframe cross-origin, e un iframe NON inoltra gli eventi di
-  puntamento al documento che lo contiene — se attacchi il drag
-  direttamente sul wrapper, appena il dito/mouse è sopra l'iframe lo
-  swipe si blocca. L'overlay cattura sempre lui il gesto, sopra tutto.
-  Come bonus: un tap secco (senza trascinamento) sull'overlay apre il
-  post vero su Instagram, altrimenti l'embed sotto sarebbe irraggiungibile.
-  L'overlay è montato SOLO sulla carta in cima: le carte dietro devono
-  restare visibili ma non devono intercettare gesti.
+  Le carte sono immagini statiche in public/instagram/ (l'anteprima pubblica di
+  ogni post), non più gli embed ufficiali: un iframe Instagram pesa più di un
+  megabyte e veniva creato solo quando la carta arrivava in cima, quindi le carte
+  sotto erano vuote. Ora tutte le carte stanno sempre nel DOM e le immagini (circa
+  30 KB l'una) partono insieme quando la sezione si avvicina allo schermo.
 
-  Tutte le carte visibili nel mazzo (non solo quella in cima) montano
-  l'embed vero: quando fai swipe la prossima è già pronta, non c'è un
-  buco vuoto sotto. La key di ogni carta è l'indice del post (idx), non
-  la sua posizione nel mazzo: così quando una carta viene promossa da
-  "dietro" a "in cima" resta lo STESSO nodo React/DOM, non viene
-  smontata e rimontata da capo (niente ricaricamento, niente flash).
-  Le carte che escono dalla finestra visibile (VISIBLE_DEPTH) vengono
-  smontate per davvero — l'iframe non resta a consumare risorse quando
-  non è a portata di swipe.
+  Per aggiungere un post: salva la sua immagine come public/instagram/<codice>.jpg
+  e aggiungi il codice (la parte dopo /p/ nel link) a CURATED_POSTS.
 
-  La carta mostra soltanto il viewport quadrato del contenuto: header,
-  didascalia e CTA dell'embed restano fuori dalla maschera. È il
-  compromesso necessario per uniformare embed di dimensione variabile,
-  il cui DOM interno è fuori dal nostro controllo.
+  Ogni carta ha due livelli: l'esterno prende la posizione nel mazzo (gestita da
+  React), l'interno segue il dito (gestito direttamente sul DOM, senza render a
+  ogni movimento). Così le due trasformazioni non si sovrascrivono.
 */
-const CURATED_POSTS: string[] = [
-  "https://www.instagram.com/p/DZNBnbrjPns/",
-  "https://www.instagram.com/p/DZKQ_OgDKUd/",
-  "https://www.instagram.com/p/DWrDeL8DPET/",
-  "https://www.instagram.com/p/DWi1z2cjMOa/",
-  "https://www.instagram.com/p/DY9S5ZNMktl/",
-  "https://www.instagram.com/p/DYUemPXjB46/",
-  "https://www.instagram.com/p/CrRPN_gLWt-/",
-  "https://www.instagram.com/p/ChjnmW-LSUy/",
+const CURATED_POSTS = [
+  "DZNBnbrjPns",
+  "DZKQ_OgDKUd",
+  "DWrDeL8DPET",
+  "DWi1z2cjMOa",
+  "DY9S5ZNMktl",
+  "DYUemPXjB46",
+  "CrRPN_gLWt-",
+  "ChjnmW-LSUy",
 ];
 
 const VISIBLE_DEPTH = 3;
-const SWIPE_THRESHOLD = 80;
+const SWIPE_THRESHOLD = 70;
 const TAP_THRESHOLD = 6;
+const FLY_OUT_MS = 220;
+
+const postUrl = (code: string) => `https://www.instagram.com/p/${code}/`;
+
+function deckStyle(depth: number) {
+  const hidden = depth >= VISIBLE_DEPTH;
+  const d = Math.min(depth, VISIBLE_DEPTH);
+  const rotation = depth === 0 ? 0 : (depth % 2 === 0 ? 1 : -1) * (3 + d * 1.5);
+  return {
+    zIndex: CURATED_POSTS.length - depth,
+    opacity: hidden ? 0 : 1 - depth * 0.12,
+    transform: `translateY(${d * 16}px) scale(${1 - d * 0.05}) rotate(${rotation}deg)`,
+    // Le carte nascoste si riposizionano senza animazione: non devono attraversare il mazzo.
+    transition: hidden ? "none" : "transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s ease",
+  };
+}
 
 export function InstagramPosts() {
   const [current, setCurrent] = useState(0);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const dragStartX = useRef(0);
-  const dragging = useRef(false);
-  const animationTimer = useRef<number | null>(null);
-
-  useEffect(
-    () => () => {
-      if (animationTimer.current !== null) window.clearTimeout(animationTimer.current);
-    },
-    [],
-  );
-
+  const topCard = useRef<HTMLAnchorElement>(null);
+  const drag = useRef({ active: false, startX: 0, moved: false, animating: false });
   const total = CURATED_POSTS.length;
 
-  if (total === 0) {
-    return (
-      <p className="mt-6 rounded-md border border-dashed border-(--surface-border) p-4 text-center text-sm text-(--text-secondary)">
-        Nessun post selezionato ancora — aggiungi un permalink in{" "}
-        <code className="font-mono text-(--accent-primary)">src/features/social/InstagramPosts.tsx</code>.
-      </p>
-    );
+  function go(step: 1 | -1) {
+    setCurrent((c) => (c + step + total) % total);
   }
 
-  function goNext() {
-    setCurrent((c) => (c + 1) % total);
-  }
-  function goPrev() {
-    setCurrent((c) => (c - 1 + total) % total);
-  }
-
-  function snapBack() {
-    const el = cardRef.current;
+  function setOffset(x: number, transition: string) {
+    const el = topCard.current;
     if (!el) return;
-    el.style.transition = "transform 0.25s ease";
-    el.style.transform = "translateX(0) rotate(0deg)";
+    el.style.transition = transition;
+    el.style.transform = x ? `translateX(${x}px) rotate(${x / 16}deg)` : "";
   }
 
-  function handlePointerDown(e: React.PointerEvent) {
+  function handlePointerDown(e: PointerEvent<HTMLAnchorElement>) {
+    if (drag.current.animating) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    dragging.current = true;
-    dragStartX.current = e.clientX;
-    const el = cardRef.current;
-    if (el) el.style.transition = "none";
+    drag.current = { active: true, startX: e.clientX, moved: false, animating: false };
+    setOffset(0, "none");
   }
 
-  function handlePointerMove(e: React.PointerEvent) {
-    if (!dragging.current) return;
-    const el = cardRef.current;
-    if (!el) return;
-    const deltaX = e.clientX - dragStartX.current;
-    el.style.transform = `translateX(${deltaX}px) rotate(${deltaX / 14}deg)`;
+  function handlePointerMove(e: PointerEvent<HTMLAnchorElement>) {
+    if (!drag.current.active) return;
+    const deltaX = e.clientX - drag.current.startX;
+    if (Math.abs(deltaX) >= TAP_THRESHOLD) drag.current.moved = true;
+    setOffset(deltaX, "none");
   }
 
-  function handlePointerUp(e: React.PointerEvent) {
-    if (!dragging.current) return;
-    dragging.current = false;
-
-    const deltaX = e.clientX - dragStartX.current;
-    const el = cardRef.current;
-
-    if (Math.abs(deltaX) < TAP_THRESHOLD) {
-      window.open(CURATED_POSTS[current], "_blank", "noopener,noreferrer");
-      snapBack();
+  function handlePointerUp(e: PointerEvent<HTMLAnchorElement>) {
+    if (!drag.current.active) return;
+    drag.current.active = false;
+    const deltaX = e.clientX - drag.current.startX;
+    if (Math.abs(deltaX) <= SWIPE_THRESHOLD) {
+      setOffset(0, "transform 0.25s ease");
       return;
     }
-
-    if (Math.abs(deltaX) > SWIPE_THRESHOLD) {
-      const goingNext = deltaX < 0; // swipe a sinistra = avanti
-      if (el) {
-        el.style.transition = "transform 0.22s ease";
-        el.style.transform = `translateX(${goingNext ? -600 : 600}px) rotate(${goingNext ? -25 : 25}deg)`;
+    const step = deltaX < 0 ? 1 : -1; // swipe a sinistra = avanti
+    const card = topCard.current;
+    drag.current.animating = true;
+    setOffset(step === 1 ? -480 : 480, `transform ${FLY_OUT_MS}ms ease-in`);
+    window.setTimeout(() => {
+      // Prima la carta va in fondo al mazzo (nascosta), poi perde lo spostamento:
+      // nello stesso fotogramma, così non ricompare per un istante in cima.
+      flushSync(() => go(step));
+      if (card) {
+        card.style.transition = "none";
+        card.style.transform = "";
       }
-      animationTimer.current = window.setTimeout(() => {
-        if (goingNext) goNext();
-        else goPrev();
-        if (el) {
-          el.style.transition = "none";
-          el.style.transform = "translateX(0) rotate(0deg)";
-        }
-      }, 200);
-    } else {
-      snapBack();
-    }
+      drag.current = { active: false, startX: 0, moved: false, animating: false };
+    }, FLY_OUT_MS);
   }
 
   function handlePointerCancel() {
-    dragging.current = false;
-    snapBack();
+    drag.current.active = false;
+    setOffset(0, "transform 0.25s ease");
   }
-
-  const depthCount = Math.min(VISIBLE_DEPTH, total);
 
   return (
     <div className="mt-6">
       <div className="relative isolate mx-auto aspect-square w-full max-w-[300px]">
-        {Array.from({ length: depthCount }, (_, d) => depthCount - 1 - d).map((depth) => {
-          const idx = (current + depth) % total;
+        {CURATED_POSTS.map((code, idx) => {
+          const depth = (idx - current + total) % total;
           const isTop = depth === 0;
-          const rotation = isTop ? 0 : (depth % 2 === 0 ? 1 : -1) * (4 + depth * 2);
-
           return (
             <div
-              key={idx}
-              ref={isTop ? cardRef : undefined}
-              className="surface-solid absolute inset-0 overflow-hidden rounded-lg"
-              style={{
-                zIndex: depthCount - depth,
-                transform: `translateY(${depth * 10}px) scale(${1 - depth * 0.06}) rotate(${rotation}deg)`,
-                opacity: isTop ? 1 : 0.85 - depth * 0.2,
-              }}
+              key={code}
+              className="absolute inset-0 will-change-transform motion-reduce:transition-none!"
+              style={deckStyle(depth)}
+              aria-hidden={!isTop}
             >
-              {/* L'header bianco con profilo e CTA appartiene all'iframe
-                  cross-origin di Instagram e non è stilizzabile. Lo spostiamo
-                  sotto il bordo superiore della carta: il viewport quadrato
-                  mostra così soltanto il contenuto visuale del post. */}
-              <div className="translate-y-[-54px]">
-                <InstagramEmbed url={CURATED_POSTS[idx]} />
-              </div>
-              {isTop && (
-                <div
-                  className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
-                  onPointerDown={handlePointerDown}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  onPointerCancel={handlePointerCancel}
+              <a
+                ref={isTop ? topCard : undefined}
+                href={postUrl(code)}
+                target="_blank"
+                rel="noopener noreferrer"
+                tabIndex={isTop ? 0 : -1}
+                aria-label={`Apri il post ${idx + 1} di ${total} su Instagram`}
+                draggable={false}
+                // Un trascinamento non deve aprire il post.
+                onClick={(e) => {
+                  if (drag.current.moved) e.preventDefault();
+                  drag.current.moved = false;
+                }}
+                onPointerDown={isTop ? handlePointerDown : undefined}
+                onPointerMove={isTop ? handlePointerMove : undefined}
+                onPointerUp={isTop ? handlePointerUp : undefined}
+                onPointerCancel={isTop ? handlePointerCancel : undefined}
+                className={`surface-solid relative block h-full w-full overflow-hidden rounded-lg shadow-xl select-none ${
+                  isTop ? "cursor-grab touch-pan-y active:cursor-grabbing" : "pointer-events-none"
+                }`}
+              >
+                <img
+                  src={appHref(`instagram/${code}.jpg`)}
+                  alt=""
+                  width={640}
+                  height={640}
+                  loading="lazy"
+                  decoding="async"
+                  draggable={false}
+                  className="h-full w-full object-cover"
                 />
-              )}
+                {isTop && (
+                  <span className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent px-4 pt-8 pb-3 text-xs font-semibold text-white">
+                    Apri su Instagram ↗
+                  </span>
+                )}
+              </a>
             </div>
           );
         })}
       </div>
 
-      <p className="mt-3 text-center text-xs text-(--text-secondary)">Scorri la carta per esplorare gli altri post</p>
+      <p className="mt-9 text-center text-xs text-(--text-secondary)">Scorri la carta per esplorare gli altri post</p>
 
-      <div className="mt-2 flex items-center justify-center gap-4">
+      <div className="mt-2 flex items-center justify-center gap-3">
         <button
           type="button"
-          onClick={goPrev}
+          onClick={() => go(-1)}
           aria-label="Post precedente"
           className="flex h-8 w-8 items-center justify-center rounded-full border border-(--surface-border) text-(--text-secondary) hover:text-(--accent-primary)"
         >
           ‹
         </button>
-        <span className="font-mono text-xs text-(--text-secondary)">
-          {current + 1} / {total}
-        </span>
+        <div className="flex gap-1.5" aria-label={`Post ${current + 1} di ${total}`} role="status">
+          {CURATED_POSTS.map((code, idx) => (
+            <span
+              key={code}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                idx === current ? "w-4 bg-(--accent-primary)" : "w-1.5 bg-(--surface-border)"
+              }`}
+            />
+          ))}
+        </div>
         <button
           type="button"
-          onClick={goNext}
+          onClick={() => go(1)}
           aria-label="Post successivo"
           className="flex h-8 w-8 items-center justify-center rounded-full border border-(--surface-border) text-(--text-secondary) hover:text-(--accent-primary)"
         >
