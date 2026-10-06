@@ -82,3 +82,24 @@ export function clearPendingOrder(requestId: string, storage?: JournalStorage) {
     // Una voce rimasta può ripetere in sicurezza la stessa richiesta.
   }
 }
+
+/** Una richiesta di un altro evento non si può più inviare (vedi pruneOrderHistory): si elimina. */
+export function clearPendingOrdersOutside(eventId: string | null, storage?: JournalStorage) {
+  try {
+    const target = storage ?? localStorage;
+    const stale: string[] = [];
+    for (let index = 0; index < target.length; index++) {
+      const key = target.key(index);
+      if (!key?.startsWith(PREFIX)) continue;
+      try {
+        const value: unknown = JSON.parse(target.getItem(key) ?? "null");
+        if (!valid(value) || value.eventId !== eventId) stale.push(key);
+      } catch {
+        stale.push(key);
+      }
+    }
+    stale.forEach((key) => target.removeItem(key));
+  } catch {
+    // Senza memoria locale non c'è nulla da eliminare.
+  }
+}

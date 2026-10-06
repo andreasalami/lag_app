@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   ORDER_HISTORY_KEY,
   addOrderToHistory,
+  openEventId,
   ordersForEvent,
+  pruneOrderHistory,
   readOrderHistory,
   saveOrderHistory,
   type StoredOrder,
@@ -70,5 +72,16 @@ describe("orderHistory", () => {
 
     expect(storage.getItem(ORDER_HISTORY_KEY)).toContain("order-1");
     expect(storage.getItem("lag:last-submitted-order")).toBeNull();
+  });
+
+  it("dopo la chiusura dell'evento non lascia ordini in sospeso sul telefono", () => {
+    const storage = memoryStorage();
+    saveOrderHistory([order("order-1"), order("order-2", "event-2")], storage);
+
+    expect(openEventId({ event_id: "event-1", reason: "event_closed" })).toBeNull();
+    expect(openEventId({ event_id: "event-2", reason: "ordering_paused" })).toBe("event-2");
+    expect(pruneOrderHistory("event-2", storage).map((item) => item.order_id)).toEqual(["order-2"]);
+    expect(pruneOrderHistory(null, storage)).toEqual([]);
+    expect(readOrderHistory(storage)).toEqual([]);
   });
 });
