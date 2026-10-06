@@ -22,27 +22,28 @@ Produzione:
 | Biglietti | Checkout Eventbrite (widget ufficiale) | — |
 | Programma | Griglia calendario, 2 palchi in contemporanea | staff |
 | Menu | Prodotti, prezzi, scorte e allergeni 1–14 | staff / cucina |
-| Instagram | Embed ufficiali dei post dell'evento | — |
-| Torneo | Riepilogo con turno e ultimi 5 risultati, più tabellone completo separato (nomi squadra fino a 20 caratteri) | tournament_manager |
+| Instagram | Mazzo di carte con le immagini dei post dell'evento; il tocco apre il post | — |
+| Torneo | Riepilogo con turno e ultimi 5 risultati, più tabellone completo separato (nomi squadra fino a 20 caratteri); salvataggi multipli, uno in onda | tournament_manager |
 | Ordini | Preordine pubblico, QR, cassa, code di cucina e bar | cassa / cucina / bar |
-| Gestione evento | Apertura e chiusura ordinazioni, situazione incassi in PDF, report CSV finale | cassa |
+| Apertura e Chiusura Evento | Apertura e chiusura ordinazioni, situazione incassi in PDF, report CSV finale | cassa |
 
 ## Ruoli e accesso
 
 Su desktop l'accesso avviene dal pulsante **Staff** nella barra superiore; su
 mobile il pulsante **Login staff** si trova in fondo alla Home, dopo il torneo.
-Il menu mobile in alto mostra il Programma e il riepilogo degli ordini salvati
-sul dispositivo. Dopo il login, l'area Staff mostra i collegamenti in questo ordine:
+Su mobile il pulsante **Ordini** in alto a destra apre il riepilogo degli ordini
+salvati sul dispositivo. Dopo il login, l'area Staff mostra i collegamenti in
+questo ordine:
 
-1. Programma
-2. Menu (staff, cucina, bar, admin)
-3. Gestione torneo (admin)
-4. Gestione evento (cassa e admin)
-5. Cassa
+1. Scaletta (staff, admin)
+2. Menu e Scorte (staff, cucina, bar, admin)
+3. Torneo (tournament_manager, admin)
+4. Apertura e Chiusura Evento (cassa e admin)
+5. Casse
 6. Cucina
 7. Bar
 
-Le sezioni di gestione precedono le postazioni operative, raccolte in fondo.
+Il blocco **Gestione** precede le postazioni operative, raccolte in fondo.
 Ogni sezione riservata ha in alto **← Area staff**, che riporta sempre al
 login o all'elenco delle sezioni, anche se la pagina è stata aperta da un link
 diretto; dall'area staff **← Torna al sito** riporta alla Home.
@@ -61,15 +62,21 @@ Pagine e ruoli dell'interfaccia stanno in un solo punto,
 [src/features/auth/staffPages.ts](src/features/auth/staffPages.ts). I permessi sono
 verificati da Supabase tramite Row Level Security. Il ruolo
 non viene scelto dal browser: viene letto dalla tabella `profiles` dopo il
-login. Le pagine Gestione evento, Cassa, Cucina e Bar sono caricate
+login. Le pagine Apertura e Chiusura Evento, Cassa, Cucina e Bar sono caricate
 dinamicamente soltanto dopo la verifica del ruolo: un visitatore anonimo o un
 ruolo diverso riceve la sola schermata di accesso riservato, anche conoscendo
 direttamente l'URL.
 
-Cassa, Cucina e Bar ricordano la postazione scelta su quel dispositivo, anche
-dopo un ricaricamento, finché non si preme **Cambia cassa** o **Cambia
-postazione**. Se il browser blocca la memoria locale la pagina funziona lo
-stesso: la postazione va solo riscelta al ricaricamento.
+Cassa, Cucina e Bar ricordano la postazione scelta su quel dispositivo solo per
+l'evento in corso, anche dopo un ricaricamento, finché non si preme **Cambia
+cassa** o **Cambia postazione**. Fuori dall'evento, o quando ne inizia uno nuovo,
+si riparte dalla scelta della postazione. Senza rete vale l'ultima scelta. Se il
+browser blocca la memoria locale la pagina funziona lo stesso: la postazione va
+solo riscelta al ricaricamento.
+
+Gli ordini salvati sul telefono del cliente valgono solo per l'evento aperto:
+alla chiusura il server li annulla e cancella i QR, quindi il telefono li toglie
+dallo storico al primo controllo con la rete.
 
 ## Flusso ordini
 
@@ -100,7 +107,7 @@ volta lo stesso QR già usato in cassa. Il cliente può consultare lo stato del
 proprio ordine mediante il token del QR, senza accesso pubblico alla tabella
 degli ordini.
 
-La sezione **Gestione evento** (ruoli `cassa` e `admin`, separata dalle casse) gestisce:
+La sezione **Apertura e Chiusura Evento** (ruoli `cassa` e `admin`, separata dalle casse) gestisce:
 
 - nome, apertura e chiusura del singolo weekend, e durata in serate (da 1 a 3);
 - limite configurabile degli ordini contemporaneamente in attesa di pagamento (default 100); questo conteggio non include gli ordini già pagati in cucina;
@@ -184,7 +191,7 @@ delle due strade porta a una build pubblicabile.
 Per una prima verifica si può assegnare `admin` a un account di test; non è
 consigliato usare `admin` per tutti gli account reali.
 
-Dopo l'aggiornamento dello schema, entra una prima volta in **Gestione evento**:
+Dopo l'aggiornamento dello schema, entra una prima volta in **Apertura e Chiusura Evento**:
 il nuovo evento nasce intenzionalmente con ordinazioni sospese. Imposta nome e
 orari, salva, quindi premi **Riapri ordinazioni** quando il sistema è pronto.
 
@@ -205,8 +212,9 @@ Il collaudo di questo aggiornamento mobile è tracciato in
   sezione si nasconde anche se il widget di Eventbrite non si carica.
 - `VITE_INSTAGRAM_HANDLE`: handle Instagram mostrato nell'app.
 
-I permalink dei post Instagram sono definiti in
-`src/features/social/InstagramPosts.tsx`.
+I post Instagram sono definiti in `src/features/social/InstagramPosts.tsx`:
+per aggiungerne uno salva la sua immagine come `public/instagram/<codice>.jpg`
+(il codice è la parte dopo `/p/` nel link) e aggiungi il codice all'elenco.
 
 ```bash
 npm run dev       # sviluppo, http://localhost:5173
@@ -290,9 +298,12 @@ gli step di build e deploy risultino verdi.
 - Le notifiche Web Push richiedono la chiave VAPID pubblica nella build e la
   Edge Function configurata con i relativi segreti; senza questi valori l'app
   mostra un errore di configurazione senza registrare il dispositivo.
-- Le modifiche non ancora pubblicate al torneo restano una bozza nel browser;
-  dopo il salvataggio il tabellone è condiviso tramite Supabase e aggiornato
-  per il pubblico con polling mentre la pagina è visibile.
+- Il torneo si gestisce con i **Salvataggi**: si sceglie un salvataggio, lo si
+  modifica e compare **Salva modifiche**; **Salva come nuovo** crea una copia
+  privata. Uno solo è in onda: salvarlo aggiorna il tabellone pubblico, gli
+  altri si pubblicano con **Metti in onda**. Le modifiche non ancora salvate
+  restano nel browser per sopravvivere a un ricaricamento; il pubblico riceve
+  gli aggiornamenti con polling mentre la pagina è visibile.
 - Il calendario della Home resta contenuto nella larghezza del viewport anche
   su mobile. Solo il tabellone completo, nella pagina dedicata, usa uno scroll
   orizzontale interno per mantenere leggibili tutti i turni.
