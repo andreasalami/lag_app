@@ -152,9 +152,12 @@ export function Staff() {
 
   return (
     <section className="mx-auto max-w-3xl px-4 py-10">
+      <Button variant="back" href={appHref()} className="mb-6 min-h-10 px-4 py-2">
+        ← Torna al sito
+      </Button>
       <StaffPageHeading
-        eyebrow="Area riservata"
-        title="Gestione"
+        eyebrow={null}
+        title="Area riservata"
         description={`Accesso attivo · ${session.user.email ?? "account staff"}`}
       />
 
@@ -204,12 +207,9 @@ export function Staff() {
         )}
       </div>
 
-      <div className="mt-6 flex flex-wrap justify-center gap-2">
+      <div className="mt-6 flex justify-center">
         <Button variant="staff-secondary" onClick={signOut}>
           Esci
-        </Button>
-        <Button variant="back" href={appHref()}>
-          ← Torna al sito
         </Button>
       </div>
     </section>
