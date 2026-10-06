@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseTournamentArchive, parseTournamentSnapshot, teamNameTooLong } from "./tournamentState";
+import { parseTournamentSave, parseTournamentSnapshot, sameTournament, teamNameTooLong } from "./tournamentState";
 
 const snapshot = {
-  size: 8,
+  size: 8 as const,
   teams: Array.from({ length: 8 }, (_, index) => `Squadra ${index + 1}`),
   matches: {},
   overrides: {},
@@ -25,33 +25,21 @@ describe("tournament state", () => {
     expect(parseTournamentSnapshot({ ...snapshot, teams })?.teams[0]).toBe(teams[0]);
   });
 
-  it("converte una riga archivio Supabase", () => {
-    expect(
-      parseTournamentArchive({
-        ...snapshot,
-        id: "snapshot-1",
-        reason: "size_change",
-        target_size: 16,
-        created_at: "2026-09-01T17:00:00.000Z",
-      }),
-    ).toEqual({
+  it("converte una riga salvataggio Supabase e rifiuta metadati mancanti", () => {
+    const row = { ...snapshot, id: "save-1", name: "Finale", updated_at: "2026-10-06 18:00:00.123456+00" };
+    expect(parseTournamentSave(row)).toEqual({
       ...snapshot,
-      id: "snapshot-1",
-      reason: "size_change",
-      targetSize: 16,
-      createdAt: "2026-09-01T17:00:00.000Z",
+      id: "save-1",
+      name: "Finale",
+      updatedAt: "2026-10-06 18:00:00.123456+00",
     });
+    expect(parseTournamentSave({ ...row, name: undefined })).toBeNull();
   });
 
-  it("rifiuta metadati archivio non validi", () => {
-    expect(
-      parseTournamentArchive({
-        ...snapshot,
-        id: "snapshot-1",
-        reason: "unknown",
-        target_size: 16,
-        created_at: "not-a-date",
-      }),
-    ).toBeNull();
+  it("confronta i tabelloni ignorando l'ordine delle chiavi del database", () => {
+    const local = { ...snapshot, matches: { "0-0": { winner: "A" as const, scoreA: 2, scoreB: 1 } } };
+    const fromDatabase = { ...snapshot, matches: { "0-0": { scoreA: 2, scoreB: 1, winner: "A" as const } } };
+    expect(sameTournament(local, fromDatabase)).toBe(true);
+    expect(sameTournament(local, snapshot)).toBe(false);
   });
 });

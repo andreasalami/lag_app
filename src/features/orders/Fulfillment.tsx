@@ -15,11 +15,12 @@ import {
 } from "./workflow";
 import { OrderNotes } from "./OrderNotes";
 import { StationPicker } from "./StationPicker";
+import { useEventStation } from "./stationMemory";
 import { PickupSelection } from "./PickupSelection";
 import { kitchenMessage } from "./PreparationChoice";
 import type { KitchenState } from "./types";
 import { isPickupSelectionValid, remainingToPickUp, selectedPickupCount } from "./pickupQuantities";
-import { appHref, pollWhileVisible, readStorage, removeStorage, writeStorage } from "../../lib/browser";
+import { appHref, pollWhileVisible, readStorage, writeStorage } from "../../lib/browser";
 
 type FulfillmentItem = {
   id: string;
@@ -66,11 +67,8 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   const { role } = useAuth();
   const options = area === "cucina" ? KITCHEN_STATIONS : BAR_STATIONS;
   const areaLabel = area === "cucina" ? "Cucina" : "Bar";
-  // Come in Cassa: la postazione resta sul dispositivo finché non si preme "Cambia postazione".
-  const [station, setStation] = useState<FulfillmentStation | null>(() => {
-    const saved = readStorage(STATION_STORAGE_KEYS[area]);
-    return options.find((option) => option.key === saved)?.key ?? null;
-  });
+  // Come in Cassa: la postazione resta sul dispositivo per l'evento in corso.
+  const [station, saveStation, stationChecked] = useEventStation(STATION_STORAGE_KEYS[area], options);
   const [orders, setOrders] = useState<FulfillmentOrder[]>([]);
   const [activeOrder, setActiveOrder] = useState<FulfillmentOrder | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -154,10 +152,8 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
   );
 
   function chooseStation(next: FulfillmentStation | null) {
-    if (next) writeStorage(STATION_STORAGE_KEYS[area], next);
-    else removeStorage(STATION_STORAGE_KEYS[area]);
     knownKitchenOrderIds.current = null;
-    setStation(next);
+    saveStation(next);
     setActiveOrder(null);
     setMessage(null);
   }
@@ -284,6 +280,8 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
     await refetch();
   }
 
+  if (!stationChecked) return <p className="py-16 text-center text-sm text-(--text-secondary)">Carico...</p>;
+
   if (!station) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
@@ -291,7 +289,7 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
         <StaffPanel
           eyebrow="Configurazione dispositivo"
           title="Scegli la postazione"
-          description="La scelta resta memorizzata e può essere cambiata in seguito."
+          description="La scelta resta memorizzata fino alla chiusura dell’evento e può essere cambiata in seguito."
         >
           <StationPicker options={options} onPick={chooseStation} />
         </StaffPanel>

@@ -5,15 +5,15 @@ import type { Role } from "./AuthContext";
  * Decide solo cosa mostrare; il vero controllo resta nel database (RLS e RPC).
  */
 export const STAFF_PAGES = [
-  { hash: "gestione-programma", title: "Gestione Scaletta", group: "sections", roles: ["staff", "admin"] },
+  { hash: "gestione-programma", title: "Scaletta", group: "sections", roles: ["staff", "admin"] },
   {
     hash: "gestione-menu",
-    title: "Gestione Menu e Scorte",
+    title: "Menu e Scorte",
     group: "sections",
     roles: ["staff", "cucina", "bar", "admin"],
   },
-  { hash: "gestione-torneo", title: "Gestione torneo", group: "sections", roles: ["tournament_manager", "admin"] },
-  { hash: "gestione-evento", title: "Gestione evento", group: "sections", roles: ["cassa", "admin"] },
+  { hash: "gestione-torneo", title: "Torneo", group: "sections", roles: ["tournament_manager", "admin"] },
+  { hash: "gestione-evento", title: "Apertura e Chiusura Evento", group: "sections", roles: ["cassa", "admin"] },
   { hash: "cassa", title: "Casse", group: "operations", roles: ["cassa", "admin"] },
   { hash: "cucina", title: "Cucina", group: "operations", roles: ["cucina", "admin"] },
   { hash: "bar", title: "Bar", group: "operations", roles: ["bar", "admin"] },

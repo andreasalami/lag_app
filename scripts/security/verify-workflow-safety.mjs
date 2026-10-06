@@ -172,13 +172,6 @@ assert.equal(
   null,
 );
 console.log("PASS: undo once while open; delivery and undo blocked after closure for every staff role.");
-const rev = await asUser(admin, () => rpc("publish_tournament", [0, 8, JSON.stringify(["A", "B"]), "{}", "{}"]));
-assert.equal(rev, 1);
-await assert.rejects(
-  asUser(admin, () => rpc("publish_tournament", [0, 8, JSON.stringify(["STALE"]), "{}", "{}"])),
-  /tournament_conflict/,
-);
-assert.deepEqual((await db.query("select teams from tournament_state where id='main'")).rows[0].teams, ["A", "B"]);
 await assert.rejects(
   asUser(admin, () => db.query("update tournament_state set teams='[]' where id='main'")),
   /permission denied/,
@@ -188,5 +181,5 @@ await assert.rejects(
   /permission denied/,
 );
 assert.deepEqual(await asUser(admin, () => rpc("get_cashier_claims", [])), []);
-console.log("PASS: stale tournament publication and direct write denied; claim summary restricted to cashiers.");
+console.log("PASS: direct tournament write denied; claim summary restricted to cashiers.");
 await db.close();

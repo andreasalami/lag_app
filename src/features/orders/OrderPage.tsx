@@ -11,16 +11,23 @@ import {
   applyStatusUpdates,
   fetchOrderStatusUpdates,
   isPublicOrderStatus,
-  ordersForEvent,
+  openEventId,
   readOrderHistory,
   saveOrderHistory,
   type PublicOrderStatus,
   type StoredOrder,
+  pruneOrderHistory,
 } from "./orderHistory";
 import { OrderMenu } from "./OrderMenu";
 import { getOrCreateRecoveryToken, recoveryOrderQr, saveRecoveryToken } from "./orderRecovery";
 import { ALLERGENS, orderingReasonMessage, priceFormatter, submitFailure } from "./orderUtils";
-import { clearPendingOrder, readPendingOrder, savePendingOrder, type PendingOrderRequest } from "./pendingOrder";
+import {
+  clearPendingOrder,
+  clearPendingOrdersOutside,
+  readPendingOrder,
+  savePendingOrder,
+  type PendingOrderRequest,
+} from "./pendingOrder";
 import { PendingRequestPanel } from "./PendingRequestPanel";
 import { PreparationChoice } from "./PreparationChoice";
 import { RestoreHistoryScreen } from "./RestoreHistoryScreen";
@@ -95,10 +102,12 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
     }
     const nextCatalog = data as OrderingCatalog;
     setCatalog(nextCatalog);
-    const allHistory = readOrderHistory();
-    const currentHistory = ordersForEvent(allHistory, nextCatalog.event_id);
-    historyRef.current = allHistory;
-    setOrderHistory(allHistory);
+    const eventId = openEventId(nextCatalog);
+    const currentHistory = pruneOrderHistory(eventId);
+    clearPendingOrdersOutside(eventId);
+    setPendingRequest(readPendingOrder());
+    historyRef.current = currentHistory;
+    setOrderHistory(currentHistory);
     if (restoreLatestOrder) {
       const latest = currentHistory[0] ?? null;
       setSubmittedOrder(latest);

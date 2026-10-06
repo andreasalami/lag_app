@@ -5,7 +5,8 @@ l'app restano nel [README](../README.md).
 
 ## Stato dello studio
 
-- `main`: `bc70c9c` (merge della PR #7, 2026-10-03); deploy su GitHub Pages avviato al merge.
+- `main`: `e37e14d` (merge della PR #8, 2026-10-04); deploy su GitHub Pages avviato al merge.
+- Branch aperto: `feat/october-update` (2026-10-06), richiede la migrazione `20261006120000` in produzione.
 - Database di produzione (Supabase `lagapp`): ripristinato e aggiornato il 2026-10-04 con `schema.sql`
   (commit `b159cbd`); migrazioni registrate fino a `20261003120000`. Il piano gratuito non ha backup
   automatici.
@@ -30,6 +31,8 @@ l'app restano nel [README](../README.md).
   animazione "Riempimento": approvato con "Sì, procedi", produzione esclusa.
 - 2026-10-04 — Produzione: Andrea chiede di aggiornare lo schema e unire la PR #8 su `main`; SQL eseguito
   da Andrea (incidente schema di agosto e ripristino nel registro dell'intervento).
+- 2026-10-06 — Aggiornamento di ottobre: piano in 6 punti approvato con "sì, procedi e ok download";
+  scelte "un salvataggio in onda" e "immagini statiche"; filtro DB sulla coda cassa escluso.
 - Fuori dall'approvazione: migrazioni sul database di produzione, merge su `main`, deploy.
 
 ## Architettura in breve
@@ -64,3 +67,4 @@ l'app restano nel [README](../README.md).
 - [2026-10-02 — Bug, pulizia e Gestione evento](changes/2026-10-02-bug-fixes-and-event-management.md)
 - [2026-10-03 — Sicurezza del database e semplificazione](changes/2026-10-03-security-and-simplification.md)
 - [2026-10-03 — PDF per serata, Biglietti, Ordina qui](changes/2026-10-03-event-evenings-pdf-tickets-order-button.md)
+- [2026-10-06 — Ordini, postazioni, salvataggi torneo, Instagram](changes/2026-10-06-october-update.md)

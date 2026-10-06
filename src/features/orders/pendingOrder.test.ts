@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { readPendingOrder, savePendingOrder, clearPendingOrder, type PendingOrderRequest } from "./pendingOrder";
+import {
+  readPendingOrder,
+  savePendingOrder,
+  clearPendingOrder,
+  clearPendingOrdersOutside,
+  type PendingOrderRequest,
+} from "./pendingOrder";
 function storage() {
   const data = new Map<string, string>();
   return {
@@ -75,5 +81,14 @@ describe("pending order journal", () => {
     db.setItem("lag:pending-order:broken", "{");
     savePendingOrder(request, db);
     expect(readPendingOrder(db)).toEqual(request);
+  });
+
+  it("removes requests that belong to another event", () => {
+    const db = storage();
+    savePendingOrder(request, db);
+    clearPendingOrdersOutside(request.eventId, db);
+    expect(readPendingOrder(db)).toEqual(request);
+    clearPendingOrdersOutside(null, db);
+    expect(readPendingOrder(db)).toBeNull();
   });
 });

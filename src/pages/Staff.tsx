@@ -161,8 +161,8 @@ export function Staff() {
       <div className="flex flex-col gap-6">
         {sections.length > 0 && (
           <StaffPanel
-            eyebrow="Gestione"
-            title="Sezioni del sito"
+            eyebrow="Contenuti ed evento"
+            title="Gestione"
             description="Contenuti mostrati nella Home e gestione dell’evento."
           >
             <div className="grid gap-3 sm:grid-cols-2">

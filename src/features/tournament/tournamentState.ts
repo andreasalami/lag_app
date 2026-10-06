@@ -8,11 +8,11 @@ export type TournamentSnapshot = {
   overrides: OverridesMap;
 };
 
-export type TournamentArchive = TournamentSnapshot & {
+/** Versione del tabellone salvata da chi gestisce; `updatedAt` resta il testo esatto del database. */
+export type TournamentSave = TournamentSnapshot & {
   id: string;
-  reason: "size_change" | "restore";
-  targetSize: BracketSize | null;
-  createdAt: string;
+  name: string;
+  updatedAt: string;
 };
 
 // Limite per scrivere e pubblicare: le card del tabellone sono strette.
@@ -72,31 +72,48 @@ export function parseTournamentSnapshot(value: unknown): TournamentSnapshot | nu
   };
 }
 
-export function parseTournamentArchive(value: unknown): TournamentArchive | null {
+export function parseTournamentSave(value: unknown): TournamentSave | null {
   const snapshot = parseTournamentSnapshot(value);
   if (!snapshot || !value || typeof value !== "object") return null;
-  const candidate = value as {
-    id?: unknown;
-    reason?: unknown;
-    target_size?: unknown;
-    created_at?: unknown;
-  };
-  const targetSize =
-    candidate.target_size === null
-      ? null
-      : BRACKET_SIZES.includes(candidate.target_size as BracketSize)
-        ? (candidate.target_size as BracketSize)
-        : undefined;
+  const candidate = value as { id?: unknown; name?: unknown; updated_at?: unknown };
   if (typeof candidate.id !== "string" || candidate.id.length === 0) return null;
-  if (candidate.reason !== "size_change" && candidate.reason !== "restore") return null;
-  if (targetSize === undefined) return null;
-  if (typeof candidate.created_at !== "string" || Number.isNaN(Date.parse(candidate.created_at))) return null;
+  if (typeof candidate.name !== "string" || typeof candidate.updated_at !== "string") return null;
+  return { ...snapshot, id: candidate.id, name: candidate.name, updatedAt: candidate.updated_at };
+}
+
+// Il database riordina le chiavi degli oggetti JSON: il confronto deve ignorare l'ordine.
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, item]) => [key, canonical(item)]),
+  );
+}
+
+export function sameTournament(a: TournamentSnapshot, b: TournamentSnapshot) {
+  const pick = ({ size, teams, matches, overrides }: TournamentSnapshot) => ({ size, teams, matches, overrides });
+  return JSON.stringify(canonical(pick(a))) === JSON.stringify(canonical(pick(b)));
+}
+
+/** Salvataggi del torneo (solo gestori) e quale di questi è in onda. */
+export async function fetchTournamentSaves() {
+  const [list, state] = await Promise.all([
+    supabase
+      .from("tournament_snapshots")
+      .select("id, name, size, teams, matches, overrides, updated_at")
+      .order("updated_at", { ascending: false }),
+    supabase.from("tournament_state").select("live_save_id").eq("id", "main").maybeSingle(),
+  ]);
+  const liveId: unknown = state.data?.live_save_id;
   return {
-    ...snapshot,
-    id: candidate.id,
-    reason: candidate.reason,
-    targetSize,
-    createdAt: candidate.created_at,
+    error: list.error ?? state.error,
+    saves: (list.data ?? []).flatMap((row: unknown) => {
+      const save = parseTournamentSave(row);
+      return save ? [save] : [];
+    }),
+    liveId: typeof liveId === "string" ? liveId : null,
   };
 }
 

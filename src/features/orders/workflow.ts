@@ -26,16 +26,12 @@ export const BAR_STATIONS: { key: BarStation; label: string; description: string
   { key: "bar", label: "Bar", description: "Bevande, caffè e vini" },
 ];
 
-// La postazione scelta resta sul dispositivo finché non si preme "Cambia".
+// La postazione scelta resta sul dispositivo per l'evento in corso (vedi stationMemory.ts).
 export const STATION_STORAGE_KEYS = {
   cassa: "lag:cash-station",
   cucina: "lag:kitchen-station",
   bar: "lag:bar-station",
 } as const;
-
-export function isCashStation(value: unknown): value is CashStation {
-  return typeof value === "string" && CASH_STATIONS.some((station) => station.key === value);
-}
 
 export function cashStationLabel(station: CashStation) {
   return CASH_STATIONS.find((candidate) => candidate.key === station)?.label ?? station;

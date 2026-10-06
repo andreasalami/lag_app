@@ -99,6 +99,24 @@ export function ordersForEvent(orders: StoredOrder[], eventId: string | null) {
   return eventId ? orders.filter((order) => order.event_id === eventId) : [];
 }
 
+/** Evento in cui gli ordini salvati sul telefono valgono ancora: nessuno se è chiuso o manca. */
+export function openEventId(status: { event_id?: unknown; reason?: unknown } | null) {
+  if (!status || status.reason === "event_closed" || status.reason === "no_event") return null;
+  return typeof status.event_id === "string" ? status.event_id : null;
+}
+
+/**
+ * Alla chiusura il server annulla gli ordini in sospeso e cancella i loro QR: il telefono
+ * non potrebbe più aggiornarli e li mostrerebbe per sempre "Da pagare". Restano solo
+ * quelli dell'evento aperto.
+ */
+export function pruneOrderHistory(eventId: string | null, storage?: BrowserStorage) {
+  const orders = readOrderHistory(storage);
+  const kept = ordersForEvent(orders, eventId);
+  if (kept.length !== orders.length) saveOrderHistory(kept, storage);
+  return kept;
+}
+
 export function isPublicOrderStatus(value: unknown): value is PublicOrderStatus {
   return typeof value === "string" && VALID_STATUSES.has(value as PublicOrderStatus);
 }

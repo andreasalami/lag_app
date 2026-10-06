@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ORDER_STATUS_LABELS,
+  openEventId,
   orderStatusClassName,
+  pruneOrderHistory,
   readOrderHistory,
   syncOrderHistoryStatuses,
   type StoredOrder,
@@ -9,6 +11,7 @@ import {
 import { priceFormatter } from "../../features/orders/orderUtils";
 import { TICKETS_ENABLED } from "../../features/tickets/EventbriteTickets";
 import { appHref } from "../../lib/browser";
+import { supabase } from "../../lib/supabaseClient";
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -30,11 +33,13 @@ export function Navbar() {
   }, [menuOpen]);
 
   async function refreshOrders() {
-    const stored = readOrderHistory();
-    setOrders(stored);
-    if (stored.length === 0) return;
+    setOrders(readOrderHistory());
     setRefreshingOrders(true);
-    setOrders(await syncOrderHistoryStatuses(stored));
+    // Senza rete lo storico resta com'è: meglio un ordine vecchio che un QR sparito.
+    const { data, error } = await supabase.rpc("get_ordering_status");
+    const stored = error ? readOrderHistory() : pruneOrderHistory(openEventId(data));
+    setOrders(stored);
+    if (stored.length > 0) setOrders(await syncOrderHistoryStatuses(stored));
     setRefreshingOrders(false);
   }
 
@@ -70,21 +75,28 @@ export function Navbar() {
           </a>
         </nav>
 
-        <div className="relative h-10 w-10 sm:hidden">
+        <div className="relative sm:hidden">
           <button
             ref={toggleRef}
             type="button"
             onClick={openMenu}
-            aria-label="Apri menu"
+            aria-label="Apri i miei ordini"
             aria-expanded={menuOpen}
             aria-controls="mobile-navigation-menu"
-            className="glass-elevated glass-elevated--strong absolute inset-0 flex h-10 w-10 items-center justify-center rounded-full"
+            className="glass-elevated glass-elevated--strong flex h-10 items-center gap-2 rounded-(--radius-pill) px-4 text-sm font-semibold"
           >
-            <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
-              <line x1="0" y1="1" x2="18" y2="1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              <line x1="0" y1="7" x2="13" y2="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              <line x1="0" y1="13" x2="8" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            {/* Scontrino: rimanda subito agli ordini, a differenza dell'hamburger generico. */}
+            <svg width="16" height="18" viewBox="0 0 16 18" fill="none" aria-hidden="true">
+              <path
+                d="M2 1h12v16l-2-1.5L10 17l-2-1.5L6 17l-2-1.5L2 17V1Z"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+              />
+              <line x1="5" y1="6" x2="11" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              <line x1="5" y1="10" x2="9" y2="10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
+            Ordini
           </button>
 
           {menuOpen && (
@@ -99,15 +111,7 @@ export function Navbar() {
                 id="mobile-navigation-menu"
                 className="glass-elevated glass-elevated--strong absolute right-0 top-12 z-50 w-[min(20rem,calc(100vw-2rem))] rounded-lg p-3"
               >
-                <a
-                  href="#programma"
-                  onClick={() => setMenuOpen(false)}
-                  className="surface-solid flex min-h-12 items-center justify-center rounded-md px-4 text-sm font-semibold"
-                >
-                  Programma
-                </a>
-
-                <div className="mt-3 rounded-md border border-(--surface-border) bg-(--surface-solid) p-3">
+                <div className="rounded-md border border-(--surface-border) bg-(--surface-solid) p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold">I miei ordini</p>
                     <button
