@@ -34,19 +34,25 @@ export function useSupabaseRows<T>({
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
-  async function refetch() {
-    const requestId = ++requestIdRef.current;
-    setError(null);
+  /** Legge le righe senza toccare lo stato: per chi fonde la rilettura in una bozza. */
+  async function fetchRows() {
     let query = supabase.from(table).select(select);
     for (const { column, ascending = true } of orderBy) {
       query = query.order(column, { ascending });
     }
     const { data, error } = await query;
+    return { data: error ? null : ((data ?? null) as T[] | null), error };
+  }
+
+  async function refetch() {
+    const requestId = ++requestIdRef.current;
+    setError(null);
+    const { data, error } = await fetchRows();
     if (requestId !== requestIdRef.current) return null;
     if (error) setError(error.message);
-    else if (data) setRows(data as T[]);
+    else if (data) setRows(data);
     setLoading(false);
-    return !error && data ? (data as T[]) : null;
+    return data;
   }
 
   useEffect(() => {
@@ -68,5 +74,5 @@ export function useSupabaseRows<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, realtime]);
 
-  return { rows, setRows, loading, error, refetch };
+  return { rows, setRows, loading, error, refetch, fetchRows };
 }

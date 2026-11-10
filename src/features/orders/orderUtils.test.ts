@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { eventReportToCsv, orderingReasonMessage, parseQrPayload, submitFailure, type EventReport } from "./orderUtils";
+import type { Cart } from "./cart";
+import {
+  cartChangeMessage,
+  eventReportToCsv,
+  orderingReasonMessage,
+  parseQrPayload,
+  submitFailure,
+  type EventReport,
+} from "./orderUtils";
 
 describe("parseQrPayload", () => {
   it("estrae il token dal QR LAG", () => {
@@ -77,6 +85,8 @@ describe("submitFailure", () => {
   it("scarta la richiesta sui rifiuti definitivi e non invita a recuperarla", () => {
     for (const code of [
       "stock_unavailable:Birra",
+      "unknown_menu_item",
+      "price_changed",
       "public_order_quantity_limit",
       "order_total_too_high",
       "event_changed",
@@ -103,5 +113,31 @@ describe("submitFailure", () => {
     expect(submitFailure("public_order_quantity_limit", { maxItem: 10, maxOrder: 30 }).message).toContain(
       "10 pezzi per prodotto o 30 articoli",
     );
+    // Menu cambiato mentre il cliente ordinava: il carrello va riallineato al menu riletto.
+    for (const code of ["unknown_menu_item", "price_changed"])
+      expect(submitFailure(code, limits).reloadCatalog, code).toBe(true);
+  });
+});
+
+describe("cartChangeMessage", () => {
+  const line = { id: "b", name: "Birra", category: "bevande", subcategory: "birre", price: 5, qty: 1, allergens: [] };
+
+  it("dice che cosa è stato tolto, ridotto e il nuovo totale", () => {
+    const message = cartChangeMessage({
+      cart: { b: line } as Cart,
+      removed: ["Panino"],
+      reduced: ["Birra"],
+      repriced: true,
+      changed: true,
+    });
+    expect(message).toContain("tolto dal carrello: Panino");
+    expect(message).toContain("porzioni rimaste: Birra");
+    expect(message).toMatch(/nuovo totale è 5,00/);
+    expect(message).toContain("Controlla il carrello");
+  });
+
+  it("non invita a controllare un carrello rimasto vuoto", () => {
+    const message = cartChangeMessage({ cart: {}, removed: ["Panino"], reduced: [], repriced: false, changed: true });
+    expect(message).toBe("Non più disponibile, tolto dal carrello: Panino.");
   });
 });

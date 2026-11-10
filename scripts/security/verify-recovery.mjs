@@ -8,7 +8,7 @@ for (const role of ["anon", "authenticated"]) {
   assert.equal(
     (
       await db.query(
-        "select has_function_privilege($1,'public.submit_public_order(text,text,jsonb,uuid,text,text,uuid,text,text)','EXECUTE') allowed",
+        "select has_function_privilege($1,'public.submit_public_order(text,text,jsonb,uuid,text,text,uuid,text,text,numeric)','EXECUTE') allowed",
         [role],
       )
     ).rows[0].allowed,

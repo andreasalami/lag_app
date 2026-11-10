@@ -4,7 +4,7 @@ import { Modal } from "../../components/ui/Modal";
 import { TurnstileChallenge } from "../../components/ui/TurnstileChallenge";
 import { appHref, pollWhileVisible } from "../../lib/browser";
 import { supabase } from "../../lib/supabaseClient";
-import { addToCart, cartTotal, removeOneFromCart, type Cart } from "./cart";
+import { addToCart, cartTotal, reconcileCart, removeOneFromCart, type Cart } from "./cart";
 import { CartPanel } from "./CartPanel";
 import {
   addOrderToHistory,
@@ -20,7 +20,7 @@ import {
 } from "./orderHistory";
 import { OrderMenu } from "./OrderMenu";
 import { getOrCreateRecoveryToken, recoveryOrderQr, saveRecoveryToken } from "./orderRecovery";
-import { ALLERGENS, orderingReasonMessage, priceFormatter, submitFailure } from "./orderUtils";
+import { ALLERGENS, cartChangeMessage, orderingReasonMessage, priceFormatter, submitFailure } from "./orderUtils";
 import {
   clearPendingOrder,
   clearPendingOrdersOutside,
@@ -125,6 +125,20 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
   }, [startFresh]);
 
   useEffect(() => pollWhileVisible(() => void refreshOrderStatuses(), 30_000), [refreshOrderStatuses]);
+
+  // Il menu può cambiare mentre il cliente ordina (prodotto sospeso, eliminato, terminato o con
+  // un prezzo nuovo). A ogni rilettura il carrello si riallinea e dice che cosa è cambiato:
+  // l'ordine parte solo con prodotti disponibili e con un totale che il cliente ha visto.
+  useEffect(() => {
+    if (!catalog?.accepting) return;
+    const result = reconcileCart(cart, catalog.items);
+    if (!result.changed) return;
+    setCart(result.cart);
+    setCartError(cartChangeMessage(result));
+    setCartExpanded(true);
+    // Solo quando arriva un catalogo nuovo: le modifiche del cliente al carrello non lo riattivano.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog]);
 
   const lines = useMemo(() => Object.values(cart), [cart]);
   const total = cartTotal(lines);
@@ -247,6 +261,9 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
             p_expected_event_id: pending.eventId,
             p_recovery_token: pending.recoveryToken ?? null,
             p_preparation_mode: pending.preparationMode ?? "immediate",
+            // Il totale che il cliente ha confermato: se un prezzo è cambiato il server rifiuta
+            // con price_changed e il cliente rivede il carrello aggiornato.
+            p_expected_total: Math.round(cartTotal(pending.items) * 100) / 100,
           },
         },
       });
@@ -472,6 +489,13 @@ export function OrderPage({ startFresh = false }: { startFresh?: boolean }) {
         aria-hidden="true"
         className="absolute left-[-10000px] h-px w-px overflow-hidden"
       />
+
+      {/* Con il carrello svuotato da una modifica al menu il pannello del carrello non c'è: l'avviso va qui. */}
+      {cartError && lines.length === 0 && (
+        <p role="alert" className="mt-4 rounded-sm border border-(--state-warning) p-3 text-sm text-(--state-warning)">
+          {cartError}
+        </p>
+      )}
 
       {loadError ? (
         <div className="mt-6 text-sm text-(--state-error)">

@@ -16,7 +16,10 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "push:keys": "node scripts/generate-vapid-keys.mjs",
-    "stress:orders": "node --env-file-if-exists=.env.stress.local scripts/stress/orders.mjs"
+    "stress:orders": "node --env-file-if-exists=.env.stress.local scripts/stress/orders.mjs",
+    "stress:edge-orders": "node --env-file-if-exists=.env.stress.local scripts/stress/edge-orders.mjs",
+    "stress:edge-staff": "node --env-file-if-exists=.env.stress.local scripts/stress/edge-staff.mjs",
+    "stress:traffic": "node --env-file=.env.stress.local scripts/stress/traffic.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

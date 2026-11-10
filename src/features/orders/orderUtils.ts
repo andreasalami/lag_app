@@ -1,5 +1,5 @@
 import type { OrderLine, SubmittedOrder } from "./types";
-import { lineTotal } from "./cart";
+import { cartTotal, lineTotal, type reconcileCart } from "./cart";
 
 export const priceFormatter = new Intl.NumberFormat("it-IT", {
   style: "currency",
@@ -76,6 +76,19 @@ const SUBMIT_FAILURES: {
       `Disponibilità cambiata: ${code.split("stock_unavailable:")[1] ?? "un prodotto è terminato"}. Aggiorna il carrello e riprova.`,
   },
   {
+    match: /unknown_menu_item/,
+    definitive: true,
+    reloadCatalog: true,
+    message: () => "Un prodotto del carrello non è più in menu: l’ordine non è stato inviato. Controlla il carrello.",
+  },
+  {
+    match: /price_changed/,
+    definitive: true,
+    reloadCatalog: true,
+    message: () =>
+      "Un prezzo è cambiato mentre ordinavi: l’ordine non è stato inviato. Controlla il nuovo totale e conferma di nuovo.",
+  },
+  {
     match: /public_order_quantity_limit/,
     definitive: true,
     message: (_, limits) =>
@@ -121,6 +134,17 @@ export function submitFailure(code: string, limits: Limits): SubmitFailure {
         "Non riesco a verificare l’esito. Premi Recupera ordine: useremo la stessa richiesta, senza creare un duplicato.",
     };
   return { definitive: rule.definitive, message: rule.message(code, limits), reloadCatalog: rule.reloadCatalog };
+}
+
+/** Spiega al cliente che cosa è cambiato nel carrello dopo una rilettura del menu. */
+export function cartChangeMessage(result: ReturnType<typeof reconcileCart>) {
+  const parts: string[] = [];
+  if (result.removed.length > 0) parts.push(`Non più disponibile, tolto dal carrello: ${result.removed.join(", ")}.`);
+  if (result.reduced.length > 0) parts.push(`Quantità ridotta alle porzioni rimaste: ${result.reduced.join(", ")}.`);
+  const lines = Object.values(result.cart);
+  if (result.repriced) parts.push(`Prezzi aggiornati: il nuovo totale è ${priceFormatter.format(cartTotal(lines))}.`);
+  if (lines.length > 0) parts.push("Controlla il carrello prima di inviare.");
+  return parts.join(" ");
 }
 
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

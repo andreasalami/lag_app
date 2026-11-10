@@ -31,19 +31,20 @@ export function OrderMenu({
             <div className="grid gap-2 sm:grid-cols-2">
               {sectionItems.map((item) => {
                 const almostFinished =
+                  !item.suspended &&
                   item.available_portions !== null &&
                   item.stock_capacity !== null &&
                   item.available_portions > 0 &&
                   item.available_portions <= Math.ceil(item.stock_capacity * 0.2);
-                const finished = item.available_portions === 0;
+                const finished = !item.suspended && item.available_portions === 0;
                 // Le scorte compaiono solo qui: il menu pubblico resta fisso per la serata.
-                const allInCart = !finished && remainingStock(cart, item) === 0;
+                const allInCart = !item.suspended && !finished && remainingStock(cart, item) === 0;
                 return (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => onAdd(item)}
-                    disabled={finished || allInCart}
+                    disabled={item.suspended || finished || allInCart}
                     className="surface-solid flex min-h-20 items-start justify-between gap-3 rounded-md p-3 text-left transition-colors hover:bg-(--surface-solid-hover) disabled:cursor-not-allowed disabled:opacity-55"
                   >
                     <span>
@@ -55,6 +56,9 @@ export function OrderMenu({
                       )}
                       {almostFinished && (
                         <span className="mt-1 block text-xs text-(--state-warning)">Quasi terminato</span>
+                      )}
+                      {item.suspended && (
+                        <span className="mt-1 block text-xs text-(--state-warning)">Non disponibile al momento</span>
                       )}
                       {finished && <span className="mt-1 block text-xs text-(--state-error)">Terminato</span>}
                       {allInCart && (

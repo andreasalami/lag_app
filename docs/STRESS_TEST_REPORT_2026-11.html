@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stress test LAG</title>
+    <meta
+      name="description"
+      content="Risultati dello stress test di novembre 2026: casi limite locali e traffico reale su un progetto Supabase di prova."
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f9f9f7;
+        --surface: #fcfcfb;
+        --ink: #0b0b0b;
+        --ink-2: #52514e;
+        --muted: #898781;
+        --grid: #e1e0d9;
+        --axis: #c3c2b7;
+        --border: rgba(11, 11, 11, 0.1);
+        --series-1: #2a78d6;
+        --good: #0ca30c;
+        --good-text: #006300;
+        --warning: #fab219;
+        --serious: #ec835a;
+        --critical: #d03b3b;
+        --chip-ink: #ffffff;
+        --wash-good: rgba(12, 163, 12, 0.08);
+        --wash-critical: rgba(208, 59, 59, 0.07);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          color-scheme: dark;
+          --page: #0d0d0d;
+          --surface: #1a1a19;
+          --ink: #f0efec;
+          --ink-2: #c3c2b7;
+          --muted: #898781;
+          --grid: #2c2c2a;
+          --axis: #383835;
+          --border: rgba(255, 255, 255, 0.1);
+          --series-1: #3987e5;
+          --good-text: #0ca30c;
+          --wash-good: rgba(12, 163, 12, 0.12);
+          --wash-critical: rgba(208, 59, 59, 0.12);
+        }
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --page: #0d0d0d;
+        --surface: #1a1a19;
+        --ink: #f0efec;
+        --ink-2: #c3c2b7;
+        --muted: #898781;
+        --grid: #2c2c2a;
+        --axis: #383835;
+        --border: rgba(255, 255, 255, 0.1);
+        --series-1: #3987e5;
+        --good-text: #0ca30c;
+        --wash-good: rgba(12, 163, 12, 0.12);
+        --wash-critical: rgba(208, 59, 59, 0.12);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+      }
+      body {
+        background: var(--page);
+        color: var(--ink);
+        font:
+          16px/1.55 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 40px 16px 64px;
+      }
+      h1 {
+        font-size: clamp(26px, 4.6vw, 40px);
+        line-height: 1.15;
+        margin: 6px 0 12px;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        font-size: 22px;
+        margin: 0 0 6px;
+      }
+      h3 {
+        font-size: 16px;
+        margin: 0 0 4px;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      .eyebrow {
+        color: var(--muted);
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .lede {
+        color: var(--ink-2);
+        font-size: 18px;
+        max-width: 46em;
+      }
+      section {
+        margin-top: 44px;
+      }
+      .section-note {
+        color: var(--ink-2);
+        margin-bottom: 16px;
+        max-width: 48em;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+      }
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+        margin-top: 24px;
+      }
+      .tile {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      .tile .label {
+        color: var(--ink-2);
+        font-size: 14px;
+      }
+      .tile .value {
+        font-size: 34px;
+        font-weight: 600;
+        line-height: 1.15;
+        margin: 6px 0 4px;
+      }
+      .tile .sub {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+      .tile .chip {
+        white-space: normal;
+        align-items: flex-start;
+      }
+      .dot {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        display: inline-grid;
+        place-items: center;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--chip-ink);
+      }
+      .dot.good {
+        background: var(--good);
+      }
+      .dot.warning {
+        background: var(--warning);
+        color: #0b0b0b;
+      }
+      .dot.serious {
+        background: var(--serious);
+      }
+      .dot.critical {
+        background: var(--critical);
+      }
+      .split {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 12px;
+      }
+      .split .card.good {
+        background: linear-gradient(var(--wash-good), var(--wash-good)), var(--surface);
+      }
+      .split .card.bad {
+        background: linear-gradient(var(--wash-critical), var(--wash-critical)), var(--surface);
+      }
+      ul.items {
+        list-style: none;
+        padding: 0;
+        margin: 10px 0 0;
+      }
+      ul.items li {
+        display: grid;
+        grid-template-columns: 22px 1fr;
+        gap: 8px;
+        padding: 7px 0;
+        border-top: 1px solid var(--border);
+      }
+      ul.items li:first-child {
+        border-top: 0;
+      }
+      ul.items .dot {
+        margin-top: 3px;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 14px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px 12px;
+        border-top: 1px solid var(--border);
+        vertical-align: top;
+      }
+      thead th {
+        border-top: 0;
+        color: var(--ink-2);
+        font-weight: 600;
+        font-size: 13px;
+      }
+      td.num,
+      th.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .chart-card {
+        padding: 18px 18px 8px;
+      }
+      .chart-title {
+        font-weight: 600;
+      }
+      .chart-sub {
+        color: var(--ink-2);
+        font-size: 14px;
+        margin-bottom: 8px;
+      }
+      .chart {
+        position: relative;
+        width: 100%;
+      }
+      .chart svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+      }
+      .chart text {
+        font:
+          12px system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        fill: var(--muted);
+      }
+      .chart text.anno {
+        fill: var(--ink-2);
+        font-weight: 600;
+      }
+      .tooltip {
+        position: absolute;
+        pointer-events: none;
+        background: var(--surface);
+        color: var(--ink);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 13px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 0.1s;
+      }
+      .tooltip strong {
+        font-variant-numeric: tabular-nums;
+      }
+      details {
+        margin: 8px 0 10px;
+      }
+      details summary {
+        cursor: pointer;
+        color: var(--ink-2);
+        font-size: 14px;
+      }
+      details .table-wrap {
+        margin-top: 8px;
+        max-height: 280px;
+        overflow: auto;
+      }
+      .evidence {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 12px;
+      }
+      .evidence .card .big {
+        font-size: 26px;
+        font-weight: 600;
+        margin: 4px 0;
+      }
+      .evidence .card p {
+        color: var(--ink-2);
+        font-size: 14px;
+        margin: 0;
+      }
+      .verdict {
+        margin-top: 14px;
+        border-left: 3px solid var(--series-1);
+        padding: 4px 0 4px 14px;
+        max-width: 48em;
+      }
+      .sev-group {
+        margin-top: 14px;
+      }
+      .sev-group h3 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .finding {
+        padding: 10px 0;
+        border-top: 1px solid var(--border);
+      }
+      .finding:first-of-type {
+        border-top: 0;
+      }
+      .finding .what {
+        font-weight: 600;
+      }
+      .finding .effect {
+        color: var(--ink-2);
+        font-size: 14px;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 14px;
+        font-size: 14px;
+      }
+      .kv dt {
+        color: var(--ink-2);
+      }
+      .kv dd {
+        margin: 0;
+      }
+      footer {
+        margin-top: 48px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      code {
+        font:
+          13px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        background: var(--page);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0 4px;
+      }
+      @media (max-width: 520px) {
+        main {
+          padding-top: 24px;
+        }
+        .tile .value {
+          font-size: 28px;
+        }
+        th,
+        td {
+          padding: 8px 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow">LAG app · stress test · novembre 2026</div>
+        <h1>Gli ordini restano sempre corretti. Il piano Free non regge una serata intera.</h1>
+        <p class="lede">
+          Prove fatte dal 3 al 6 novembre 2026: casi limite su un database locale usa e getta, poi traffico realistico
+          su un progetto Supabase di prova separato. La produzione non è mai stata toccata in scrittura.
+        </p>
+      </header>
+
+      <div class="tiles" role="list">
+        <div class="tile" role="listitem">
+          <div class="label">Ordini incoerenti</div>
+          <div class="value">0</div>
+          <div class="chip">
+            <span class="dot good" aria-hidden="true">✓</span>su 152 ordini cloud e 49.195 chiamate locali
+          </div>
+        </div>
+        <div class="tile" role="listitem">
+          <div class="label">Risposta tipica prima del blocco</div>
+          <div class="value">55 ms</div>
+          <div class="chip"><span class="dot good" aria-hidden="true">✓</span>95% entro 157 ms</div>
+        </div>
+        <div class="tile" role="listitem">
+          <div class="label">Tenuta al ritmo di una serata (Free)</div>
+          <div class="value">≈ 7 min</div>
+          <div class="chip"><span class="dot critical" aria-hidden="true">✕</span>poi blocco, 2 volte su 2</div>
+        </div>
+        <div class="tile" role="listitem">
+          <div class="label">Risultato del torneo a 2.500 telefoni</div>
+          <div class="value">10 s</div>
+          <div class="chip"><span class="dot critical" aria-hidden="true">✕</span>al blocco totale</div>
+        </div>
+      </div>
+
+      <section aria-labelledby="glance">
+        <h2 id="glance">A colpo d'occhio</h2>
+        <div class="split">
+          <div class="card good">
+            <h3>Funziona</h3>
+            <ul class="items">
+              <li>
+                <span class="dot good" aria-hidden="true">✓</span
+                ><span
+                  >Ordini, pagamenti, consegne e scorte restano coerenti anche con migliaia di operazioni concorrenti e
+                  durante i blocchi.</span
+                >
+              </li>
+              <li>
+                <span class="dot good" aria-hidden="true">✓</span
+                ><span>Finché il server risponde, è veloce: circa 55 ms tipici con 2.500 telefoni simulati.</span>
+              </li>
+              <li>
+                <span class="dot good" aria-hidden="true">✓</span
+                ><span>500 persone che aprono l'app nello stesso minuto: zero errori.</span>
+              </li>
+              <li>
+                <span class="dot good" aria-hidden="true">✓</span
+                ><span>Lo staff si riconnette al tempo reale in meno di mezzo secondo.</span>
+              </li>
+              <li>
+                <span class="dot good" aria-hidden="true">✓</span
+                ><span>Aggiungere prodotti, cambiare prezzi e spostarli di categoria durante il servizio.</span>
+              </li>
+            </ul>
+          </div>
+          <div class="card bad">
+            <h3>Non funziona</h3>
+            <ul class="items">
+              <li>
+                <span class="dot critical" aria-hidden="true">✕</span
+                ><span
+                  >Il piano Free si blocca dopo circa 7 minuti al ritmo di una serata, e in 10 secondi quando tutti
+                  guardano il torneo.</span
+                >
+              </li>
+              <li>
+                <span class="dot critical" aria-hidden="true">✕</span
+                ><span
+                  >Eliminare un prodotto presente in un ordine non pagato blocca gli ordini per tutti dopo 60
+                  minuti.</span
+                >
+              </li>
+              <li>
+                <span class="dot serious" aria-hidden="true">!</span
+                ><span
+                  >Due dispositivi che modificano menu o scaletta insieme si annullano a vicenda, senza avviso.</span
+                >
+              </li>
+              <li>
+                <span class="dot serious" aria-hidden="true">!</span
+                ><span>Torneo: circa 3 modifiche su 4 si perdono con più gestori che salvano spesso.</span>
+              </li>
+              <li>
+                <span class="dot serious" aria-hidden="true">!</span
+                ><span
+                  >Un prodotto sospeso torna disponibile da solo quando un ordine non pagato viene annullato o
+                  scade.</span
+                >
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="cloud">
+        <h2 id="cloud">Traffico reale sul cloud</h2>
+        <p class="section-note">
+          Progetto Supabase di prova sul piano Free, macchina Nano, Europa centrale. Carico calibrato sull'evento di
+          giugno 2027: 2.500 telefoni attivi, 30 dispositivi dello staff, sotto le 200 richieste al secondo. Ogni prova
+          si ferma da sola al primo segnale di degrado.
+        </p>
+
+        <div class="card chart-card">
+          <div class="chart-title">Serata reale, seconda prova: risposte ricevute al secondo</div>
+          <div class="chart-sub">
+            2.500 telefoni simulati più lo staff. Stabile per 7 minuti e mezzo, poi in 5 secondi le risposte scendono a
+            zero.
+          </div>
+          <div class="chart" id="evening-chart"></div>
+          <details>
+            <summary>Dati del grafico</summary>
+            <div class="table-wrap">
+              <table id="evening-table">
+                <thead>
+                  <tr>
+                    <th class="num">Secondo</th>
+                    <th class="num">Risposte al secondo</th>
+                    <th class="num">Richieste in attesa</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+
+        <div class="table-wrap" style="margin-top: 12px">
+          <table>
+            <thead>
+              <tr>
+                <th>Prova</th>
+                <th>Carico</th>
+                <th>Esito</th>
+                <th class="num">Richieste</th>
+                <th class="num">95% entro</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Solo staff, 5 min</td>
+                <td>30 dispositivi</td>
+                <td>
+                  <span class="chip"><span class="dot good" aria-hidden="true">✓</span>Passa</span>
+                </td>
+                <td class="num">870</td>
+                <td class="num">179 ms</td>
+              </tr>
+              <tr>
+                <td>Riconnessione staff</td>
+                <td>staff + 17 ordini/min</td>
+                <td>
+                  <span class="chip"><span class="dot good" aria-hidden="true">✓</span>Passa</span>
+                </td>
+                <td class="num">3.476</td>
+                <td class="num">211 ms</td>
+              </tr>
+              <tr>
+                <td>500 aperture in 1 min</td>
+                <td>500 telefoni</td>
+                <td>
+                  <span class="chip"><span class="dot good" aria-hidden="true">✓</span>Passa</span>
+                </td>
+                <td class="num">2.810</td>
+                <td class="num">126 ms</td>
+              </tr>
+              <tr>
+                <td>Serata reale, prova 1</td>
+                <td>2.500 telefoni, 9 ordini/min</td>
+                <td>
+                  <span class="chip"><span class="dot critical" aria-hidden="true">✕</span>Blocco a 7 min</span>
+                </td>
+                <td class="num">40.887</td>
+                <td class="num">153 ms</td>
+              </tr>
+              <tr>
+                <td>Serata reale, prova 2</td>
+                <td>2.500 telefoni, 9 ordini/min</td>
+                <td>
+                  <span class="chip"><span class="dot critical" aria-hidden="true">✕</span>Blocco a 7 min 35 s</span>
+                </td>
+                <td class="num">48.629</td>
+                <td class="num">157 ms</td>
+              </tr>
+              <tr>
+                <td>Risultato del torneo</td>
+                <td>2.500 telefoni in 30 s</td>
+                <td>
+                  <span class="chip"><span class="dot critical" aria-hidden="true">✕</span>Blocco a 10 s</span>
+                </td>
+                <td class="num">181</td>
+                <td class="num">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="section-note" style="margin-top: 10px">
+          Il "95% entro" è misurato prima del blocco. Non sono partite la rampa a gradini, il caso peggiore a 50 ordini
+          al minuto e le modifiche dello staff sotto carico: avrebbero solo fatto scattare di nuovo il blocco.
+        </p>
+      </section>
+
+      <section aria-labelledby="why">
+        <h2 id="why">Perché si blocca</h2>
+        <p class="section-note">Dai grafici e dai log del progetto di prova, letti dopo le prove.</p>
+        <div class="evidence">
+          <div class="card">
+            <h3>Il gateway fa passare</h3>
+            <div class="big">8–43 s</div>
+            <p>
+              Fino al blocco il gateway Supabase registra 100–130 richieste al secondo, servite in circa 20 ms. Poi le
+              poche richieste completate aspettano fino a 43 secondi la risposta del progetto.
+            </p>
+          </div>
+          <div class="card">
+            <h3>La memoria è finita</h3>
+            <div class="big">0,5 GB</div>
+            <p>
+              La macchina Nano ha al massimo 0,5 GB di RAM e lavora con circa 500 MB in swap. Supabase segna l'impegno
+              di memoria, 1,7 GB, come "SEVERE".
+            </p>
+          </div>
+          <div class="card">
+            <h3>Il disco si satura</h3>
+            <div class="big">60–91%</div>
+            <p>
+              Subito dopo ogni blocco la macchina passa fino al 91% del tempo ad aspettare il disco. È il segno tipico
+              dello swap.
+            </p>
+          </div>
+          <div class="card">
+            <h3>CPU e database non c'entrano</h3>
+            <div class="big">15–40%</div>
+            <p>
+              La CPU sotto carico è impegnata al 15–40%. Le query più lente arrivano a circa 3 secondi, quelle tipiche a
+              3–14 ms.
+            </p>
+          </div>
+        </div>
+        <p class="verdict">
+          <strong>Conclusione, confidenza media-alta:</strong> il collo di bottiglia è la memoria della macchina Free,
+          non una protezione per indirizzo IP. Il blocco quindi colpirebbe anche 2.500 telefoni veri, da qualunque rete
+          arrivino. Il sistema non risponde con un errore: resta in silenzio e riparte da solo dopo un minuto o poco
+          più.
+        </p>
+        <p class="section-note">
+          <strong>Non ancora noto:</strong> quanta memoria basta. Si saprà solo ripetendo le stesse prove su una
+          macchina più grande.
+        </p>
+      </section>
+
+      <section aria-labelledby="plans">
+        <h2 id="plans">Free o Pro</h2>
+        <p class="section-note">
+          Valori dal sito Supabase, controllati il 7 novembre 2026. Il prezzo è in dollari, IVA esclusa.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Voce</th>
+                <th>Free</th>
+                <th>Pro</th>
+                <th>Per l'evento</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Prezzo</td>
+                <td>0</td>
+                <td>25 $ al mese, circa 26–27 € con IVA</td>
+                <td>si può attivare per un mese e poi disdire</td>
+              </tr>
+              <tr>
+                <td>Macchina</td>
+                <td>Nano, fino a 0,5 GB</td>
+                <td>
+                  Micro, 1 GB, compresa nei 10 $ di crediti. Small, 2 GB: circa 15 $ al mese, quindi 5 $ oltre i crediti
+                </td>
+                <td>
+                  <span class="chip"><span class="dot critical" aria-hidden="true">✕</span>Nano insufficiente</span>
+                </td>
+              </tr>
+              <tr>
+                <td>Traffico in uscita</td>
+                <td>5 GB al mese</td>
+                <td>250 GB al mese</td>
+                <td>
+                  <span class="chip"
+                    ><span class="dot warning" aria-hidden="true">!</span>stima fino a circa 4 GB per l'evento</span
+                  >
+                </td>
+              </tr>
+              <tr>
+                <td>Connessioni in tempo reale</td>
+                <td>200</td>
+                <td>500</td>
+                <td>
+                  <span class="chip"
+                    ><span class="dot good" aria-hidden="true">✓</span>le usa solo lo staff, circa 21 dispositivi</span
+                  >
+                </td>
+              </tr>
+              <tr>
+                <td>Log consultabili</td>
+                <td>1 giorno</td>
+                <td>7 giorni</td>
+                <td>utile per capire i problemi dopo la serata</td>
+              </tr>
+              <tr>
+                <td>Pausa per inattività</td>
+                <td>dopo 1 settimana</td>
+                <td>mai</td>
+                <td>sul Free va riattivato prima dell'evento</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="verdict">
+          <strong>Indicazione:</strong> per l'evento serve il Pro. Prima di pagare il mese dell'evento conviene ripetere
+          le stesse prove sul Pro, per sapere se basta la Micro o serve la Small. Anche quella prova costa il mese di
+          Pro.
+        </p>
+        <p class="section-note">
+          La stima del traffico vale circa 0,35 GB per ogni ora con 2.500 telefoni attivi, per due serate da circa 6
+          ore. È un tetto alto, perché suppone tutti i telefoni attivi per tutta la sera.
+        </p>
+      </section>
+
+      <section aria-labelledby="edge">
+        <h2 id="edge">Casi limite in locale</h2>
+        <p class="section-note">
+          Database Postgres locale usa e getta, con lo schema reale dell'app. Ordini: 456 round e 43.429 chiamate, con 4
+          seed diversi più una ripetizione. Modifiche dello staff: 5.766 chiamate, con 3 seed più una ripetizione.
+          Nessuna correzione applicata: questo report elenca e basta.
+        </p>
+
+        <div class="card">
+          <div class="sev-group">
+            <h3><span class="dot critical" aria-hidden="true">✕</span>Gravi</h3>
+            <div class="finding">
+              <div class="what">Prodotto eliminato mentre è in un ordine non pagato</div>
+              <div class="effect">
+                L'ordine non si può più annullare. Dopo 60 minuti la scadenza automatica va in errore, e con lei stato,
+                menu, invio degli ordini e coda della cassa, per tutti.
+              </div>
+            </div>
+            <div class="finding">
+              <div class="what">L'unico modo per sbloccare è chiudere e riaprire l'evento</div>
+              <div class="effect">
+                Così però gli ordini pagati e non ancora ritirati risultano consegnati, e non si possono più evadere.
+              </div>
+            </div>
+          </div>
+          <div class="sev-group">
+            <h3><span class="dot serious" aria-hidden="true">!</span>Medi</h3>
+            <div class="finding">
+              <div class="what">La sospensione di un prodotto si annulla da sola</div>
+              <div class="effect">
+                Con scorta 0, l'annullamento o la scadenza di un ordine non pagato rimette disponibile il prodotto.
+                Inoltre, se un prodotto si vende mentre lo staff lo sospende, il salvataggio va ripetuto. Per la birra
+                più venduta il primo tentativo riesce circa 7 volte su 10 se tra apertura e salvataggio passano 5
+                secondi, circa 1 volta su 8 se ne passano 30.
+              </div>
+            </div>
+            <div class="finding">
+              <div class="what">Menu e scaletta: modifiche perse senza avviso</div>
+              <div class="effect">
+                Due dispositivi che cambiano campi diversi dello stesso elemento si annullano a vicenda. Una modifica a
+                un elemento già eliminato risponde "ok" senza salvare nulla.
+              </div>
+            </div>
+            <div class="finding">
+              <div class="what">Torneo: circa il 74% dei salvataggi respinto per conflitto</div>
+              <div class="effect">
+                Con più gestori che salvano ogni 2–30 secondi, seguendo l'invito a ricaricare si perdono circa 3
+                modifiche su 4. Non ci sono sovrascritture silenziose. Dopo che un altro salvataggio va in onda, l'app
+                continua a mostrare "in onda" su uno che non lo è più.
+              </div>
+            </div>
+            <div class="finding">
+              <div class="what">Blocco reciproco tra eliminazione di un prodotto e ordine (deadlock)</div>
+              <div class="effect">
+                Circa l'1,3% dei casi, ma solo quando le due operazioni coincidono apposta. L'operazione fallisce e va
+                ripetuta.
+              </div>
+            </div>
+          </div>
+          <div class="sev-group">
+            <h3><span class="dot warning" aria-hidden="true">!</span>Lievi</h3>
+            <div class="finding">
+              <div class="what">Messaggi poco chiari</div>
+              <div class="effect">
+                Un ruolo senza diritti sul menu riceve "ok" senza che cambi nulla. Il cliente con un prodotto eliminato
+                nel carrello vede un errore generico. Alcuni input sbagliati restituiscono errori tecnici del database
+                invece di messaggi comprensibili, in 5 casi.
+              </div>
+            </div>
+            <div class="finding">
+              <div class="what">Preparazione "dopo" su un ordine di sole bevande</div>
+              <div class="effect">La risposta all'invio non coincide con quanto salvato.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="cash">
+        <h2 id="cash">Cassa: un conto da tenere d'occhio</h2>
+        <div class="card">
+          <dl class="kv">
+            <dt>Ipotesi</dt>
+            <dd>5 casse, circa 20 secondi per incassare un ordine.</dd>
+            <dt>Capacità</dt>
+            <dd>circa 15 ordini al minuto.</dd>
+            <dt>Limite in coda</dt>
+            <dd>100 ordini non pagati: impostazione dell'evento, modificabile da 10 a 1.000.</dd>
+            <dt>Picco a 17/min</dt>
+            <dd>la coda cresce di circa 2 ordini al minuto e regge per tutta la serata.</dd>
+            <dt>Picco a 50/min</dt>
+            <dd>
+              la coda cresce di circa 35 al minuto. Dopo circa 3 minuti i nuovi ordini vengono rifiutati per coda piena.
+            </dd>
+          </dl>
+          <p class="section-note" style="margin: 12px 0 0">
+            I tempi di cassa sono ipotesi, non misure: conviene cronometrarli a una prova generale.
+          </p>
+        </div>
+      </section>
+
+      <section aria-labelledby="method">
+        <h2 id="method">Come è stato fatto</h2>
+        <div class="card">
+          <dl class="kv">
+            <dt>Locale</dt>
+            <dd>
+              Postgres 17 usa e getta, solo socket locale, schema dell'app. Script <code>edge-orders.mjs</code> ed
+              <code>edge-staff.mjs</code>.
+            </dd>
+            <dt>Cloud</dt>
+            <dd>
+              Progetto Supabase "lag-stress", separato dalla produzione, dati sintetici. Script
+              <code>traffic.mjs</code>, che rifiuta il progetto di produzione.
+            </dd>
+            <dt>Limiti</dt>
+            <dd>
+              Tutto il traffico partiva da un solo Mac, e i grafici Supabase hanno un punto al minuto. Il traffico usato
+              è stato di 100 MB su 5 GB.
+            </dd>
+            <dt>Non fatto</dt>
+            <dd>Nessuna correzione. Nessuna verifica in sola lettura sulla produzione.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <footer>
+        Report generato il 7 novembre 2026 da Claude per Andrea. Dati grezzi in <code>stress-results.local/</code>, che
+        è escluso da git.
+      </footer>
+    </main>
+
+    <script>
+      // Serata reale, seconda prova: [secondo, risposte nei 5 s, errori, in attesa].
+      const EVENING = [
+        [5, 2, 0, 1],
+        [10, 58, 0, 30],
+        [15, 482, 0, 13],
+        [20, 465, 0, 1],
+        [25, 458, 0, 8],
+        [30, 469, 0, 8],
+        [35, 455, 0, 10],
+        [40, 462, 0, 8],
+        [45, 604, 0, 2],
+        [50, 454, 0, 3],
+        [55, 459, 0, 10],
+        [60, 608, 0, 3],
+        [65, 525, 0, 0],
+        [70, 521, 0, 2],
+        [75, 630, 0, 13],
+        [80, 655, 0, 14],
+        [85, 532, 0, 14],
+        [90, 469, 0, 9],
+        [95, 301, 0, 207],
+        [100, 780, 0, 10],
+        [105, 575, 0, 0],
+        [110, 652, 0, 0],
+        [115, 522, 0, 14],
+        [120, 478, 0, 0],
+        [125, 523, 0, 0],
+        [130, 552, 0, 41],
+        [135, 663, 0, 31],
+        [140, 525, 0, 8],
+        [145, 522, 0, 11],
+        [150, 513, 0, 0],
+        [155, 517, 0, 9],
+        [160, 687, 0, 0],
+        [165, 565, 0, 9],
+        [170, 460, 0, 41],
+        [175, 526, 0, 2],
+        [180, 537, 0, 8],
+        [185, 518, 0, 11],
+        [190, 717, 0, 24],
+        [195, 516, 0, 2],
+        [200, 525, 0, 2],
+        [205, 526, 0, 10],
+        [210, 477, 0, 1],
+        [215, 581, 0, 16],
+        [220, 563, 0, 9],
+        [225, 562, 0, 0],
+        [230, 770, 0, 9],
+        [235, 458, 0, 10],
+        [240, 477, 0, 9],
+        [245, 585, 0, 9],
+        [250, 527, 0, 1],
+        [255, 596, 0, 11],
+        [260, 538, 0, 1],
+        [265, 455, 0, 2],
+        [270, 599, 0, 8],
+        [275, 467, 0, 2],
+        [280, 449, 0, 18],
+        [285, 807, 0, 10],
+        [290, 588, 0, 13],
+        [295, 563, 0, 15],
+        [300, 536, 0, 7],
+        [305, 464, 0, 0],
+        [310, 600, 0, 9],
+        [315, 666, 0, 2],
+        [320, 495, 0, 10],
+        [325, 461, 0, 10],
+        [330, 534, 0, 0],
+        [335, 580, 0, 18],
+        [340, 604, 0, 1],
+        [345, 461, 0, 4],
+        [350, 689, 0, 9],
+        [355, 516, 0, 39],
+        [360, 517, 0, 1],
+        [365, 456, 0, 13],
+        [370, 530, 0, 32],
+        [375, 690, 0, 8],
+        [380, 552, 0, 13],
+        [385, 476, 0, 1],
+        [390, 555, 0, 15],
+        [395, 522, 0, 49],
+        [400, 629, 0, 2],
+        [405, 597, 0, 9],
+        [410, 534, 0, 0],
+        [415, 520, 0, 6],
+        [420, 540, 0, 3],
+        [425, 455, 0, 8],
+        [430, 571, 0, 0],
+        [435, 713, 0, 11],
+        [440, 641, 0, 0],
+        [445, 522, 0, 8],
+        [450, 465, 0, 8],
+        [455, 367, 0, 100],
+        [460, 9, 0, 552],
+        [465, 19, 0, 986],
+        [470, 2, 0, 1437],
+        [475, 0, 0, 1510],
+        [480, 0, 0, 1522],
+        [485, 80, 80, 1487],
+      ];
+      const points = EVENING.map(([s, done, bad, wait]) => ({ s, rate: (done - bad) / 5, wait }));
+      const STALL_S = 455;
+
+      const tbody = document.querySelector("#evening-table tbody");
+      tbody.innerHTML = points
+        .map(
+          (p) =>
+            `<tr><td class="num">${p.s}</td><td class="num">${Math.round(p.rate)}</td><td class="num">${p.wait}</td></tr>`,
+        )
+        .join("");
+
+      const NS = "http://www.w3.org/2000/svg";
+      const host = document.getElementById("evening-chart");
+      const el = (name, attrs, parent) => {
+        const node = document.createElementNS(NS, name);
+        for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+        parent.appendChild(node);
+        return node;
+      };
+
+      function draw() {
+        host.innerHTML = "";
+        const width = Math.max(280, host.clientWidth);
+        const height = width < 520 ? 220 : 260;
+        const m = { top: 24, right: 14, bottom: 30, left: 38 };
+        const w = width - m.left - m.right;
+        const h = height - m.top - m.bottom;
+        const xMax = 490,
+          yMax = 200;
+        const x = (s) => m.left + (s / xMax) * w;
+        const y = (v) => m.top + h - (v / yMax) * h;
+
+        const svg = el(
+          "svg",
+          {
+            viewBox: `0 0 ${width} ${height}`,
+            width,
+            height,
+            role: "img",
+            "aria-label":
+              "Risposte al secondo durante la seconda prova serata: circa 100 al secondo per 455 secondi, poi crollo a zero.",
+          },
+          host,
+        );
+
+        for (const v of [0, 50, 100, 150, 200]) {
+          el(
+            "line",
+            {
+              x1: m.left,
+              x2: m.left + w,
+              y1: y(v),
+              y2: y(v),
+              stroke: v === 0 ? "var(--axis)" : "var(--grid)",
+              "stroke-width": 1,
+            },
+            svg,
+          );
+          el("text", { x: m.left - 8, y: y(v) + 4, "text-anchor": "end" }, svg).textContent = v;
+        }
+        const step = width < 520 ? 120 : 60;
+        for (let s = 0; s <= 480; s += step) {
+          el("text", { x: x(s), y: m.top + h + 20, "text-anchor": "middle" }, svg).textContent =
+            s === 0 ? "0" : `${s / 60} min`;
+        }
+
+        const line = points.map((p, i) => `${i ? "L" : "M"}${x(p.s).toFixed(1)},${y(p.rate).toFixed(1)}`).join("");
+        el(
+          "path",
+          {
+            d: `${line}L${x(points.at(-1).s)},${y(0)}L${x(points[0].s)},${y(0)}Z`,
+            fill: "var(--series-1)",
+            "fill-opacity": 0.1,
+          },
+          svg,
+        );
+        el(
+          "path",
+          {
+            d: line,
+            fill: "none",
+            stroke: "var(--series-1)",
+            "stroke-width": 2,
+            "stroke-linejoin": "round",
+            "stroke-linecap": "round",
+          },
+          svg,
+        );
+
+        el(
+          "line",
+          { x1: x(STALL_S), x2: x(STALL_S), y1: m.top - 6, y2: m.top + h, stroke: "var(--axis)", "stroke-width": 1 },
+          svg,
+        );
+        el("text", { class: "anno", x: x(STALL_S) - 6, y: m.top - 10, "text-anchor": "end" }, svg).textContent =
+          "blocco a 7 min 35 s";
+        const avg = points.filter((p) => p.s >= 15 && p.s < STALL_S);
+        const mean = avg.reduce((a, p) => a + p.rate, 0) / avg.length;
+        el("text", { class: "anno", x: x(15), y: y(182) }, svg).textContent =
+          `≈ ${Math.round(mean)} risposte al secondo`;
+
+        const cross = el(
+          "line",
+          { y1: m.top, y2: m.top + h, stroke: "var(--axis)", "stroke-width": 1, opacity: 0 },
+          svg,
+        );
+        const dot = el(
+          "circle",
+          { r: 5, fill: "var(--series-1)", stroke: "var(--surface)", "stroke-width": 2, opacity: 0 },
+          svg,
+        );
+        const tip = document.createElement("div");
+        tip.className = "tooltip";
+        host.appendChild(tip);
+        const hit = el("rect", { x: m.left, y: m.top, width: w, height: h, fill: "transparent" }, svg);
+
+        function show(clientX) {
+          const box = svg.getBoundingClientRect();
+          const px = clientX - box.left;
+          const s = ((px - m.left) / w) * xMax;
+          const p = points.reduce((best, q) => (Math.abs(q.s - s) < Math.abs(best.s - s) ? q : best));
+          cross.setAttribute("x1", x(p.s));
+          cross.setAttribute("x2", x(p.s));
+          cross.setAttribute("opacity", 1);
+          dot.setAttribute("cx", x(p.s));
+          dot.setAttribute("cy", y(p.rate));
+          dot.setAttribute("opacity", 1);
+          const min = Math.floor(p.s / 60),
+            sec = p.s % 60;
+          tip.innerHTML = `${min} min ${sec} s<br><strong>${Math.round(p.rate)}</strong> risposte al secondo<br><strong>${p.wait}</strong> richieste in attesa`;
+          tip.style.opacity = 1;
+          const tx = Math.min(Math.max(x(p.s) - tip.offsetWidth / 2, 0), width - tip.offsetWidth);
+          tip.style.left = `${tx}px`;
+          tip.style.top = `${Math.max(0, y(p.rate) - tip.offsetHeight - 14)}px`;
+        }
+        function hide() {
+          cross.setAttribute("opacity", 0);
+          dot.setAttribute("opacity", 0);
+          tip.style.opacity = 0;
+        }
+        hit.addEventListener("pointermove", (e) => show(e.clientX));
+        hit.addEventListener("pointerdown", (e) => show(e.clientX));
+        hit.addEventListener("pointerleave", hide);
+      }
+
+      draw();
+      let resizeTimer;
+      window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(draw, 120);
+      });
+    </script>
+  </body>
+</html>

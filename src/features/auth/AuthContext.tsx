@@ -58,10 +58,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  // Il ruolo si rilegge solo quando cambia l'utente. Supabase emette una sessione "nuova"
+  // (stesso utente) a ogni rientro nella scheda e a ogni rinnovo del token: dipendere
+  // dall'oggetto sessione riportava la pagina a "Verifico l'accesso…" e azzerava bozza del
+  // menu, ordine aperto in cassa e carrello dell'ordine manuale.
+  const userId = session?.user.id ?? null;
+
   useEffect(() => {
     if (!authReady) return;
 
-    if (!session) {
+    if (!userId) {
       setRole(null);
       setProfileError(null);
       setLoading(false);
@@ -76,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void supabase
       .from("profiles")
       .select("role")
-      .eq("id", session.user.id)
+      .eq("id", userId)
       .single()
       .then(({ data, error }) => {
         if (cancelled) return;
@@ -91,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [authReady, session]);
+  }, [authReady, userId]);
 
   async function signIn(email: string, password: string) {
     if (!isSupabaseConfigured) {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parseTournamentSave, parseTournamentSnapshot, sameTournament, teamNameTooLong } from "./tournamentState";
+import {
+  mergeTournament,
+  parseTournamentSave,
+  parseTournamentSnapshot,
+  sameTournament,
+  teamNameTooLong,
+} from "./tournamentState";
 
 const snapshot = {
   size: 8 as const,
@@ -41,5 +47,40 @@ describe("tournament state", () => {
     const fromDatabase = { ...snapshot, matches: { "0-0": { scoreA: 2, scoreB: 1, winner: "A" as const } } };
     expect(sameTournament(local, fromDatabase)).toBe(true);
     expect(sameTournament(local, snapshot)).toBe(false);
+  });
+});
+
+describe("mergeTournament", () => {
+  const match = (scoreA: number, scoreB: number) => ({
+    winner: scoreA > scoreB ? ("A" as const) : ("B" as const),
+    scoreA,
+    scoreB,
+  });
+
+  it("tiene le modifiche di due postazioni su partite, squadre e ripescaggi diversi", () => {
+    const mine = { ...snapshot, matches: { "0-0": match(2, 1) }, overrides: { "1-0-A": "Ripescata" } };
+    const theirs = {
+      ...snapshot,
+      teams: ["Leoni", ...snapshot.teams.slice(1)],
+      matches: { "0-1": match(0, 3) },
+    };
+    expect(mergeTournament(snapshot, mine, theirs)).toEqual({
+      size: 8,
+      teams: theirs.teams,
+      matches: { "0-0": match(2, 1), "0-1": match(0, 3) },
+      overrides: { "1-0-A": "Ripescata" },
+    });
+  });
+
+  it("sulla stessa partita vale la mia modifica, e una cancellazione altrui resta cancellata", () => {
+    const base = { ...snapshot, matches: { "0-0": match(1, 0), "0-1": match(1, 0) } };
+    const mine = { ...base, matches: { "0-0": match(5, 0), "0-1": match(1, 0) } };
+    const theirs = { ...base, matches: { "0-0": match(0, 9) } };
+    expect(mergeTournament(base, mine, theirs)?.matches).toEqual({ "0-0": match(5, 0) });
+  });
+
+  it("non fonde tabelloni di dimensioni diverse", () => {
+    const bigger = { ...snapshot, size: 16 as const, teams: [...snapshot.teams, ...snapshot.teams] };
+    expect(mergeTournament(snapshot, snapshot, bigger)).toBeNull();
   });
 });

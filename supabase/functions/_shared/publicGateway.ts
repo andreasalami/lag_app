@@ -86,6 +86,7 @@ export async function handlePublicRequest(request: Request, action: "order" | "p
             p_expected_event_id: args.p_expected_event_id,
             p_recovery_token: args.p_recovery_token ?? null,
             p_preparation_mode: args.p_preparation_mode ?? "immediate",
+            p_expected_total: args.p_expected_total ?? null,
           })
         : await client.rpc("upsert_push_subscription", {
             p_endpoint: args.p_endpoint,
