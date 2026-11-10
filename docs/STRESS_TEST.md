@@ -46,3 +46,69 @@ cambiarle. Per un solo scenario: `LOADTEST_SCENARIOS=capacity npm run stress:ord
 I tempi riportati includono l'avvio di un processo `psql` per chiamata: servono a
 confrontare due esecuzioni, non come latenza dell'app. Un finding produce exit
 code `2`, distinto da un crash del runner.
+
+## Casi limite (novembre 2026)
+
+Stessa infrastruttura locale (`scripts/stress/lib.mjs`): nessuna rete e nessun Supabase.
+Ogni scenario si ripete con tempi e intrecci casuali, e dopo ogni round controlla gli
+invarianti degli ordini. Gli script non correggono nulla: elencano i difetti.
+
+```sh
+npm run stress:edge-orders
+```
+
+```sh
+npm run stress:edge-staff
+```
+
+- `edge-orders.mjs`: casse concorrenti, claim che scadono, annullo contro scadenza,
+  consegne, capienza cucina, chiusura evento durante tutto il resto, ordini al banco,
+  idempotenza, limiti. Variabili: `LOADTEST_ROUNDS`, `LOADTEST_SEED`,
+  `LOADTEST_SCENARIOS`, `LOADTEST_MAX_SECONDS`, `LOADTEST_JSON_OUT`.
+- `edge-staff.mjs`: modifiche dello staff a menu, scorte, scaletta, torneo e permessi
+  durante il servizio. Variabili: `LOADTEST_SCENARIOS`, `LOADTEST_SEED`,
+  `LOADTEST_ROUNDS`, `LOADTEST_BUDGET_SECONDS`, `LOADTEST_REPORT`.
+
+## Traffico reale su un progetto di test
+
+`scripts/stress/traffic.mjs` simula 30 dispositivi dello staff e fino a 2.500 telefoni
+contro un progetto Supabase **di test**. Rifiuta il progetto di produzione, resta sotto
+le 190 richieste al secondo e si ferma al primo segnale di degrado: errori oltre l'1%
+in 30 secondi, 95° percentile oltre 10 secondi, un 429 o un 503, budget di traffico
+esaurito.
+
+Richiede `.env.stress.local` con le quattro variabili `STRESS_*` di
+`.env.stress.example`. I valori sono segreti: restano solo in quel file.
+
+```sh
+npm run stress:traffic -- check
+```
+
+```sh
+npm run stress:traffic -- prepare-gateway
+```
+
+```sh
+npm run stress:traffic -- setup
+```
+
+```sh
+npm run stress:traffic -- run evening
+```
+
+- `check` verifica la configurazione senza fare richieste di carico.
+- `prepare-gateway` prepara in `stress-results.local/gateway` la funzione
+  `submit-order` di test (`scripts/stress/gateway/index.ts`), da pubblicare sul progetto
+  di test con la Supabase CLI. Turnstile viene simulato con 150 ms di attesa.
+- `setup` crea account, menu ed evento di prova nel progetto di test.
+- Scenari di `run`: `baseline`, `evening`, `ramp`, `worst`, `open-burst`,
+  `tournament-publish`, `realtime-reconnect`, `staff-edits`.
+
+I risultati vanno in `stress-results.local/`, escluso da git. Il controllo automatico
+delle regole di stop gira contro un server finto locale, senza rete:
+
+```sh
+node scripts/stress/traffic.selftest.mjs
+```
+
+Risultati di novembre 2026: [STRESS_TEST_RESULTS_2026-11-07.md](STRESS_TEST_RESULTS_2026-11-07.md).

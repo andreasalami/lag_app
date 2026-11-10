@@ -9,11 +9,7 @@
 // Turnstile, PostgREST e la rete restano fuori. Ogni chiamata apre un processo psql:
 // i tempi includono quell'avvio e servono a confrontare esecuzioni, non come latenza reale.
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { performance } from "node:perf_hooks";
+import { createDb, jsonb, lit, messageOf } from "./lib.mjs";
 
 const integerEnv = (name, fallback) => {
   const value = Number(process.env[name] ?? fallback);
@@ -40,65 +36,15 @@ for (const scenario of selectedScenarios) {
 if (capAttempts <= capacity) throw new Error("LOADTEST_CAP_ATTEMPTS deve superare LOADTEST_CAPACITY.");
 if (capacity < 10 || capacity > 1000) throw new Error("La capienza deve restare tra 10 e 1000.");
 
-// Binari PostgreSQL: dal PATH, oppure da LOADTEST_PG_BIN (per esempio /opt/homebrew/opt/postgresql@17/bin).
-const bin = (name) => (process.env.LOADTEST_PG_BIN ? join(process.env.LOADTEST_PG_BIN, name) : name);
-// Su macOS il postmaster si rifiuta di partire senza una LC_ALL valida.
-const pgEnv = { ...process.env, LC_ALL: "C" };
-const workDir = mkdtempSync(join(tmpdir(), "lag-stress-"));
-const dataDir = join(workDir, "data");
-const port = "55432"; // Solo il nome del socket: listen_addresses vuoto, nessuna porta TCP.
-const PSQL_ARGS = ["-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose"];
-const connection = ["-h", workDir, "-p", port, "-U", "postgres", "-d", "postgres"];
+const { workDir, sql, admin_sql, rpc, start, installSchema, stop } = createDb();
 
 const checks = [];
 const findings = [];
 const fixtureIds = { unlimited: crypto.randomUUID(), limited: crypto.randomUUID() };
 const admin = crypto.randomUUID();
 
-// Letterali SQL: i valori sono generati qui (UUID, costanti), mai input esterno.
-const lit = (value) => (value === null || value === undefined ? "null" : `'${String(value).replaceAll("'", "''")}'`);
-const jsonb = (value) => `${lit(JSON.stringify(value))}::jsonb`;
-
-/** Esegue SQL in una connessione propria: come browser (anon), gateway (service_role) o utente autenticato. */
-function sql(query, { as = "postgres", user = null } = {}) {
-  const preamble = as === "postgres" ? "" : `set role ${as};\nset request.jwt.claim.sub = ${lit(user ?? "")};\n`;
-  return new Promise((resolve) => {
-    const started = performance.now();
-    const child = spawn(bin("psql"), [...PSQL_ARGS, ...connection]);
-    let out = "";
-    let err = "";
-    child.stdout.on("data", (chunk) => (out += chunk));
-    child.stderr.on("data", (chunk) => (err += chunk));
-    child.on("close", (code) => {
-      const ms = performance.now() - started;
-      if (code === 0) {
-        const text = out.trim();
-        let data = text;
-        try {
-          data = text === "" ? null : JSON.parse(text);
-        } catch {
-          /* risultato non JSON: resta testo */
-        }
-        resolve({ data, error: null, ms });
-      } else {
-        const match = err.match(/ERROR:\s+([0-9A-Z]{5}):\s+([^\n]*)/);
-        resolve({ data: null, error: { code: match?.[1] ?? null, message: match?.[2] ?? err.trim() }, ms });
-      }
-    });
-    child.stdin.end(`${preamble}${query}\n`);
-  });
-}
-
-async function admin_sql(query) {
-  const result = await sql(query);
-  if (result.error) throw new Error(`${query.slice(0, 80)}: ${result.error.message}`);
-  return result.data;
-}
-
-const rpc = (name, args, options) => sql(`select public.${name}(${args.join(", ")})`, options);
 const asAdmin = { as: "authenticated", user: admin };
 const asPublic = { as: "anon" };
-const messageOf = (error) => error?.message ?? "";
 
 function percentile(values, fraction) {
   if (values.length === 0) return 0;
@@ -142,47 +88,8 @@ const stock = async () =>
 const orderCount = async (where = "true") =>
   Number(await admin_sql(`select count(*) from public.orders where ${where}`));
 
-async function startCluster() {
-  execFileSync(bin("initdb"), ["-D", dataDir, "-U", "postgres", "--auth=trust", "-E", "UTF8", "--locale=C"], {
-    stdio: "ignore",
-    env: pgEnv,
-  });
-  try {
-    execFileSync(
-      bin("pg_ctl"),
-      [
-        "-D",
-        dataDir,
-        "-l",
-        join(workDir, "postgres.log"),
-        "-o",
-        `-k ${workDir} -p ${port} -c listen_addresses='' -c max_connections=${Math.max(capAttempts, readAttempts) + 50}`,
-        "-w",
-        "start",
-      ],
-      { stdio: "ignore", env: pgEnv },
-    );
-  } catch {
-    throw new Error(
-      `PostgreSQL temporaneo non avviato:\n${readFileSync(join(workDir, "postgres.log"), "utf8").slice(-1500)}`,
-    );
-  }
-}
-
 async function setup() {
-  // Ruoli, auth.uid() e pgcrypto come su Supabase.
-  await admin_sql(`create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
-create schema auth; create table auth.users(id uuid primary key);
-create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-create schema extensions; create extension pgcrypto with schema extensions;
-grant usage on schema public, auth, extensions to anon, authenticated, service_role;
-create publication supabase_realtime;`);
-  const schema = new URL("../../supabase/schema.sql", import.meta.url);
-  const install = spawn(bin("psql"), [...PSQL_ARGS, ...connection, "-f", schema.pathname]);
-  let err = "";
-  install.stderr.on("data", (chunk) => (err += chunk));
-  const code = await new Promise((resolve) => install.on("close", resolve));
-  if (code !== 0) throw new Error(`installazione schema.sql: ${err.trim()}`);
+  await installSchema();
 
   await admin_sql(`insert into auth.users values (${lit(admin)});
 update public.profiles set role = 'admin' where id = ${lit(admin)};
@@ -525,7 +432,7 @@ async function closeRaceScenario() {
 
 console.log(`Stress test ordini LAG su PostgreSQL temporaneo (${workDir})`);
 try {
-  await startCluster();
+  start({ maxConnections: Math.max(capAttempts, readAttempts) + 50 });
   await setup();
   if (selectedScenarios.has("read")) await readBurst();
   if (selectedScenarios.has("idempotency")) await idempotencyScenario();
@@ -534,12 +441,7 @@ try {
   if (selectedScenarios.has("identities")) await identityScenarios();
   if (selectedScenarios.has("close-race")) await closeRaceScenario();
 } finally {
-  try {
-    execFileSync(bin("pg_ctl"), ["-D", dataDir, "-m", "fast", "-w", "stop"], { stdio: "ignore", env: pgEnv });
-  } catch {
-    /* cluster mai avviato */
-  }
-  rmSync(workDir, { recursive: true, force: true });
+  stop();
 }
 
 console.log(JSON.stringify({ checks: checks.length, findings }, null, 2));

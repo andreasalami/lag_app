@@ -5,8 +5,14 @@ l'app restano nel [README](../README.md).
 
 ## Stato dello studio
 
-- `main`: `e37e14d` (merge della PR #8, 2026-10-04); deploy su GitHub Pages avviato al merge.
-- Branch aperto: `feat/october-update` (2026-10-06), richiede la migrazione `20261006120000` in produzione.
+- `main`: `036f111`, merge della PR #9 con l'aggiornamento di ottobre.
+- Branch aperti:
+  - `test/stress-limits-2026-11`: script e risultati dello stress test di novembre, non
+    committati;
+  - `feat/staff-hub-header`: di Andrea, non toccato.
+- Progetto Supabase di test `lag-stress` (ref `iwcbtxtgnxjchzoicxcv`), in
+  un'organizzazione Free separata. Serve solo allo stress test e va eliminato a fine
+  prove.
 - Database di produzione (Supabase `lagapp`): ripristinato e aggiornato il 2026-10-04 con `schema.sql`
   (commit `b159cbd`); migrazioni registrate fino a `20261003120000`. Il piano gratuito non ha backup
   automatici.
@@ -33,6 +39,11 @@ l'app restano nel [README](../README.md).
   da Andrea (incidente schema di agosto e ripristino nel registro dell'intervento).
 - 2026-10-06 — Aggiornamento di ottobre: piano in 6 punti approvato con "sì, procedi e ok download";
   scelte "un salvataggio in onda" e "immagini statiche"; filtro DB sulla coda cassa escluso.
+- 2026-11-03/07 — Stress test:
+  - nessuna correzione, report visivo;
+  - limiti di richiesta di Supabase non superati;
+  - progetto di test separato, produzione mai in scrittura;
+  - "Sì, parti", poi "Prova le prove brevi" e "Sì, prepara il report".
 - Fuori dall'approvazione: migrazioni sul database di produzione, merge su `main`, deploy.
 
 ## Architettura in breve
@@ -61,6 +72,12 @@ l'app restano nel [README](../README.md).
 - Produzione: ridistribuire la Edge Function `send-push-broadcast` (il database rifiuta già gli annunci).
 - `npm audit`: restano 2 moderate (vitest) e 1 bassa (dompurify, via jsPDF).
 - `docs/RISCRITTURA_DA_ZERO_2026-10-03.md` non versionato, di un'altra sessione: da valutare.
+- Piano Supabase per l'evento: il Free (Nano) si blocca sotto carico da serata. Andrea
+  deve decidere se provare il Pro sul progetto di test (Micro o Small) prima del mese
+  dell'evento.
+- Difetti dello stress test da correggere: eliminazione di prodotti in ordini aperti,
+  sblocco dopo la scadenza, sospensione che si annulla, modifiche perse su menu, scaletta
+  e torneo. Elenco completo in `docs/STRESS_TEST_RESULTS_2026-11-07.md`.
 
 ## Interventi
 
@@ -68,3 +85,4 @@ l'app restano nel [README](../README.md).
 - [2026-10-03 — Sicurezza del database e semplificazione](changes/2026-10-03-security-and-simplification.md)
 - [2026-10-03 — PDF per serata, Biglietti, Ordina qui](changes/2026-10-03-event-evenings-pdf-tickets-order-button.md)
 - [2026-10-06 — Ordini, postazioni, salvataggi torneo, Instagram](changes/2026-10-06-october-update.md)
+- [2026-11-07 — Stress test: casi limite e traffico reale](changes/2026-11-07-stress-test-limits.md)
