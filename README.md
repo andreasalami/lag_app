@@ -21,7 +21,7 @@ Produzione:
 |---|---|---|
 | Biglietti | Checkout Eventbrite (widget ufficiale) | — |
 | Programma | Griglia calendario, 2 palchi in contemporanea | staff |
-| Menu | Prodotti, prezzi, scorte e allergeni 1–14 | staff / cucina |
+| Menu | Prodotti, prezzi, scorte, allergeni 1–14 e sospensione, modificabili anche a evento in corso | staff / cucina / bar (solo bevande) |
 | Instagram | Mazzo di carte con le immagini dei post dell'evento; il tocco apre il post | — |
 | Torneo | Riepilogo con turno e ultimi 5 risultati, più tabellone completo separato (nomi squadra fino a 20 caratteri); salvataggi multipli, uno in onda | tournament_manager |
 | Ordini | Preordine pubblico, QR, cassa, code di cucina e bar | cassa / cucina / bar |
@@ -257,6 +257,34 @@ Il workflow interrompe la build se manca uno dei quattro valori obbligatori
 Dopo il push, controlla **Actions → Deploy to GitHub Pages** e attendi che
 gli step di build e deploy risultino verdi.
 
+## Menu durante l'evento
+
+Il menu si modifica anche nel mezzo del servizio, senza danneggiare gli ordini.
+
+- **Ordini già inviati:** conservano sempre i loro articoli, prezzi compresi. Una
+  sospensione o un'eliminazione vale solo per gli ordini successivi.
+- **Sospendi/Riattiva:** tasto per prodotto, applicato subito e separato dalla scorta.
+  Annullamenti e scadenze restituiscono le porzioni ma non riaprono un prodotto
+  sospeso. Prima di sospendere o eliminare compare quanto resta da preparare: porzioni
+  in ordini pagati e porzioni in ordini non ancora pagati. Sta alla cucina sospendere
+  quando ha ancora margine per evaderli.
+- **Pannello Pietanze:** in Cucina (Prodotti nel Bar), sotto la coda, i prodotti
+  divisi per sezione con porzioni da preparare, scorta, stato e tasto Sospendi.
+- **Scorte:** si salvano per differenza. Chi vede 50 e scrive 80 aggiunge 30 alle
+  porzioni di quel momento, senza sovrascrivere le vendite nel frattempo.
+- **Più dispositivi:** ognuno salva solo i campi che ha cambiato. La pagina rilegge il
+  menu ogni 20 secondi senza toccare la bozza in corso. Una voce eliminata da un altro
+  dispositivo viene segnalata. Lo stesso vale per la scaletta; nel torneo due
+  postazioni su partite diverse vengono fuse.
+- **Cliente:** un prodotto sospeso resta in elenco, in grigio, con "Non disponibile al
+  momento". Se il menu cambia mentre ordina, il carrello si riallinea da solo e il
+  cliente vede il nuovo totale prima di inviare: il server rifiuta un totale diverso da
+  quello confermato (`price_changed`).
+- **Cassa:** un ordine non pagato che contiene un prodotto sospeso dopo l'invio mostra
+  la riga con l'etichetta "sospeso". L'ordine resta valido; se il prodotto non si può
+  proprio più fare, la cassa lo annulla d'accordo con il cliente. Gli ordini già pagati
+  con un prodotto non più disponibile si gestiscono a mano.
+
 ## Backend e sicurezza
 
 - Le tabelle pubbliche (`program_slots`, `menu_items`, `tournament_state`) sono
@@ -273,8 +301,10 @@ gli step di build e deploy risultino verdi.
 - Il report permanente non duplica il dettaglio ordini: conserva solo
   riepilogo e aggregati prodotto; il CSV viene ricostruito dalle righe già
   anonimizzate quando viene riscaricato.
-- Le connessioni realtime sono limitate ai pochi dispositivi cassa/cucina. I
-  telefoni del pubblico effettuano solo le letture indispensabili.
+- Le connessioni realtime sono limitate ai dispositivi della cassa. Cucina e bar
+  aggiornano la coda ogni 8 secondi: senza permessi di lettura diretta sugli ordini il
+  realtime non consegnava loro nessun evento. I telefoni del pubblico effettuano solo
+  le letture indispensabili.
 - Non inserire mai chiavi `service_role`, password o altri segreti nei file
    `VITE_*`, in `.env.local`, nel repository o nel bundle frontend.
 - `supabase/schema.sql` descrive lo stato finale (una definizione per funzione,

@@ -17,6 +17,7 @@ import { OrderNotes } from "./OrderNotes";
 import { StationPicker } from "./StationPicker";
 import { useEventStation } from "./stationMemory";
 import { PickupSelection } from "./PickupSelection";
+import { DishesPanel } from "./DishesPanel";
 import { kitchenMessage } from "./PreparationChoice";
 import type { KitchenState } from "./types";
 import { isPickupSelectionValid, remainingToPickUp, selectedPickupCount } from "./pickupQuantities";
@@ -130,21 +131,17 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
     }
   }, [soundEnabled, station]);
 
+  // Solo polling: cucina e bar non hanno permessi di lettura diretta su ordini e righe di
+  // evasione, quindi il realtime non consegnava loro nessun evento e pesava soltanto sul database.
   useEffect(() => {
     void refetch();
     if (!station) return;
-    const channel = supabase
-      .channel(`fulfillment-${area}-${station}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void refetch())
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_fulfillment_items" }, () => void refetch())
-      .subscribe();
-    const stopPolling = pollWhileVisible(() => void refetch(), 15_000);
+    const stopPolling = pollWhileVisible(() => void refetch(), 8_000);
     return () => {
       queueRequestId.current += 1;
       stopPolling();
-      void supabase.removeChannel(channel);
     };
-  }, [area, refetch, station]);
+  }, [refetch, station]);
 
   const filtered = useMemo(
     () => orders.filter((order) => matchesOrderSearch(order, numberSearch, aliasSearch)),
@@ -460,6 +457,8 @@ export function Fulfillment({ area }: { area: "cucina" | "bar" }) {
           )}
         </div>
       </StaffPanel>
+
+      <DishesPanel area={area} />
 
       {recent.length > 0 && (
         <StaffPanel

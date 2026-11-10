@@ -208,6 +208,8 @@ function expect(condition, rule, detail = {}) {
 }
 
 const isErr = (result, token) => messageOf(result.error).includes(token);
+// Chi arriva secondo su un pagamento: "già pagato" se l'ordine è stato incassato, "claim_lost" negli altri casi.
+const lostPay = (result) => isErr(result, "claim_lost") || isErr(result, "already_paid");
 const summarize = (results) => results.map((result) => (result.error ? messageOf(result.error) : "ok"));
 const successes = (results) => results.filter((result) => !result.error);
 const must = (result, what = "setup") => {
@@ -217,7 +219,7 @@ const must = (result, what = "setup") => {
 
 // Errori di business documentati nelle funzioni: ogni altro errore è inatteso.
 const documented =
-  /claim_lost|order_not_available|order_already_claimed|reservation_expired|event_closed|kitchen_capacity_reached|kitchen_not_active|invalid_delivery_quantity|delivery_not_available|undo_window_expired|stock_unavailable|capacity_reached|request_id_conflict|public_order_rate_limit|ordering_paused|not_open_yet|ordering_closed/;
+  /claim_lost|already_paid|order_not_available|order_already_claimed|reservation_expired|event_closed|kitchen_capacity_reached|kitchen_not_active|invalid_delivery_quantity|delivery_not_available|undo_window_expired|stock_unavailable|capacity_reached|request_id_conflict|public_order_rate_limit|ordering_paused|not_open_yet|ordering_closed/;
 
 /** Ogni chiamata passa da qui: giornale del round. Gli errori si classificano a fine round (checkCallErrors). */
 async function call(op, promise, meta = {}) {
@@ -717,7 +719,7 @@ const cashVariants = {
         { claims: summarize(v.claims) },
       );
       expect(
-        successes(v.pays).length === 1 && v.pays.every((result) => !result.error || isErr(result, "claim_lost")),
+        successes(v.pays).length === 1 && v.pays.every((result) => !result.error || lostPay(result)),
         "two_desks_pay_not_single",
         { pays: summarize(v.pays) },
       );
@@ -766,7 +768,7 @@ const cashVariants = {
       );
       expect(v.renewed >= 1, "claim_renewal_did_not_extend_expiry", { rows: v.renewed });
       expect(
-        successes(v.pays).length === 1 && v.pays.every((result) => !result.error || isErr(result, "claim_lost")),
+        successes(v.pays).length === 1 && v.pays.every((result) => !result.error || lostPay(result)),
         "renew_pay_not_single",
         { pays: summarize(v.pays) },
       );
@@ -796,7 +798,7 @@ const cashVariants = {
         { claims: summarize(v.claims) },
       );
       expect(
-        successes(v.race).length === 1 && v.race.every((result) => !result.error || isErr(result, "claim_lost")),
+        successes(v.race).length === 1 && v.race.every((result) => !result.error || lostPay(result)),
         "pay_vs_cancel_not_single_winner",
         { race: summarize(v.race) },
       );
@@ -819,12 +821,14 @@ const cashVariants = {
     ];
     v.verify = () => {
       expect(
-        successes(v.pays).length === 1 && v.pays.every((result) => !result.error || isErr(result, "claim_lost")),
+        successes(v.pays).length === 1 && v.pays.every((result) => !result.error || lostPay(result)),
         "double_pay_not_single",
         { pays: summarize(v.pays) },
       );
       expect(
-        isErr(v.after[0], "claim_lost") && isErr(v.after[1], "claim_lost") && isErr(v.after[2], "order_not_available"),
+        isErr(v.after[0], "already_paid") &&
+          isErr(v.after[1], "claim_lost") &&
+          isErr(v.after[2], "order_not_available"),
         "operations_after_pay_not_refused",
         { after: summarize(v.after) },
       );
@@ -968,7 +972,7 @@ const cashVariants = {
         { race: summarize(v.race), last: v.last.error?.message ?? "ok" },
       );
       expect(
-        v.race.every((result) => !result.error || isErr(result, "claim_lost")),
+        v.race.every((result) => !result.error || lostPay(result)),
         "toggle_preparation_unexpected_error",
         { race: summarize(v.race) },
       );
@@ -990,11 +994,9 @@ const cashVariants = {
         claims: summarize(v.claims),
         pay: v.first.error,
       });
-      expect(
-        v.second.every((result) => isErr(result, "claim_lost")),
-        "second_device_acted_after_pay",
-        { second: summarize(v.second) },
-      );
+      expect(isErr(v.second[0], "already_paid") && isErr(v.second[1], "claim_lost"), "second_device_acted_after_pay", {
+        second: summarize(v.second),
+      });
     };
     return v;
   },

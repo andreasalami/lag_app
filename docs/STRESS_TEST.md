@@ -68,6 +68,10 @@ npm run stress:edge-staff
 - `edge-staff.mjs`: modifiche dello staff a menu, scorte, scaletta, torneo e permessi
   durante il servizio. Variabili: `LOADTEST_SCENARIOS`, `LOADTEST_SEED`,
   `LOADTEST_ROUNDS`, `LOADTEST_BUDGET_SECONDS`, `LOADTEST_REPORT`.
+- Dal 2026-11-10 i due script simulano il client aggiornato: sospensione con
+  l'interruttore, scorte per differenza, solo i campi cambiati, fusione del torneo,
+  totale confermato dal cliente. Le attese sono cambiate di conseguenza (per esempio
+  due modifiche di scorta dalla stessa lettura vengono entrambe applicate).
 
 ## Traffico reale su un progetto di test
 

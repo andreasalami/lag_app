@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { StaffPanel } from "../../components/ui/StaffPanel";
+import { Notice } from "../../components/ui/Notice";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
-import { newDraftId, useDraftRows } from "../../lib/useDraftRows";
+import { changedFields, draftUuid, newDraftId, useDraftRows } from "../../lib/useDraftRows";
 import { ProgramGrid, type ProgramSlotData } from "./ProgramGrid";
 import { appHref } from "../../lib/browser";
 
@@ -56,6 +57,7 @@ export function Program({ management = false }: { management?: boolean }) {
   const draft = useDraftRows(slots, setSlots, loading);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   // Il numero di giorni è condiviso (riga singola su Supabase,
   // program_settings) — non più uno state locale al browser di chi
@@ -98,6 +100,7 @@ export function Program({ management = false }: { management?: boolean }) {
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
+    setSaveNotice(null);
 
     const invalidSlot = slots.some(
       (slot) =>
@@ -114,7 +117,8 @@ export function Program({ management = false }: { management?: boolean }) {
       return;
     }
 
-    const created = draft.created.map(({ day, stage, title, start_time, end_time }) => ({
+    const created = draft.created.map(({ id, day, stage, title, start_time, end_time }) => ({
+      id: draftUuid(id),
       day,
       stage,
       title,
@@ -122,23 +126,34 @@ export function Program({ management = false }: { management?: boolean }) {
       end_time,
     }));
 
-    const { error } = await supabase.rpc("save_program", {
-      p_days: days,
+    // Solo i campi cambiati: due dispositivi su campi diversi dello stesso evento non si sovrascrivono.
+    const { data, error } = await supabase.rpc("save_program", {
+      // I giorni si inviano solo se cambiati: un dispositivo rimasto indietro non li riporta al valore vecchio.
+      p_days: days !== savedDays ? days : null,
       p_created: created,
-      p_updated: draft.updated.map(({ row }) => row),
+      p_updated: draft.updated.map(({ row, original }) => changedFields(row, original)),
       p_deleted: draft.deletedIds,
     });
 
     if (error) {
       console.error("[Program] Errore salvataggio:", error.message);
-      setSaveError("Salvataggio non riuscito. Riprova.");
+      setSaveError(
+        error.message.includes("slots_beyond_days")
+          ? "Un altro dispositivo ha aggiunto eventi in un giorno che stai togliendo. Ricarica la pagina."
+          : "Salvataggio non riuscito. Riprova.",
+      );
       setSaving(false);
       return;
     }
 
-    draft.markSaved(await refetch());
+    const fresh = await refetch();
+    draft.markSaved(fresh);
     setSavedDays(days);
     setSaving(false);
+    const missing = (data as { missing?: unknown } | null)?.missing;
+    if (!fresh) setSaveNotice("Modifiche salvate, ma non riesco a rileggere la scaletta. Ricarica la pagina.");
+    else if (Array.isArray(missing) && missing.length > 0)
+      setSaveNotice("Un evento era già stato eliminato da un altro dispositivo. Le altre modifiche sono salvate.");
   }
 
   return (
@@ -266,6 +281,13 @@ export function Program({ management = false }: { management?: boolean }) {
           error={saveError}
           onSave={handleSave}
         />
+      )}
+      {canEdit && saveNotice && !isDirty && (
+        <div className="fixed inset-x-4 bottom-24 z-40 mx-auto max-w-3xl">
+          <Notice className="surface-solid shadow-lg" onDismiss={() => setSaveNotice(null)}>
+            {saveNotice}
+          </Notice>
+        </div>
       )}
     </section>
   );

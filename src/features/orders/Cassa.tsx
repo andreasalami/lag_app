@@ -7,7 +7,7 @@ import { StaffPageHeading, StaffPanel } from "../../components/ui/StaffPanel";
 import { pollWhileVisible, readStorage, writeStorage } from "../../lib/browser";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
-import { lineTotal, type Cart } from "./cart";
+import { lineTotal, reconcileCart, type Cart } from "./cart";
 import { OrderEditor } from "./OrderEditor";
 import { OrderNotes } from "./OrderNotes";
 import { parseQrPayload, priceFormatter } from "./orderUtils";
@@ -72,7 +72,7 @@ export function Cassa() {
     refetch: refetchMenu,
   } = useSupabaseRows<OrderMenuItem>({
     table: "menu_items",
-    select: "id, category, subcategory, name, price, available_portions, stock_capacity, allergens",
+    select: "id, category, subcategory, name, price, available_portions, stock_capacity, allergens, suspended",
     orderBy: [{ column: "category" }, { column: "name" }],
     fallback: [],
   });
@@ -178,7 +178,12 @@ export function Cassa() {
         setClaimValidUntil(Date.parse(data.claim_expires_at));
         setActiveOrder((current) =>
           current && current.id === data.id
-            ? { ...current, kitchen_state: data.kitchen_state, preparation_mode: data.preparation_mode }
+            ? {
+                ...current,
+                kitchen_state: data.kitchen_state,
+                preparation_mode: data.preparation_mode,
+                unavailable_items: data.unavailable_items,
+              }
             : current,
         );
         setMessage((current) => (current?.startsWith("Controllo dell’ordine non confermato.") ? null : current));
@@ -306,6 +311,13 @@ export function Cassa() {
       p_device_id: deviceIdRef.current,
     });
     setActionBusy(false);
+    // Risposta persa dopo un pagamento riuscito: l'ordine è già alle postazioni, non va incassato di nuovo.
+    if (error?.message.includes("already_paid")) {
+      setMessage(`Ordine #${activeOrder.display_number} già pagato: è già stato inviato alle postazioni.`);
+      setActiveOrder(null);
+      void refetchOrders();
+      return;
+    }
     if (error) {
       setMessage(
         error.message.includes("kitchen_capacity_reached")
@@ -363,13 +375,24 @@ export function Cassa() {
     setActionBusy(false);
     setConfirmCounterOrder(false);
     if (error || !data) {
+      const code = error?.message ?? "";
+      const menuChanged = code.includes("stock_unavailable:") || code.includes("unknown_menu_item");
       setMessage(
-        error?.message.includes("stock_unavailable:")
-          ? `Scorte insufficienti: ${error.message.split("stock_unavailable:")[1]}`
-          : error?.message.includes("kitchen_capacity_reached")
-            ? "Cucina al completo: attendi oppure scegli la preparazione successiva con il cliente. Ordine non registrato."
-            : "Ordine eccezionale non creato.",
+        code.includes("stock_unavailable:")
+          ? `Non disponibili (sospesi o scorte finite): ${code.split("stock_unavailable:")[1]}. Ho aggiornato il menu: controlla le righe.`
+          : code.includes("unknown_menu_item")
+            ? "Un prodotto non è più in menu. Ho aggiornato l’elenco: controlla le righe."
+            : code.includes("order_total_too_high")
+              ? "Importo troppo alto per un solo ordine: dividilo in più ordini."
+              : code.includes("kitchen_capacity_reached")
+                ? "Cucina al completo: attendi oppure scegli la preparazione successiva con il cliente. Ordine non registrato."
+                : "Ordine eccezionale non creato.",
       );
+      // Il menu è cambiato mentre si componeva l'ordine: l'elenco e le righe si riallineano.
+      if (menuChanged) {
+        const fresh = await refetchMenu();
+        if (fresh) setCounterCart((current) => reconcileCart(current, fresh).cart);
+      }
       return;
     }
     const created = data as StaffOrder;
@@ -470,6 +493,12 @@ export function Cassa() {
               valido.
             </p>
           )}
+          {(activeOrder.unavailable_items?.length ?? 0) > 0 && (
+            <p role="status" className="mb-4 rounded-xl border border-(--state-warning) p-3 text-sm">
+              Alcuni prodotti sono stati sospesi dopo l’invio di questo ordine. L’ordine resta valido e viene preparato
+              per intero. Se un prodotto non si può proprio più fare, annulla l’ordine d’accordo con il cliente.
+            </p>
+          )}
           <div className="flex flex-col gap-3">
             {activeOrder.items.map((line) => (
               <div
@@ -478,6 +507,9 @@ export function Cassa() {
               >
                 <strong>
                   {line.qty}× {line.name}
+                  {activeOrder.unavailable_items?.includes(line.id) && (
+                    <span className="ml-2 text-xs font-semibold text-(--state-warning)">sospeso</span>
+                  )}
                 </strong>
                 <span className="font-mono">{priceFormatter.format(lineTotal(line))}</span>
               </div>

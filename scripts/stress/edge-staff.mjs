@@ -261,10 +261,24 @@ delete from public.menu_items;
 ${values ? `insert into public.menu_items (id, category, subcategory, name, price, available_portions, stock_capacity) values ${values};` : ""}`);
 }
 
-function publicOrder(lines, { requestId = crypto.randomUUID(), qrToken = token(), alias = "Edge test" } = {}) {
+function publicOrder(
+  lines,
+  { requestId = crypto.randomUUID(), qrToken = token(), alias = "Edge test", expectedTotal = null } = {},
+) {
   return rpc(
     "submit_public_order",
-    [lit(alias), lit(""), jsonb(lines), lit(requestId), lit(qrToken), lit("")],
+    [
+      lit(alias),
+      lit(""),
+      jsonb(lines),
+      lit(requestId),
+      lit(qrToken),
+      lit(""),
+      "null",
+      "null",
+      lit("immediate"),
+      expectedTotal === null ? "null" : String(expectedTotal),
+    ],
     asGateway,
   );
 }
@@ -314,17 +328,14 @@ const deliver = (orderId, name, lines, role = roleOfStation(name)) =>
 const staffMenu = (updated = [], created = [], deleted = [], role = "staff") =>
   rpc("bulk_upsert_menu_items", [jsonb(created), jsonb(updated), uuidArray(deleted)], asRole(role));
 
-/** Il client manda la riga intera più la scorta letta al caricamento (Menu.tsx, handleSave). */
+/**
+ * Il client manda solo i campi cambiati; per le scorte anche il numero letto al caricamento,
+ * così il database applica la differenza (Menu.tsx, handleSave).
+ */
 const menuRow = (base, edits = {}) => ({
   id: base.id,
-  category: base.category,
-  subcategory: base.subcategory,
-  name: base.name,
-  price: Number(base.price),
-  available_portions: base.available_portions,
-  allergens: base.allergens ?? [],
   ...edits,
-  original_available_portions: base.available_portions,
+  ...("available_portions" in edits ? { original_available_portions: base.available_portions } : {}),
 });
 
 async function loadMenuRows(role = "staff") {
@@ -885,7 +896,10 @@ async function scenarioRecovery(round) {
           "claim_order_for_station (riga 1990: reservation_expired), cancel_order_for_station (riga 1419), bulk_upsert_menu_items (riga 366: l'insert ignora l'id)",
       },
     );
+  // Chiudere l'evento consegna d'ufficio gli ordini pagati: è un difetto solo se chiudere è
+  // l'unico modo per sbloccare un'interruzione, cioè se l'interruzione esiste ancora.
   if (
+    out.pay_after_expiry.outage_before.length > 0 &&
     out.close_and_reopen.paid_waiting_items_still_to_hand_over > 0 &&
     out.close_and_reopen.paid_waiting_order_status_after_close === "consegnato"
   )
@@ -1100,16 +1114,12 @@ async function suspendTrial({ rate, think }, windowMs) {
   let suspendedAt = null;
   while (performance.now() - began < windowMs) {
     attempts += 1;
-    // "Carica": lo staff apre la gestione menu e legge la scorta; "pensa": digita 0; "salva".
-    const loaded = await sql(
-      `select available_portions from public.menu_items where id = ${lit(F.id)}`,
-      asRole("staff"),
-    );
+    // Lo staff apre il prodotto, "pensa" e tocca Sospendi: un interruttore separato dalla scorta,
+    // scritto subito sul database (SuspendButton.tsx, setSuspended).
     await sleep(think * rand(0.8, 1.2));
     const save = await call(
-      "bulk_upsert_menu_items",
-      staffMenu([menuRow({ ...F, available_portions: loaded.data, allergens: [] }, { available_portions: 0 })]),
-      ["stock_changed_retry"],
+      "sospensione (interruttore)",
+      sql(`update public.menu_items set suspended = true where id = ${lit(F.id)} returning id`, asRole("staff")),
     );
     saveMs.push(save.ms);
     if (!save.error) {
@@ -1134,7 +1144,7 @@ async function suspendTrial({ rate, think }, windowMs) {
     stock_after_expiry: null,
   };
   if (soldAfter.length > 0)
-    finding("Prodotto sospeso (scorta 0) venduto di nuovo dopo il salvataggio", SEV.ORDER, {
+    finding("Prodotto sospeso venduto di nuovo dopo la sospensione", SEV.ORDER, {
       sold_after: soldAfter.length,
       rate,
       think,
@@ -1153,15 +1163,11 @@ async function suspendTrial({ rate, think }, windowMs) {
       result.stock_after_cancel = stockAfterCancel;
       result.still_sold_after_cancel = !again.error;
       if (!again.error)
-        finding(
-          "La sospensione (scorta 0) si annulla da sola quando un ordine non pagato viene annullato o scade",
-          SEV.STOCK,
-          {
-            unpaid_orders_when_suspended: unpaid.length,
-            stock_after_cancel: stockAfterCancel,
-            function: "apply_order_stock (righe 634-641) restituisce le porzioni a menu_items",
-          },
-        );
+        finding("La sospensione si annulla da sola quando un ordine non pagato viene annullato o scade", SEV.STOCK, {
+          unpaid_orders_when_suspended: unpaid.length,
+          stock_after_cancel: stockAfterCancel,
+          function: "apply_order_stock restituisce le porzioni: la sospensione deve restare",
+        });
       await agePending(unpaid.slice(1));
       await rpc("get_ordering_status", [], asPublic);
       result.stock_after_expiry = await stockOf(F.id);
@@ -1268,6 +1274,16 @@ async function scenarioPrice() {
       flips,
       sequence,
     });
+  // Il client invia il totale che il cliente ha confermato: con il prezzo vecchio l'ordine si ferma.
+  const unaware = await place(L([P, 3]), { allowed: ["price_changed"], expectedTotal: cartPrice * 3 });
+  const aware = await place(L([P, 3]), { allowed: [], expectedTotal: p1 * 3 });
+  if (cartPrice !== p1 && (!messageOf(unaware.error ?? {}).includes("price_changed") || aware.error))
+    finding("Prezzo cambiato: l'ordine parte senza che il cliente confermi il nuovo totale", SEV.ORDER, {
+      cartPrice,
+      p1,
+      with_old_total: outcome(unaware),
+      with_new_total: outcome(aware),
+    });
   const totalsOk = cents(stale.total) === cents(p1 * 3 + Number(R.price) * 0);
   if (!totalsOk)
     finding("Totale ordine diverso da prezzo corrente per quantità", SEV.ORDER, { total: stale.total, p1 });
@@ -1292,7 +1308,7 @@ async function scenarioPrice() {
     rounds: 0,
     charged_price_equals_current_price_not_cart_price: 0,
     cart_price_differed: 0,
-    note: "submit_public_order non riceve un prezzo atteso: il cliente paga il prezzo corrente senza avviso (schema.sql righe 1860-1966); il totale mostrato prima dell'invio è calcolato dal carrello (OrderPage.tsx riga 557)",
+    note: "submit_public_order riceve il totale confermato dal cliente (p_expected_total): se un prezzo è cambiato risponde price_changed e il client mostra il nuovo totale da confermare",
   };
   metrics.price.rounds += 1;
   metrics.price.cart_price_differed += cartPrice !== p1 ? 1 : 0;
@@ -1493,12 +1509,10 @@ async function scenarioMenuRace() {
   const rows0 = await loadMenuRows();
   const base = (item) => rows0.find((row) => row.id === item.id);
   const save = (item, edits, delay, role = "staff") =>
-    sleep(delay).then(() =>
-      call("bulk_upsert_menu_items", staffMenu([menuRow(base(item), edits)], [], [], role), ["stock_changed_retry"]),
-    );
+    sleep(delay).then(() => call("bulk_upsert_menu_items", staffMenu([menuRow(base(item), edits)], [], [], role)));
   const finalRow = async (item) => (await loadMenuRows()).find((row) => row.id === item.id) ?? null;
 
-  // A. Stesso prodotto, campi diversi: ogni dispositivo manda la riga intera.
+  // A. Stesso prodotto, campi diversi: ogni dispositivo manda solo il campo che ha cambiato.
   {
     const renamed = "[EDGE] campi rinominato";
     const [ra, rb] = await Promise.all([
@@ -1514,7 +1528,7 @@ async function scenarioMenuRace() {
         {
           final: { price: row.price, name: row.name },
           kept,
-          function: "bulk_upsert_menu_items (righe 396-412): imposta tutti i campi della riga, senza versione",
+          function: "bulk_upsert_menu_items: ogni campo presente nella richiesta va applicato da solo",
         },
       );
   }
@@ -1523,9 +1537,11 @@ async function scenarioMenuRace() {
     must(await call("bulk_upsert_menu_items", staffMenu([], [], [items.gone.id])), "eliminazione");
     const late = await save(items.gone, { name: "[EDGE] modificato dopo l'eliminazione" }, 0);
     const exists = (await finalRow(items.gone)) !== null;
-    if (!late.error && !exists)
+    // Il client mostra "era già stata eliminata da un altro dispositivo" quando la riga è in `missing`.
+    const reported = (late.data?.missing ?? []).includes(items.gone.id);
+    if (!late.error && !exists && !reported)
       finding("La modifica di un prodotto eliminato da un altro dispositivo risponde ok ma non salva nulla", SEV.LOST, {
-        function: "bulk_upsert_menu_items (riga 396): l'update non trova la riga e non segnala niente",
+        function: "bulk_upsert_menu_items deve elencare la riga in `missing`",
       });
   }
   // C. Due dispositivi impostano la scorta dello stesso prodotto dalla stessa lettura.
@@ -1536,14 +1552,16 @@ async function scenarioMenuRace() {
     ]);
     const okCount = [ra, rb].filter((result) => !result.error).length;
     const row = await finalRow(items.stockA);
-    if (okCount !== 1)
-      finding("Due modifiche di scorta dalla stessa lettura: attese una accettata e una rifiutata", SEV.LOST, {
+    // Scorte per differenza: da 50 uno toglie 50 e l'altro toglie 20. Entrambe accettate, in
+    // qualunque ordine il risultato è 0 (mai negativo).
+    if (okCount !== 2 || row.available_portions !== 0)
+      finding("Due modifiche di scorta dalla stessa lettura: attese entrambe applicate per differenza", SEV.LOST, {
         okCount,
         stock: row.available_portions,
       });
     metrics["menu-race"] ??= {};
     metrics["menu-race"].stock_vs_stock = {
-      exactly_one_accepted: (metrics["menu-race"].stock_vs_stock?.exactly_one_accepted ?? 0) + (okCount === 1 ? 1 : 0),
+      both_applied: (metrics["menu-race"].stock_vs_stock?.both_applied ?? 0) + (okCount === 2 ? 1 : 0),
       rounds: (metrics["menu-race"].stock_vs_stock?.rounds ?? 0) + 1,
     };
   }
@@ -1559,7 +1577,7 @@ async function scenarioMenuRace() {
         price: row.price,
       });
   }
-  // E. Scorta abbassata mentre il prodotto vende: accettata o rifiutata, mai una scorta fuori dai limiti.
+  // E. Scorta abbassata mentre il prodotto vende: sempre accettata, per differenza (5000 -> 20 toglie 4980).
   {
     const sold = [];
     const [save20] = await Promise.all([
@@ -1574,9 +1592,7 @@ async function scenarioMenuRace() {
     const row = await finalRow(items.selling);
     const soldTotal = sold.length;
     const accepted = !save20.error;
-    const drift = accepted
-      ? row.available_portions > 20 || row.available_portions < 20 - soldTotal
-      : row.available_portions !== 5000 - soldTotal;
+    const drift = !accepted || row.available_portions !== 20 - soldTotal;
     if (drift || row.stock_capacity < row.available_portions)
       finding("Scorta incoerente dopo una modifica concorrente alle vendite", SEV.STOCK, {
         accepted,
@@ -1612,8 +1628,13 @@ async function scenarioMenuRace() {
 // ---------------------------------------------------------------------------------------------
 // Scenario 8: scaletta (program_slots, program_settings)
 // ---------------------------------------------------------------------------------------------
+/** `days` null: il dispositivo non ha cambiato i giorni, come fa il client (Program.tsx, handleSave). */
 const saveProgram = (days, created = [], updated = [], deleted = [], role = "staff") =>
-  rpc("save_program", [String(days), jsonb(created), jsonb(updated), uuidArray(deleted)], asRole(role));
+  rpc(
+    "save_program",
+    [days === null ? "null" : String(days), jsonb(created), jsonb(updated), uuidArray(deleted)],
+    asRole(role),
+  );
 const slotRows = async () =>
   (await admin_sql(
     `select coalesce(json_agg(row_to_json(s) order by s.id), '[]') from (select id, day, stage, title, start_time, end_time from public.program_slots) s`,
@@ -1634,16 +1655,16 @@ ${slots.map((s) => `(${lit(s.id)}, ${s.day}, ${lit(s.stage)}, ${lit(s.title)}, $
 }
 
 async function scenarioSchedule() {
-  const allowed = ["days must be", "every slot day"];
-  // A. Stesso slot, campi diversi, riga intera da ciascun dispositivo.
+  const allowed = ["days must be", "every slot day", "slots_beyond_days"];
+  // A. Stesso slot, campi diversi: ogni dispositivo manda solo il campo che ha cambiato.
   {
     const [slot] = await resetProgram();
     const [ra, rb] = await Promise.all([
       sleep(rand(0, 25)).then(() =>
-        call("save_program", saveProgram(3, [], [{ ...slot, start_time: "19:30" }]), allowed),
+        call("save_program", saveProgram(null, [], [{ id: slot.id, start_time: "19:30" }]), allowed),
       ),
       sleep(rand(0, 25)).then(() =>
-        call("save_program", saveProgram(3, [], [{ ...slot, title: "Band uno (cambiato)" }]), allowed),
+        call("save_program", saveProgram(null, [], [{ id: slot.id, title: "Band uno (cambiato)" }]), allowed),
       ),
     ]);
     const row = (await slotRows()).find((entry) => entry.id === slot.id);
@@ -1654,7 +1675,7 @@ async function scenarioSchedule() {
         SEV.LOST,
         {
           final: { start_time: row.start_time, title: row.title },
-          function: "save_program (righe 204-211): update dell'intera riga senza versione",
+          function: "save_program: ogni campo presente nella richiesta va applicato da solo",
         },
       );
   }
@@ -1662,9 +1683,12 @@ async function scenarioSchedule() {
   {
     let slots = await resetProgram();
     await call("save_program", saveProgram(1, [], [], [slots[1].id, slots[2].id]), allowed);
+    // Il dispositivo obsoleto non ha toccato i giorni: non li invia.
     const stale = await call(
       "save_program",
-      saveProgram(3, [{ day: 3, stage: "Stage 1", title: "Nuovo giorno 3", start_time: "21:00", end_time: "22:00" }]),
+      saveProgram(null, [
+        { day: 3, stage: "Stage 1", title: "Nuovo giorno 3", start_time: "21:00", end_time: "22:00" },
+      ]),
       allowed,
     );
     const daysAfter = await programDays();
@@ -1674,13 +1698,15 @@ async function scenarioSchedule() {
         SEV.LOST,
         {
           days_after: daysAfter,
-          function: "save_program (righe 193-195): upsert di days con il valore del chiamante",
+          function: "save_program: i giorni cambiano solo se il chiamante li invia",
         },
       );
     slots = await resetProgram();
     await call(
       "save_program",
-      saveProgram(3, [{ day: 3, stage: "Stage 1", title: "Nuovo giorno 3", start_time: "21:00", end_time: "22:00" }]),
+      saveProgram(null, [
+        { day: 3, stage: "Stage 1", title: "Nuovo giorno 3", start_time: "21:00", end_time: "22:00" },
+      ]),
       allowed,
     );
     await call("save_program", saveProgram(1, [], [], [slots[1].id, slots[2].id]), allowed);
@@ -1690,24 +1716,25 @@ async function scenarioSchedule() {
       finding("Scaletta: riducendo i giorni resta uno slot oltre i giorni pubblicati", SEV.LOST, {
         days: daysOrphan,
         orphan_slots: orphan.map((row) => ({ day: row.day, title: row.title })),
-        function: "save_program (righe 183-191) controlla solo gli slot nel payload, non quelli già presenti",
+        function: "save_program deve rifiutare la riduzione dei giorni se restano eventi oltre (slots_beyond_days)",
       });
   }
   // C. Eliminazione contro modifica dello stesso slot.
   {
     const [slot] = await resetProgram();
-    await call("save_program", saveProgram(3, [], [], [slot.id]), allowed);
+    await call("save_program", saveProgram(null, [], [], [slot.id]), allowed);
     const late = await call(
       "save_program",
-      saveProgram(3, [], [{ ...slot, title: "Modificato dopo l'eliminazione" }]),
+      saveProgram(null, [], [{ id: slot.id, title: "Modificato dopo l'eliminazione" }]),
       allowed,
     );
     const exists = (await slotRows()).some((row) => row.id === slot.id);
-    if (!late.error && !exists)
+    // Il client mostra "era già stato eliminato da un altro dispositivo" quando lo slot è in `missing`.
+    if (!late.error && !exists && !(late.data?.missing ?? []).includes(slot.id))
       finding(
         "Scaletta: la modifica di uno slot eliminato da un altro dispositivo risponde ok ma non salva nulla",
         SEV.LOST,
-        { function: "save_program (riga 205)" },
+        { function: "save_program deve elencare lo slot in `missing`" },
       );
   }
   // D. Quattro dispositivi aggiungono slot e modificano slot diversi nello stesso momento.
@@ -1719,7 +1746,7 @@ async function scenarioSchedule() {
           call(
             "save_program",
             saveProgram(
-              3,
+              null,
               Array.from({ length: 3 }, (_, index) => ({
                 day: 1 + (index % 3),
                 stage: "Stage 2",
@@ -1727,7 +1754,7 @@ async function scenarioSchedule() {
                 start_time: `1${device}:0${index}`,
                 end_time: `1${device}:5${index}`,
               })),
-              device < 3 ? [{ ...slots[device], title: `Modificato da ${device}` }] : [],
+              device < 3 ? [{ id: slots[device].id, title: `Modificato da ${device}` }] : [],
             ),
             allowed,
           ),
@@ -1792,6 +1819,25 @@ async function resetTournament() {
   );
 }
 
+/** Stessa fusione a tre vie del client (tournamentState.ts, mergeTournament): vale la mia modifica, altrimenti la loro. */
+function mergeDocs(base, mine, theirs) {
+  const choose = (b, m, t) => (same(m, b) ? t : m);
+  const mergeMap = (b, m, t) => {
+    const merged = {};
+    for (const key of new Set([...Object.keys(b), ...Object.keys(m), ...Object.keys(t)])) {
+      const value = choose(b[key], m[key], t[key]);
+      if (value !== undefined) merged[key] = value;
+    }
+    return merged;
+  };
+  return {
+    ...theirs,
+    teams: base.teams.map((team, index) => choose(team, mine.teams[index], theirs.teams[index])),
+    matches: mergeMap(base.matches, mine.matches, theirs.matches),
+    overrides: mergeMap(base.overrides, mine.overrides, theirs.overrides),
+  };
+}
+
 /** Ogni dispositivo modifica un campo diverso: nomi squadra, partite del turno 0, del turno 1, ripescaggi. */
 function applyEdit(doc, device, counter) {
   if (device === 0) {
@@ -1841,6 +1887,7 @@ async function tournamentRun({ name, periodMs, durationMs, redo = false, extras 
 
   async function device(index) {
     let doc = await fetchSave(first.id);
+    let base = structuredClone(doc); // ultima versione letta o salvata: serve alla fusione
     let counter = index * 100;
     let pending = [];
     while (performance.now() < deadline) {
@@ -1853,23 +1900,40 @@ async function tournamentRun({ name, periodMs, durationMs, redo = false, extras 
       }
       stats.edits += batch;
       stats.saves += 1;
-      const result = await call("save_tournament", saveTournament(doc.id, doc.name, doc.updated_at, doc), [
+      let result = await call("save_tournament", saveTournament(doc.id, doc.name, doc.updated_at, doc), [
         "save_conflict",
       ]);
       stats.ms.push(result.ms);
+      // Come l'app (TournamentBracket.tsx, save): al conflitto rilegge, fonde e riprova, fino a 3 volte.
+      for (
+        let retry = 0;
+        !redo && retry < 3 && result.error && messageOf(result.error).includes("save_conflict");
+        retry += 1
+      ) {
+        stats.conflicts += 1;
+        const theirs = await fetchSave(first.id);
+        doc = mergeDocs(base, doc, theirs);
+        base = structuredClone(theirs);
+        result = await call("save_tournament", saveTournament(doc.id, doc.name, doc.updated_at, doc), [
+          "save_conflict",
+        ]);
+        stats.ms.push(result.ms);
+      }
       if (!result.error) {
         stats.ok += 1;
         stats.edits_persisted += pending.length;
         if (result.data.live === true) stats.live_ok += 1;
         else stats.unpublished_ok += 1;
         doc.updated_at = result.data.updated_at;
+        base = structuredClone(doc);
         for (const edit of pending) expected.set(edit.key, edit.value);
         pending = [];
       } else if (messageOf(result.error).includes("save_conflict")) {
         stats.conflicts += 1;
-        // Come l'app: "Ricaricalo ... le tue modifiche andranno perse".
+        // Fusione non riuscita dopo 3 tentativi (o modalità "rifacimento"): si ricarica e le modifiche si perdono.
         const lost = pending;
         doc = await fetchSave(first.id);
+        base = structuredClone(doc);
         if (redo) {
           for (const edit of lost) {
             const [kind, rest] = edit.key.split(":");
@@ -2007,17 +2071,9 @@ async function tournamentRun({ name, periodMs, durationMs, redo = false, extras 
         revisionDelta,
         revisionExpected,
       });
-    if (stats.unpublished_ok > 0)
-      finding(
-        "Torneo: salvataggi riusciti ma non pubblicati dopo che un altro salvataggio è andato in onda; l'app continua a mostrare 'in onda'",
-        SEV.LOST,
-        {
-          name,
-          saves_ok_but_not_published: stats.unpublished_ok,
-          function: "save_tournament (righe 2472-2478) risponde live=false",
-          client: "TournamentBracket.tsx riga 276 imposta liveId solo se live === true e non lo azzera",
-        },
-      );
+    // Dopo che un altro salvataggio è andato in onda, save_tournament risponde live=false: è
+    // corretto, e il client ora toglie l'etichetta "in onda" (TournamentBracket.tsx, save).
+    // Resta solo come metrica: saves_ok_but_not_published.
   }
   return result;
 }
@@ -2112,11 +2168,15 @@ function finalizeTournamentMetrics() {
       }
     }
   }
+  const lostEdits = Object.entries(metrics.tournament)
+    .filter(([name]) => name.startsWith("ogni_") && !name.includes("rifacimento"))
+    .reduce((total, [, entry]) => total + entry.edits_lost + entry.silent_overwrites, 0);
   metrics.tournament.requirement_different_matches_updated_independently = {
-    met: totalConflicts === 0,
+    met: lostEdits === 0,
     saves: totalSaves,
-    rejected_with_save_conflict: totalConflicts,
-    why: "save_tournament riscrive l'intero documento (squadre, partite, ripescaggi) e confronta updated_at dell'intero salvataggio (righe 2465-2469): partite diverse dello stesso torneo non si fondono",
+    conflicts_merged_and_retried: totalConflicts,
+    lost_edits: lostEdits,
+    why: "save_tournament confronta updated_at dell'intero salvataggio; al conflitto il client rilegge, fonde squadre, partite e ripescaggi uno per uno e riprova",
   };
 }
 

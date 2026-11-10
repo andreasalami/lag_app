@@ -52,7 +52,7 @@ export function OrderEditor({ menuItems, cart, setCart, alias, setAlias, notes, 
           >
             <span className="text-sm">
               {item.name}
-              {item.available_portions === 0 ? " — terminato" : ""}
+              {item.suspended ? " — sospeso" : item.available_portions === 0 ? " — terminato" : ""}
             </span>
             <span className="shrink-0 font-mono text-(--accent-primary)">
               {priceFormatter.format(Number(item.price))}

@@ -28,6 +28,7 @@ import {
   fetchPublishedRevision,
   fetchPublishedTournament,
   fetchTournamentSaves,
+  mergeTournament,
   parseTournamentSnapshot,
   sameTournament,
   TEAM_NAME_MAX_LENGTH,
@@ -108,6 +109,7 @@ export function TournamentBracket({ management = false }: { management?: boolean
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveConflict, setSaveConflict] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [newSaveName, setNewSaveName] = useState<string | null>(null);
   const [pendingSelectId, setPendingSelectId] = useState<string | null>(null);
 
@@ -239,42 +241,71 @@ export function TournamentBracket({ management = false }: { management?: boolean
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
 
-  /** Salva sul salvataggio scelto, oppure ne crea uno nuovo con `asNew` come nome. */
+  /**
+   * Salva sul salvataggio scelto, oppure ne crea uno nuovo con `asNew` come nome.
+   * Se un'altra postazione ha salvato nel frattempo, fonde le due versioni e riprova:
+   * partite diverse convivono, senza chiedere a nessuno di ricaricare e rifare il lavoro.
+   */
   async function save({ asNew, publish = false }: { asNew?: string; publish?: boolean }) {
     if (hasTooLongNames || saving) return false;
-    const target = asNew === undefined ? selected : null;
+    let base = asNew === undefined ? selected : null;
+    let snapshot = current;
+    let merged = false;
     setSaving(true);
     setSaveError(null);
     setSaveConflict(false);
-    const { data, error } = await supabase.rpc("save_tournament", {
-      p_id: target?.id ?? null,
-      p_name: asNew ?? target?.name ?? "",
-      p_expected_updated_at: target?.updatedAt ?? null,
-      p_size: size,
-      p_teams: teams,
-      p_matches: matches,
-      p_overrides: overrides,
-      p_publish: publish,
-    });
-    setSaving(false);
-    const row = data as { id?: unknown; name?: unknown; updated_at?: unknown; live?: unknown } | null;
-    if (error || typeof row?.id !== "string" || typeof row.name !== "string" || typeof row.updated_at !== "string") {
-      console.error("[Torneo] Salvataggio non riuscito:", error?.message);
+    setSaveNotice(null);
+    for (let attempt = 0; ; attempt += 1) {
+      const { data, error } = await supabase.rpc("save_tournament", {
+        p_id: base?.id ?? null,
+        p_name: asNew ?? base?.name ?? "",
+        p_expected_updated_at: base?.updatedAt ?? null,
+        p_size: snapshot.size,
+        p_teams: snapshot.teams,
+        p_matches: snapshot.matches,
+        p_overrides: snapshot.overrides,
+        p_publish: publish,
+      });
+      const row = data as { id?: unknown; name?: unknown; updated_at?: unknown; live?: unknown } | null;
+      if (!error && typeof row?.id === "string" && typeof row.name === "string" && typeof row.updated_at === "string") {
+        // L'editor tiene i dati come li ha scritti: il confronto con sameTournament ignora l'ordine del database.
+        const saved: TournamentSave = { ...snapshot, id: row.id, name: row.name, updatedAt: row.updated_at };
+        if (merged) applySnapshot(snapshot);
+        setSaves((list) => [saved, ...list.filter((item) => item.id !== saved.id)]);
+        setSelectedId(saved.id);
+        if (row.live === true) setLiveId(saved.id);
+        else if (liveId === saved.id) {
+          // Un'altra postazione ha messo in onda un altro salvataggio: questo non lo è più.
+          setLiveId(null);
+          void fetchTournamentSaves().then((list) => !list.error && setLiveId(list.liveId));
+        }
+        if (merged) setSaveNotice("Salvato insieme alle modifiche fatte da un’altra postazione.");
+        setSaving(false);
+        return true;
+      }
       const conflict = Boolean(error?.message.includes("save_conflict"));
+      if (conflict && base && attempt < 3) {
+        const list = await fetchTournamentSaves();
+        const theirs = list.error ? null : list.saves.find((item) => item.id === base?.id);
+        const fused = theirs ? mergeTournament(base, snapshot, theirs) : null;
+        if (theirs && fused) {
+          setLiveId(list.liveId);
+          base = theirs;
+          snapshot = fused;
+          merged = true;
+          continue;
+        }
+      }
+      console.error("[Torneo] Salvataggio non riuscito:", error?.message);
+      setSaving(false);
       setSaveConflict(conflict);
       setSaveError(
         conflict
-          ? "Un’altra postazione ha salvato questo torneo nel frattempo. Ricaricalo per vedere la versione aggiornata: le tue modifiche andranno perse."
+          ? "Un’altra postazione ha cambiato questo torneo in modo non conciliabile (per esempio il numero di squadre). Ricaricalo per vedere la versione aggiornata: le tue modifiche andranno perse."
           : "Salvataggio non riuscito. Le modifiche sono ancora qui: riprova.",
       );
       return false;
     }
-    // L'editor tiene i dati come li ha scritti: il confronto con sameTournament ignora l'ordine del database.
-    const saved: TournamentSave = { ...current, id: row.id, name: row.name, updatedAt: row.updated_at };
-    setSaves((list) => [saved, ...list.filter((item) => item.id !== saved.id)]);
-    setSelectedId(saved.id);
-    if (row.live === true) setLiveId(saved.id);
-    return true;
   }
 
   async function reloadSaves(openId: string | null) {
@@ -517,6 +548,11 @@ export function TournamentBracket({ management = false }: { management?: boolean
               {hasTooLongNames && (
                 <p role="alert" className="mt-3 text-xs text-(--state-error)">
                   Un nome squadra supera i {TEAM_NAME_MAX_LENGTH} caratteri: accorcialo per poter salvare.
+                </p>
+              )}
+              {saveNotice && !saveError && (
+                <p role="status" className="mt-3 text-xs text-(--state-success)">
+                  {saveNotice}
                 </p>
               )}
               {saveError && (

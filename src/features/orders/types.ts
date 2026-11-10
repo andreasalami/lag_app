@@ -14,9 +14,11 @@ export type OrderMenuItem = {
   available_portions: number | null;
   stock_capacity: number | null;
   allergens: number[];
+  /** Sospeso dallo staff: non ordinabile finché non viene riattivato. Gli ordini già inviati lo conservano. */
+  suspended: boolean;
 };
 
-export type OrderLine = Omit<OrderMenuItem, "available_portions" | "stock_capacity"> & { qty: number };
+export type OrderLine = Omit<OrderMenuItem, "available_portions" | "stock_capacity" | "suspended"> & { qty: number };
 
 export type SubmittedOrder = {
   preparation_mode?: PreparationMode;
@@ -60,4 +62,6 @@ export type StaffOrder = {
   created_at: string;
   paid_at: string | null;
   claim_expires_at: string | null;
+  /** Righe sospese o eliminate dopo l'invio: solo un'informazione per la cassa, l'ordine resta valido. */
+  unavailable_items?: string[];
 };

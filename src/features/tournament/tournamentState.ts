@@ -92,6 +92,39 @@ function canonical(value: unknown): unknown {
   );
 }
 
+const sameValue = (a: unknown, b: unknown) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+
+/**
+ * Fusione a tre vie quando un'altra postazione ha salvato nel frattempo. `base` è il
+ * salvataggio da cui si era partiti, `mine` l'editor, `theirs` la versione ora nel database.
+ * Ogni squadra, partita e ripescaggio si decide da sé: se l'ho cambiato io vale il mio valore,
+ * altrimenti quello dell'altra postazione. Due postazioni su partite diverse non si perdono
+ * nulla; sulla stessa partita vale l'ultima che salva. Se qualcuno ha cambiato il numero di
+ * squadre il tabellone non è più confrontabile e la fusione non si fa (null).
+ */
+export function mergeTournament(
+  base: TournamentSnapshot,
+  mine: TournamentSnapshot,
+  theirs: TournamentSnapshot,
+): TournamentSnapshot | null {
+  if (mine.size !== base.size || theirs.size !== base.size) return null;
+  const pick = <T>(b: T, m: T, t: T) => (sameValue(m, b) ? t : m);
+  function mergeMap<T>(b: Record<string, T>, m: Record<string, T>, t: Record<string, T>) {
+    const merged: Record<string, T> = {};
+    for (const key of new Set([...Object.keys(b), ...Object.keys(m), ...Object.keys(t)])) {
+      const value = pick(b[key], m[key], t[key]);
+      if (value !== undefined) merged[key] = value;
+    }
+    return merged;
+  }
+  return {
+    size: base.size,
+    teams: base.teams.map((team, index) => pick(team, mine.teams[index], theirs.teams[index])),
+    matches: mergeMap(base.matches, mine.matches, theirs.matches),
+    overrides: mergeMap(base.overrides, mine.overrides, theirs.overrides),
+  };
+}
+
 export function sameTournament(a: TournamentSnapshot, b: TournamentSnapshot) {
   const pick = ({ size, teams, matches, overrides }: TournamentSnapshot) => ({ size, teams, matches, overrides });
   return JSON.stringify(canonical(pick(a))) === JSON.stringify(canonical(pick(b)));

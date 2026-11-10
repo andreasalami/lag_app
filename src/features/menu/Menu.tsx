@@ -1,18 +1,22 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
+import { Modal } from "../../components/ui/Modal";
+import { Notice } from "../../components/ui/Notice";
 import { SaveBanner } from "../../components/ui/SaveBanner";
 import { useAuth } from "../auth/AuthContext";
 import { canOpen, staffPage } from "../auth/staffPages";
 import { supabase } from "../../lib/supabaseClient";
 import { useSupabaseRows } from "../../lib/useSupabaseRows";
-import { newDraftId, useDraftRows } from "../../lib/useDraftRows";
+import { changedFields, draftUuid, isNewId, newDraftId, useDraftRows } from "../../lib/useDraftRows";
 import { ALLERGENS, priceFormatter } from "../orders/orderUtils";
 import { OrderEntryButton } from "../orders/OrderEntryButton";
 import type { OrderMenuItem } from "../orders/types";
 import { FreeWaterNotice } from "./FreeWaterNotice";
 import { MENU_SECTIONS, isMenuSectionForCategory, type MenuCategory, type MenuSection } from "./menuSections";
-import { appHref } from "../../lib/browser";
+import { appHref, pollWhileVisible } from "../../lib/browser";
+import { commitmentSummary, fetchCommitments, type Commitment } from "./menuAvailability";
+import { SuspendButton } from "./SuspendButton";
 
 type Category = MenuCategory;
 
@@ -36,6 +40,7 @@ const FALLBACK_ITEMS: MenuItem[] = [
     available_portions: null,
     stock_capacity: null,
     allergens: [1],
+    suspended: false,
   },
   {
     id: "f2",
@@ -46,6 +51,7 @@ const FALLBACK_ITEMS: MenuItem[] = [
     available_portions: null,
     stock_capacity: null,
     allergens: [],
+    suspended: false,
   },
   {
     id: "f3",
@@ -56,6 +62,7 @@ const FALLBACK_ITEMS: MenuItem[] = [
     available_portions: null,
     stock_capacity: null,
     allergens: [1],
+    suspended: false,
   },
   {
     id: "f4",
@@ -66,6 +73,7 @@ const FALLBACK_ITEMS: MenuItem[] = [
     available_portions: null,
     stock_capacity: null,
     allergens: [],
+    suspended: false,
   },
 ];
 
@@ -79,6 +87,12 @@ const FALLBACK_ITEMS: MenuItem[] = [
 
   La bozza (righe nuove, modificate, eliminate) è gestita da useDraftRows,
   condiviso con il Programma.
+
+  Il menu si modifica anche a evento in corso:
+  - si salvano solo i campi cambiati, così due dispositivi non si sovrascrivono;
+  - le scorte si salvano per differenza (vedevo 50, scrivo 80: +30 su quelle di adesso);
+  - la sospensione è un tasto a parte, applicato subito, e vale per i nuovi ordini;
+  - la pagina rilegge il database ogni 20 secondi senza toccare ciò che stai modificando.
 */
 export function Menu({ management = false }: { management?: boolean }) {
   const { role } = useAuth();
@@ -93,9 +107,10 @@ export function Menu({ management = false }: { management?: boolean }) {
     loading,
     error: loadError,
     refetch,
+    fetchRows,
   } = useSupabaseRows<MenuItem>({
     table: "menu_items",
-    select: "id, category, subcategory, name, price, available_portions, stock_capacity, allergens",
+    select: "id, category, subcategory, name, price, available_portions, stock_capacity, allergens, suspended",
     orderBy: [{ column: "category" }, { column: "name" }],
     fallback: FALLBACK_ITEMS,
   });
@@ -103,6 +118,28 @@ export function Menu({ management = false }: { management?: boolean }) {
   const draft = useDraftRows(items, setItems, loading);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Eliminazione in attesa di conferma: mostra quanti ordini già inviati contengono il prodotto.
+  const [deleteTarget, setDeleteTarget] = useState<{ item: MenuItem; commitment: Commitment } | null>(null);
+  const savingRef = useRef(false);
+  const live = useRef({ fetchRows, syncFromServer: draft.syncFromServer });
+  live.current = { fetchRows, syncFromServer: draft.syncFromServer };
+
+  // Scorte e sospensioni cambiano mentre si vende: chi gestisce le vede aggiornate senza ricaricare.
+  useEffect(() => {
+    if (!canEdit) return;
+    return pollWhileVisible(async () => {
+      if (savingRef.current) return;
+      const { data } = await live.current.fetchRows();
+      if (data && !savingRef.current) live.current.syncFromServer(data);
+    }, 20_000);
+  }, [canEdit]);
+
+  async function requestDelete(item: MenuItem) {
+    const commitment = isNewId(item.id) ? undefined : (await fetchCommitments())?.get(item.id);
+    if (commitment) setDeleteTarget({ item, commitment });
+    else draft.removeRow(item.id);
+  }
 
   function addItem(category: Category, subcategory: MenuSection) {
     setItems((prev) => [
@@ -116,6 +153,7 @@ export function Menu({ management = false }: { management?: boolean }) {
         available_portions: null,
         stock_capacity: null,
         allergens: [],
+        suspended: false,
       },
     ]);
   }
@@ -127,8 +165,8 @@ export function Menu({ management = false }: { management?: boolean }) {
   }
 
   async function handleSave() {
-    setSaving(true);
     setSaveError(null);
+    setNotice(null);
 
     const invalidItem = items.some(
       (item) =>
@@ -145,11 +183,11 @@ export function Menu({ management = false }: { management?: boolean }) {
     );
     if (invalidItem) {
       setSaveError("Controlla nomi, prezzi e porzioni: alcuni valori non sono validi.");
-      setSaving(false);
       return;
     }
 
-    const created = draft.created.map(({ category, subcategory, name, price, available_portions, allergens }) => ({
+    const created = draft.created.map(({ id, category, subcategory, name, price, available_portions, allergens }) => ({
+      id: draftUuid(id),
       category,
       subcategory,
       name,
@@ -157,13 +195,18 @@ export function Menu({ management = false }: { management?: boolean }) {
       available_portions,
       allergens,
     }));
-    // Le porzioni originali permettono al database di accorgersi se un ordine le ha cambiate nel frattempo.
-    const updated = draft.updated.map(({ row, original }) => ({
-      ...row,
-      original_available_portions: original.available_portions,
-    }));
+    // Solo i campi cambiati. Per le scorte si invia anche il numero che si vedeva: il database
+    // applica la differenza a quelle di adesso, senza sovrascrivere le vendite nel frattempo.
+    const updated = draft.updated.map(({ row, original }) => {
+      const patch = changedFields(row, original);
+      return "available_portions" in patch
+        ? { ...patch, original_available_portions: original.available_portions }
+        : patch;
+    });
 
-    const { error } = await supabase.rpc("bulk_upsert_menu_items", {
+    savingRef.current = true;
+    setSaving(true);
+    const { data, error } = await supabase.rpc("bulk_upsert_menu_items", {
       p_created: created,
       p_updated: updated,
       p_deleted: draft.deletedIds,
@@ -172,16 +215,23 @@ export function Menu({ management = false }: { management?: boolean }) {
     if (error) {
       console.error("[Menu] Errore salvataggio:", error.message);
       setSaveError(
-        error.message.includes("stock_changed_retry")
-          ? "Le scorte sono cambiate per un nuovo ordine. Ricarica la pagina e ripeti la modifica."
+        error.message.includes("not_authorized") || error.code === "42501"
+          ? "Non hai i permessi per modificare una di queste voci."
           : "Salvataggio non riuscito. Riprova.",
       );
+      savingRef.current = false;
       setSaving(false);
       return;
     }
 
-    draft.markSaved(await refetch());
+    const fresh = await refetch();
+    draft.markSaved(fresh);
+    savingRef.current = false;
     setSaving(false);
+    const missing = (data as { missing?: unknown } | null)?.missing;
+    if (!fresh) setNotice("Modifiche salvate, ma non riesco a rileggere il menu. Ricarica la pagina.");
+    else if (Array.isArray(missing) && missing.length > 0)
+      setNotice("Una voce era già stata eliminata da un altro dispositivo. Le altre modifiche sono salvate.");
   }
 
   return (
@@ -296,12 +346,31 @@ export function Menu({ management = false }: { management?: boolean }) {
                                 />
                                 <button
                                   type="button"
-                                  onClick={() => draft.removeRow(item.id)}
+                                  onClick={() => void requestDelete(item)}
                                   className="justify-self-start text-xs text-(--state-error) hover:underline sm:justify-self-auto"
                                 >
                                   Elimina
                                 </button>
                               </div>
+                              {/* Una voce nuova si può sospendere solo dopo il primo salvataggio. */}
+                              {!isNewId(item.id) && (
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  <SuspendButton
+                                    item={item}
+                                    onChanged={(suspended) => draft.patchSaved(item.id, { suspended })}
+                                    onMissing={() =>
+                                      void live.current
+                                        .fetchRows()
+                                        .then(({ data }) => data && draft.syncFromServer(data))
+                                    }
+                                  />
+                                  {item.suspended && (
+                                    <span className="text-xs font-semibold text-(--state-warning)">
+                                      Sospeso: non ordinabile finché non lo riattivi
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                               <label className="mt-2 flex items-center gap-2 text-xs text-(--text-secondary)">
                                 Sezione
                                 <select
@@ -408,6 +477,42 @@ export function Menu({ management = false }: { management?: boolean }) {
           onSave={handleSave}
         />
       )}
+      {canEdit && notice && !draft.isDirty && (
+        <div className="fixed inset-x-4 bottom-24 z-40 mx-auto max-w-3xl">
+          <Notice className="surface-solid shadow-lg" onDismiss={() => setNotice(null)}>
+            {notice}
+          </Notice>
+        </div>
+      )}
+
+      <Modal
+        open={deleteTarget !== null}
+        title={`Eliminare ${deleteTarget?.item.name ?? ""}?`}
+        dismissible
+        onClose={() => setDeleteTarget(null)}
+        actions={
+          <>
+            <Button variant="staff-secondary" onClick={() => setDeleteTarget(null)}>
+              Annulla
+            </Button>
+            <Button
+              variant="staff-danger"
+              onClick={() => {
+                if (deleteTarget) draft.removeRow(deleteTarget.item.id);
+                setDeleteTarget(null);
+              }}
+            >
+              Elimina
+            </Button>
+          </>
+        }
+      >
+        <p className="font-semibold text-(--text-primary)">{commitmentSummary(deleteTarget?.commitment)}</p>
+        <p className="mt-2">
+          Gli ordini già inviati conservano questo prodotto e vanno comunque evasi. L’eliminazione avviene quando premi
+          Salva.
+        </p>
+      </Modal>
     </section>
   );
 }
