@@ -1554,6 +1554,14 @@ begin
   -- mutanti mantengono un lock condiviso sull'evento finché hanno finito.
   perform 1 from public.orders
   where event_id = event_row.id order by id for update;
+  -- Prodotti in ordine di id, come apply_order_stock e bulk_upsert_menu_items: un update
+  -- diretto li bloccherebbe nell'ordine fisico e si incrocerebbe con una modifica del menu.
+  perform 1 from public.menu_items
+  where id in (
+    select (line->>'id')::uuid from public.orders orders_row
+    cross join lateral jsonb_array_elements(orders_row.items) line
+    where orders_row.event_id = event_row.id and orders_row.status = 'in_attesa_pagamento')
+  order by id for update;
 
   with reserved as (
     select (line->>'id')::uuid id, sum((line->>'qty')::integer)::integer qty
