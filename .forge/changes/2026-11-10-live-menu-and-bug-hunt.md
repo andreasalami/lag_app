@@ -36,6 +36,7 @@
 | Medio | Modificare una voce eliminata da un altro dispositivo rispondeva ok | Nessun controllo | Le righe mancanti tornano in `missing` e l'app lo dice |
 | Medio | Un dispositivo rimasto indietro riportava i giorni della scaletta al valore vecchio; riducendo i giorni restavano eventi fuori | `save_program` scriveva sempre i giorni | I giorni si inviano solo se cambiati; ridurli con eventi oltre viene rifiutato (`slots_beyond_days`) |
 | Medio | Torneo: circa 3 salvataggi su 4 respinti con `save_conflict`, modifiche perse seguendo l'invito a ricaricare | Confronto sull'intero salvataggio | Al conflitto l'app rilegge, fonde squadre, partite e ripescaggi uno per uno e riprova |
+| Medio | Torneo: con molte postazioni insieme, dopo tre fusioni l'app invitava a ricaricare e perdere le modifiche | Messaggio pensato per i conflitti non conciliabili | La bozza fusa resta nell'editor, basta risalvare |
 | Medio | Torneo: dopo un'altra pubblicazione l'app mostrava ancora "in onda" | `liveId` mai azzerato | Si azzera e si rilegge |
 | Medio | Deadlock tra eliminazione e ordini (circa 1,3% con coincidenza forzata) | Eliminazione senza ordine di blocco | Blocco per id, come gli ordini |
 | Medio | Deadlock tra chiusura dell'evento e modifica del menu (seed 2, coincidenza forzata) | `close_order_event` restituiva le scorte nell'ordine fisico delle righe | Blocco dei prodotti per id prima dell'aggiornamento |
@@ -94,9 +95,16 @@
   della migrazione. `verify-schema-matches-migrations.mjs` e le altre 10 verifiche di
   `scripts/security/` passano.
 - **Test unitari:** 100 su 100. Controllo dei tipi pulito.
-- **Stress test locali:** `edge-staff` (seed 1) 0 difetti e 0 deadlock; torneo con 161
-  conflitti fusi e nessuna modifica persa. `edge-orders` (seed 101) passa tutti gli
-  scenari. Gli altri seed sono riportati nella pull request.
+- **Stress test locali:**
+  - `edge-staff`, seed 1, 3 e 7: 0 difetti e 0 deadlock.
+  - `edge-staff`, seed 2: ha trovato 2 deadlock tra chiusura dell'evento e modifica del
+    menu. Dopo la correzione lo scenario `menu-race` ripetuto ne dà 0.
+  - `edge-staff`, seed 7, torneo: 3 modifiche perse su 179 con quattro postazioni ogni
+    2 secondi. Dopo la correzione 0.
+  - `edge-orders`, seed 101, 202, 303, 404 e 777: 10 scenari su 10 per ciascuno, nessun
+    difetto.
+  - Seed 3 e 7 e parte dei seed degli ordini sono girati prima della correzione del
+    deadlock, che tocca solo `close_order_event`.
 - **Browser**, contro un finto backend locale con le migrazioni del progetto:
   - carrello con prezzo cambiato, prodotto sospeso ed eliminato;
   - pannello Pietanze con conteggi e sospensione;
