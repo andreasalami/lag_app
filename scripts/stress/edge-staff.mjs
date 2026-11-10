@@ -1930,7 +1930,13 @@ async function tournamentRun({ name, periodMs, durationMs, redo = false, extras 
         pending = [];
       } else if (messageOf(result.error).includes("save_conflict")) {
         stats.conflicts += 1;
-        // Fusione non riuscita dopo 3 tentativi (o modalità "rifacimento"): si ricarica e le modifiche si perdono.
+        if (!redo) {
+          // Come l'app: dopo 3 fusioni la bozza fusa resta nell'editor, agganciata all'ultima
+          // versione letta, e si risalva al giro successivo. Nessuna modifica va persa.
+          stats.retry_later = (stats.retry_later ?? 0) + 1;
+          continue;
+        }
+        // Modalità "rifacimento": si ricarica e si rifanno a mano le modifiche.
         const lost = pending;
         doc = await fetchSave(first.id);
         base = structuredClone(doc);

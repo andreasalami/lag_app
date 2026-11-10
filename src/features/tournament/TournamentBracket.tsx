@@ -298,6 +298,15 @@ export function TournamentBracket({ management = false }: { management?: boolean
       }
       console.error("[Torneo] Salvataggio non riuscito:", error?.message);
       setSaving(false);
+      if (conflict && merged && base) {
+        // Fusione riuscita, ma altre postazioni hanno salvato di nuovo nel frattempo. La bozza
+        // fusa resta nell'editor, agganciata all'ultima versione letta: basta risalvare.
+        const latest = base;
+        applySnapshot(snapshot);
+        setSaves((list) => list.map((item) => (item.id === latest.id ? latest : item)));
+        setSaveError("Molte postazioni stanno salvando insieme. Le tue modifiche sono ancora qui: salva di nuovo.");
+        return false;
+      }
       setSaveConflict(conflict);
       setSaveError(
         conflict

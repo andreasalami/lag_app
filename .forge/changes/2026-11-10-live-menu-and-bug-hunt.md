@@ -38,6 +38,7 @@
 | Medio | Torneo: circa 3 salvataggi su 4 respinti con `save_conflict`, modifiche perse seguendo l'invito a ricaricare | Confronto sull'intero salvataggio | Al conflitto l'app rilegge, fonde squadre, partite e ripescaggi uno per uno e riprova |
 | Medio | Torneo: dopo un'altra pubblicazione l'app mostrava ancora "in onda" | `liveId` mai azzerato | Si azzera e si rilegge |
 | Medio | Deadlock tra eliminazione e ordini (circa 1,3% con coincidenza forzata) | Eliminazione senza ordine di blocco | Blocco per id, come gli ordini |
+| Medio | Deadlock tra chiusura dell'evento e modifica del menu (seed 2, coincidenza forzata) | `close_order_event` restituiva le scorte nell'ordine fisico delle righe | Blocco dei prodotti per id prima dell'aggiornamento |
 | Medio | Doppioni nel menu e nella scaletta se la rilettura dopo il salvataggio falliva | Le righe nuove restavano "da creare" | Id scelto dal dispositivo e `on conflict do nothing` |
 | Medio | Pagamento con risposta persa: la cassa leggeva "non confermato" e non sapeva se aveva incassato | Il secondo tentativo dava `claim_lost` | Nuovo errore `already_paid`, messaggio "già pagato" |
 | Medio | Prezzo cambiato tra carrello e invio: il cliente pagava il nuovo prezzo senza saperlo | Nessun totale atteso | `p_expected_total`, errore `price_changed`, carrello riallineato |
